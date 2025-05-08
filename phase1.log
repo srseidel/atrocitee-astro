@@ -267,3 +267,36 @@ npm run dev
 - Fixed build issues with server-rendered authentication pages
 - Enabled proper functioning of protected routes in production
 - Enhanced deployment pipeline for SSR compatibility 
+
+[2025-05-17] - Cloudflare Pages Deployment Configuration
+- Added Cloudflare adapter for server-side rendering: `npm install @astrojs/cloudflare`
+- Configured astro.config.mjs with Cloudflare adapter for SSR functionality
+- Created wrangler.toml configuration file for Cloudflare Worker settings
+- Configured environment variables in Cloudflare Pages dashboard
+- Added deployment instructions to README.md including Cloudflare setup
+- Implemented workaround for React's MessageChannel API requirement (not available in Cloudflare)
+- Replaced React with Preact for compatibility with Cloudflare Pages:
+  - Added Preact dependency: `npm install preact preact-render-to-string`
+  - Configured Vite aliases to replace React with Preact
+  - Created custom PreactHydration module to handle client-side hydration
+- Updated Supabase configuration to work in Cloudflare environment
+- Created dev/prod environment separation to handle ESM/CJS compatibility issues:
+  - Development: Uses mock Supabase client to prevent module errors
+  - Production: Uses real Supabase client with ESM compatibility
+- Added comprehensive deployment documentation for Cloudflare Pages
+- Resolved compatibility issues between Supabase and Cloudflare Workers runtime:
+  - Pinned @supabase/postgrest-js to version 1.8.5 to avoid ESM/CJS conflicts
+  - Created specific version constraints in package.json
+  - Added custom error filtering for development environment
+- Successfully deployed to Cloudflare Pages with SSR functionality
+- Created development script (dev.sh) to simplify local development
+- Simplified build configuration with proper noExternal settings
+
+[2025-05-18] - Development Reversion Update
+- Encountered critical issues with development environment after deployment changes
+- Reverted codebase to commit 60228ea7a4e915c5a9ccaf4093cf2d70c1de70bfc
+- Restored stable working environment for continued development
+- Removed incompatible changes to middleware and configuration
+- Planning more targeted approach to Cloudflare deployment after completing feature development
+- Will revisit deployment specifics after core features are fully implemented
+- Focus returned to product development rather than deployment optimization 
