@@ -1,0 +1,86 @@
+---
+interface Props {
+  productId: string;
+  name: string;
+  price: number;
+  imageUrl: string;
+  description: string;
+  category: string;
+  badge?: 'new' | 'sale' | 'featured';
+}
+
+const { 
+  productId, 
+  name, 
+  price, 
+  imageUrl = '/placeholder-product.jpg', 
+  description, 
+  category,
+  badge
+} = Astro.props;
+
+// Format price to currency
+const formattedPrice = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD'
+}).format(price);
+
+// Badge styling based on type
+const badgeClasses = {
+  new: 'bg-primary text-white',
+  sale: 'bg-secondary text-white',
+  featured: 'bg-accent text-white',
+};
+---
+
+<div class="product-card group">
+  {/* Product image */}
+  <div class="product-img-container">
+    <img 
+      src={imageUrl} 
+      alt={name} 
+      class="product-img" 
+    />
+    
+    {/* Badge */}
+    {badge && (
+      <div class={`product-badge ${badgeClasses[badge]}`}>
+        {badge}
+      </div>
+    )}
+  </div>
+  
+  {/* Product info */}
+  <div class="product-info">
+    <div class="flex justify-between items-start">
+      <div>
+        <h3 class="product-title">
+          {name}
+        </h3>
+        <p class="text-xs text-neutral-500 mb-2">{category}</p>
+      </div>
+      <span class="product-price">{formattedPrice}</span>
+    </div>
+    
+    <p class="text-sm text-neutral-600 line-clamp-2 mb-4">{description}</p>
+    
+    <div class="flex space-x-2">
+      <a 
+        href={`/product/${productId}`} 
+        class="btn btn-primary text-sm py-1 px-3 flex-1 text-center"
+      >
+        View Details
+      </a>
+      <button 
+        class="btn btn-secondary text-sm py-1 px-3"
+        aria-label="Add to cart"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <path d="M16 10a4 4 0 0 1-8 0"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div> 

@@ -1,0 +1,30 @@
+---
+interface Props {
+  variant?: 'default' | 'light' | 'dark';
+  size?: 'default' | 'large' | 'footer';
+}
+
+const { variant = 'default', size = 'default' } = Astro.props;
+
+// Size classes for different contexts
+const sizeClass = 
+  size === 'large' ? 'h-auto w-full max-w-[900px] min-h-[400px]' :
+  size === 'footer' ? 'h-[35px] w-auto' :
+  'h-[45px] w-auto'; // Default for header
+
+// SVG color variants if needed
+const colorVariant = variant === 'light' ? 'filter brightness-[1.2]' : 
+                    variant === 'dark' ? 'filter brightness-[0.8]' : '';
+
+// Add timestamp for cache busting
+const timestamp = Date.now();
+---
+
+<!-- SVG Logo with appropriate sizing -->
+<div class="inline-flex items-center">
+  <img 
+    src={`/images/atrocitee-logo.svg?t=${timestamp}`}
+    alt="Atrocitee" 
+    class={`${sizeClass} ${colorVariant} object-contain`}
+  />
+</div> 

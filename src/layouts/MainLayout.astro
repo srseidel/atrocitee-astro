@@ -1,0 +1,198 @@
+---
+// MainLayout.astro - Base layout for all pages
+import '../styles/base.css';
+import Logo from '../components/layout/Logo.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { 
+  title, 
+  description = "Atrocitee - Political t-shirts for making a difference" 
+} = Astro.props;
+
+// Navigation links
+const navLinks = [
+  { href: "/", label: "Home" },
+  { href: "/shop", label: "Shop" },
+  { href: "/about", label: "About" },
+  { href: "/about#impact", label: "Impact" },
+];
+
+// Current path for highlighting active links
+const currentPath = Astro.url.pathname;
+---
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title} | Atrocitee</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Work+Sans:wght@400;500;600;700&family=Fira+Mono&display=swap" rel="stylesheet">
+  </head>
+  <body class="min-h-screen flex flex-col font-base">
+    <!-- Header with clean, modern design -->
+    <header class="sticky top-0 z-40 bg-white border-b border-docs-border">
+      <div class="container mx-auto">
+        <div class="flex h-16 items-center justify-between">
+          <!-- Logo area -->
+          <div class="flex items-center">
+            <a href="/" class="flex items-center" aria-label="Atrocitee homepage">
+              <Logo size="default" />
+            </a>
+          </div>
+
+          <!-- Main navigation - desktop -->
+          <nav class="hidden md:flex space-x-8">
+            {navLinks.map((link) => (
+              <a 
+                href={link.href} 
+                class={`text-sm font-medium ${currentPath === link.href 
+                  ? 'text-primary' 
+                  : 'text-neutral-700 hover:text-primary'}`}
+              >
+                {link.label}
+              </a>
+            ))}
+          </nav>
+
+          <!-- Right-side actions -->
+          <div class="flex items-center space-x-4">
+            <a href="/auth/login" class="btn btn-secondary hidden sm:inline-flex">
+              Login
+            </a>
+            <a href="/cart" class="flex items-center justify-center w-10 h-10 rounded-md hover:bg-neutral-100" aria-label="View cart">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="8" cy="21" r="1"></circle>
+                <circle cx="19" cy="21" r="1"></circle>
+                <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path>
+              </svg>
+            </a>
+            
+            <!-- Mobile menu button -->
+            <button 
+              class="md:hidden flex items-center justify-center w-10 h-10 rounded-md hover:bg-neutral-100" 
+              aria-label="Toggle mobile menu"
+              id="mobile-menu-button"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Mobile navigation menu (hidden by default) -->
+        <div class="md:hidden hidden" id="mobile-menu">
+          <div class="py-2 space-y-1 border-t border-docs-border">
+            {navLinks.map((link) => (
+              <a 
+                href={link.href} 
+                class={`block px-4 py-2 text-base font-medium ${currentPath === link.href 
+                  ? 'text-primary bg-neutral-50' 
+                  : 'text-neutral-700 hover:bg-neutral-50 hover:text-primary'}`}
+              >
+                {link.label}
+              </a>
+            ))}
+            <a href="/auth/login" class="block px-4 py-2 text-base font-medium text-neutral-700 hover:bg-neutral-50 hover:text-primary">
+              Login
+            </a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main content -->
+    <main class="flex-1">
+      <slot />
+    </main>
+
+    <!-- Footer with clean, modern style -->
+    <footer class="mt-auto bg-neutral-100 border-t border-docs-border py-12">
+      <div class="container mx-auto">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+          <!-- Brand section -->
+          <div class="md:col-span-2">
+            <div class="mb-4">
+              <Logo variant="default" size="footer" />
+            </div>
+            <p class="text-neutral-600 max-w-md mb-4">
+              Political t-shirts that donate profits to causes that matter. Every purchase makes a difference.
+            </p>
+            <div class="flex space-x-4">
+              <a href="#" class="text-neutral-500 hover:text-primary" aria-label="Twitter">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"></path>
+                </svg>
+              </a>
+              <a href="#" class="text-neutral-500 hover:text-primary" aria-label="Instagram">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                  <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                </svg>
+              </a>
+              <a href="#" class="text-neutral-500 hover:text-primary" aria-label="Facebook">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
+                </svg>
+              </a>
+            </div>
+          </div>
+          
+          <!-- Navigation links -->
+          <div>
+            <h3 class="small-caps font-medium text-sm uppercase tracking-wider text-neutral-900 mb-4">Shop</h3>
+            <ul class="space-y-2">
+              <li><a href="/shop" class="text-neutral-600 hover:text-primary text-sm">All Products</a></li>
+              <li><a href="/shop/new" class="text-neutral-600 hover:text-primary text-sm">New Arrivals</a></li>
+              <li><a href="/shop/bestsellers" class="text-neutral-600 hover:text-primary text-sm">Bestsellers</a></li>
+            </ul>
+          </div>
+          
+          <!-- Company links -->
+          <div>
+            <h3 class="small-caps font-medium text-sm uppercase tracking-wider text-neutral-900 mb-4">Company</h3>
+            <ul class="space-y-2">
+              <li><a href="/about" class="text-neutral-600 hover:text-primary text-sm">About Us</a></li>
+              <li><a href="/about#impact" class="text-neutral-600 hover:text-primary text-sm">Our Impact</a></li>
+              <li><a href="/privacy-policy" class="text-neutral-600 hover:text-primary text-sm">Privacy Policy</a></li>
+              <li><a href="/terms-of-service" class="text-neutral-600 hover:text-primary text-sm">Terms of Service</a></li>
+            </ul>
+          </div>
+        </div>
+        
+        <!-- Copyright -->
+        <div class="mt-12 pt-8 border-t border-neutral-200 text-center text-sm text-neutral-500">
+          <p>&copy; {new Date().getFullYear()} Atrocitee. All rights reserved.</p>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Mobile menu JavaScript -->
+    <script>
+      // Simple toggle for mobile menu
+      document.addEventListener('DOMContentLoaded', () => {
+        const menuButton = document.getElementById('mobile-menu-button');
+        const mobileMenu = document.getElementById('mobile-menu');
+        
+        if (menuButton && mobileMenu) {
+          menuButton.addEventListener('click', () => {
+            mobileMenu.classList.toggle('hidden');
+          });
+        }
+      });
+    </script>
+  </body>
+</html> 

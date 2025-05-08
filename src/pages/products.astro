@@ -1,0 +1,137 @@
+---
+import MainLayout from '../layouts/MainLayout.astro';
+import ProductCard from '../components/ProductCard.astro';
+
+// Sample products data
+const products = [
+  {
+    productId: '1',
+    name: 'Equal Rights Tee',
+    price: 29.99,
+    imageUrl: 'https://placehold.co/600x800/e0f2fe/0369a1?text=Equal+Rights+Tee&font=open-sans',
+    description: 'Stand up for equality with this comfortable cotton t-shirt. Part of proceeds go to civil rights organizations.',
+    category: 'T-Shirts',
+    badge: 'featured' as const
+  },
+  {
+    productId: '2',
+    name: 'Climate Action Hoodie',
+    price: 49.99,
+    imageUrl: 'https://placehold.co/600x800/dcfce7/166534?text=Climate+Action+Hoodie&font=open-sans',
+    description: 'Stay warm while promoting climate awareness. Made from recycled materials.',
+    category: 'Hoodies',
+    badge: 'new' as const
+  },
+  {
+    productId: '3',
+    name: 'Vote Matters Tee',
+    price: 24.99,
+    imageUrl: 'https://placehold.co/600x800/f5f3ff/5b21b6?text=Vote+Matters+Tee&font=open-sans',
+    description: 'Encourage civic participation with this stylish t-shirt. Donations support voter registration drives.',
+    category: 'T-Shirts',
+  },
+  {
+    productId: '4',
+    name: 'Freedom of Press Tee',
+    price: 27.99,
+    imageUrl: 'https://placehold.co/600x800/fff7ed/c2410c?text=Freedom+of+Press&font=open-sans',
+    description: 'Support the important work of journalists with this comfortable t-shirt. Proceeds benefit press freedom initiatives.',
+    category: 'T-Shirts',
+    badge: 'sale' as const
+  },
+  {
+    productId: '5',
+    name: 'Healthcare for All Tee',
+    price: 28.99,
+    imageUrl: 'https://placehold.co/600x800/f0f9ff/0284c7?text=Healthcare+For+All&font=open-sans',
+    description: 'Show your support for universal healthcare with this soft cotton blend shirt. Donations go to healthcare advocacy groups.',
+    category: 'T-Shirts',
+  },
+  {
+    productId: '6',
+    name: 'Racial Justice Hoodie',
+    price: 54.99,
+    imageUrl: 'https://placehold.co/600x800/fef2f2/b91c1c?text=Racial+Justice+Hoodie&font=open-sans',
+    description: 'A comfortable hoodie with a powerful message against racial inequality. Proceeds support racial justice organizations.',
+    category: 'Hoodies',
+  }
+];
+---
+
+<MainLayout title="Products">
+  <div class="bg-docs-sidebar py-16">
+    <div class="container mx-auto">
+      <div class="max-w-2xl mx-auto text-center mb-10">
+        <h1 class="text-4xl font-bold mb-4">Our Products</h1>
+        <p class="text-neutral-600">Browse our collection of politically-themed clothing that makes a difference with every purchase.</p>
+      </div>
+    </div>
+  </div>
+
+  <section class="py-16 bg-white">
+    <div class="container mx-auto">
+      <!-- Filters and sort options -->
+      <div class="flex flex-col md:flex-row justify-between mb-8 gap-4">
+        <div class="flex space-x-2">
+          <button class="btn btn-primary">
+            All Products
+          </button>
+          <button class="btn btn-secondary">
+            T-Shirts
+          </button>
+          <button class="btn btn-secondary">
+            Hoodies
+          </button>
+        </div>
+        
+        <div class="form-group flex items-center space-x-2 mb-0">
+          <label for="sort" class="form-label mb-0 text-sm">Sort by:</label>
+          <select id="sort" class="form-input py-1 px-2 w-auto text-sm">
+            <option>Newest</option>
+            <option>Price: Low to High</option>
+            <option>Price: High to Low</option>
+            <option>Most Popular</option>
+          </select>
+        </div>
+      </div>
+      
+      <!-- Products grid -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {products.map(product => (
+          <ProductCard {...product} />
+        ))}
+      </div>
+    </div>
+  </section>
+  
+  <!-- Call to action -->
+  <section class="py-16 bg-docs-highlight">
+    <div class="container mx-auto">
+      <div class="max-w-3xl mx-auto">
+        <div class="border border-amber-200 rounded-lg p-8">
+          <div class="flex flex-col md:flex-row items-start md:items-center gap-6 md:gap-8">
+            <div class="bg-amber-100 text-amber-600 p-4 rounded-full shrink-0 w-16 h-16 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 3v4a1 1 0 0 0 1 1h4"></path>
+                <path d="M18 17h-7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4l5 5v7a2 2 0 0 1-2 2z"></path>
+                <path d="M16 17v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2"></path>
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-lg font-bold mb-2 text-amber-800">Custom Orders Available</h3>
+              <p class="text-amber-700 mb-4">
+                Looking for custom political merchandise for your group or organization? We offer bulk orders with custom designs.
+              </p>
+              <div class="flex space-x-4">
+                <a href="/contact" class="btn btn-orange">Contact Us</a>
+                <button class="btn btn-secondary border-amber-500 text-amber-600 hover:bg-amber-50">
+                  Learn More
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</MainLayout> 

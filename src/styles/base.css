@@ -1,0 +1,12 @@
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Varela+Round&display=swap');
+
+/* Import our design system and other styles first */
+@import './design-system.css';
+@import './global.css';
+@import './custom.css';
+
+/* Base Tailwind directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities; 
