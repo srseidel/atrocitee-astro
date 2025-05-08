@@ -2,6 +2,8 @@
 // MainLayout.astro - Base layout for all pages
 import '../styles/base.css';
 import Logo from '../components/layout/Logo.astro';
+import NavLinks from '../components/layout/NavLinks.astro';
+import { createServerSupabaseClient } from '../lib/supabase';
 
 interface Props {
   title: string;
@@ -13,16 +15,22 @@ const {
   description = "Atrocitee - Political t-shirts for making a difference" 
 } = Astro.props;
 
-// Navigation links
-const navLinks = [
-  { href: "/", label: "Home" },
-  { href: "/shop", label: "Shop" },
-  { href: "/about", label: "About" },
-  { href: "/about#impact", label: "Impact" },
-];
-
 // Current path for highlighting active links
 const currentPath = Astro.url.pathname;
+
+// Check authentication status if on server
+let isAuthenticated = false;
+try {
+  // Only attempt to check auth on the server
+  if (Astro.request.headers) {
+    const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+    const { data } = await supabase.auth.getSession();
+    isAuthenticated = !!data.session;
+  }
+} catch (error) {
+  // If there's an error or we're in static mode, default to not authenticated
+  isAuthenticated = false;
+}
 ---
 
 <!DOCTYPE html>
@@ -52,23 +60,21 @@ const currentPath = Astro.url.pathname;
 
           <!-- Main navigation - desktop -->
           <nav class="hidden md:flex space-x-8">
-            {navLinks.map((link) => (
-              <a 
-                href={link.href} 
-                class={`text-sm font-medium ${currentPath === link.href 
-                  ? 'text-primary' 
-                  : 'text-neutral-700 hover:text-primary'}`}
-              >
-                {link.label}
-              </a>
-            ))}
+            <NavLinks isAuthenticated={isAuthenticated} currentPath={currentPath} />
           </nav>
 
           <!-- Right-side actions -->
           <div class="flex items-center space-x-4">
-            <a href="/auth/login" class="btn btn-secondary hidden sm:inline-flex">
-              Login
-            </a>
+            {isAuthenticated ? (
+              <a href="/account" class="btn btn-secondary hidden sm:inline-flex">
+                My Account
+              </a>
+            ) : (
+              <a href="/auth/login" class="btn btn-secondary hidden sm:inline-flex">
+                Login
+              </a>
+            )}
+            
             <a href="/cart" class="flex items-center justify-center w-10 h-10 rounded-md hover:bg-neutral-100" aria-label="View cart">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="8" cy="21" r="1"></circle>
@@ -95,7 +101,17 @@ const currentPath = Astro.url.pathname;
         <!-- Mobile navigation menu (hidden by default) -->
         <div class="md:hidden hidden" id="mobile-menu">
           <div class="py-2 space-y-1 border-t border-docs-border">
-            {navLinks.map((link) => (
+            <!-- Mobile nav links with auth awareness -->
+            {[
+              { href: "/", label: "Home" },
+              { href: "/shop", label: "Shop" },
+              { href: "/about", label: "About" },
+              { href: "/about#impact", label: "Impact" },
+              ...(isAuthenticated ? [
+                { href: "/account", label: "My Account" },
+                { href: "/account/orders", label: "My Orders" }
+              ] : [])
+            ].map((link) => (
               <a 
                 href={link.href} 
                 class={`block px-4 py-2 text-base font-medium ${currentPath === link.href 
@@ -105,9 +121,15 @@ const currentPath = Astro.url.pathname;
                 {link.label}
               </a>
             ))}
-            <a href="/auth/login" class="block px-4 py-2 text-base font-medium text-neutral-700 hover:bg-neutral-50 hover:text-primary">
-              Login
-            </a>
+            {isAuthenticated ? (
+              <a href="/auth/logout" class="block px-4 py-2 text-base font-medium text-neutral-700 hover:bg-neutral-50 hover:text-primary">
+                Sign Out
+              </a>
+            ) : (
+              <a href="/auth/login" class="block px-4 py-2 text-base font-medium text-neutral-700 hover:bg-neutral-50 hover:text-primary">
+                Login
+              </a>
+            )}
           </div>
         </div>
       </div>
@@ -169,6 +191,9 @@ const currentPath = Astro.url.pathname;
               <li><a href="/about#impact" class="text-neutral-600 hover:text-primary text-sm">Our Impact</a></li>
               <li><a href="/privacy-policy" class="text-neutral-600 hover:text-primary text-sm">Privacy Policy</a></li>
               <li><a href="/terms-of-service" class="text-neutral-600 hover:text-primary text-sm">Terms of Service</a></li>
+              {isAuthenticated && (
+                <li><a href="/account" class="text-neutral-600 hover:text-primary text-sm">My Account</a></li>
+              )}
             </ul>
           </div>
         </div>

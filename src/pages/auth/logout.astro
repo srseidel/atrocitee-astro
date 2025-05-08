@@ -1,0 +1,13 @@
+---
+import { createServerSupabaseClient } from '../../lib/supabase';
+
+// Ensure this page is server-rendered
+export const prerender = false;
+
+// Handle logout
+const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+await supabase.auth.signOut();
+
+// Redirect to the home page
+return Astro.redirect('/');
+--- 

@@ -1,0 +1,18 @@
+---
+import MainLayout from '../../layouts/MainLayout.astro';
+import Container from '../../components/ui/Container.astro';
+import LoginForm from '../../components/auth/LoginForm';
+---
+
+<MainLayout title="Login">
+  <Container>
+    <div class="max-w-md mx-auto my-16">
+      <h1 class="text-3xl font-bold mb-8 text-center">Sign In</h1>
+      <div class="card">
+        <div class="card-body p-6">
+          <LoginForm client:load />
+        </div>
+      </div>
+    </div>
+  </Container>
+</MainLayout> 

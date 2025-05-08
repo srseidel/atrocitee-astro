@@ -1,0 +1,78 @@
+---
+import MainLayout from '../../layouts/MainLayout.astro';
+import Container from '../../components/ui/Container.astro';
+import { redirectIfNotAuthenticated, getUser } from '../../utils/auth';
+
+// Ensure this page is server-rendered, not statically generated
+export const prerender = false;
+
+// Check authentication and redirect if not authenticated
+const redirectResponse = await redirectIfNotAuthenticated(Astro);
+if (redirectResponse) return redirectResponse;
+
+// Get user data for the page
+const user = await getUser(Astro);
+---
+
+<MainLayout title="Admin Dashboard">
+  <Container>
+    <div class="py-12">
+      <h1 class="text-4xl font-bold mb-8">Admin Dashboard</h1>
+      
+      <div class="bg-neutral-50 p-6 rounded-lg mb-8">
+        <h2 class="text-xl font-semibold mb-4">Welcome, {user?.email}</h2>
+        <p class="text-neutral-600 mb-4">Your account was created on {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</p>
+        
+        <button 
+          id="sign-out-btn"
+          class="btn btn-secondary"
+        >
+          Sign Out
+        </button>
+      </div>
+      
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div class="card">
+          <div class="card-header">
+            Products
+          </div>
+          <div class="card-body">
+            <p class="mb-4">Manage your product catalog</p>
+            <a href="/admin/products" class="btn btn-primary">Manage Products</a>
+          </div>
+        </div>
+        
+        <div class="card">
+          <div class="card-header">
+            Orders
+          </div>
+          <div class="card-body">
+            <p class="mb-4">View and manage customer orders</p>
+            <a href="/admin/orders" class="btn btn-primary">Manage Orders</a>
+          </div>
+        </div>
+        
+        <div class="card">
+          <div class="card-header">
+            Charities
+          </div>
+          <div class="card-body">
+            <p class="mb-4">Configure charity organizations and donations</p>
+            <a href="/admin/charities" class="btn btn-primary">Manage Charities</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Container>
+</MainLayout>
+
+<script>
+  import { createBrowserSupabaseClient } from '../../lib/supabase';
+  
+  // Handle sign out button
+  document.getElementById('sign-out-btn')?.addEventListener('click', async () => {
+    const supabase = createBrowserSupabaseClient();
+    await supabase.auth.signOut();
+    window.location.href = '/auth/login';
+  });
+</script> 

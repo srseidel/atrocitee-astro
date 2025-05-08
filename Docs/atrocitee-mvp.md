@@ -103,7 +103,7 @@ Atroci-Tee is a merchandise platform that turns political outrage and current ev
   - JWT token validation on server endpoints
   - Secure cookie settings
 - **[MVP Required]** Server-side route protection
-  - Implementation using `@supabase/auth-helpers-astro` for SSR pages
+  - Implementation using `@supabase/ssr` for SSR pages
   - Server-side JWT verification
   
   > **Note**: All pages requiring authentication will be implemented as SSR pages, not static pages. This ensures server-side verification of authentication state which cannot be bypassed by clients.
@@ -253,7 +253,7 @@ To ensure successful delivery of the MVP, development will proceed in three focu
 - Implement Supabase database with essential tables
 - Implement Supabase Auth with email/password authentication
 - Create basic RLS policies
-- Develop standardized auth pattern using `@supabase/auth-helpers-astro`
+- Develop standardized auth pattern using `@supabase/ssr`
 - Create route structure (static pages and server endpoints)
 - Build essential UI components and storefront
 - Implement shopping cart functionality with Nanostores

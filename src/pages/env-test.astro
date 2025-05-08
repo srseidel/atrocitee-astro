@@ -1,0 +1,35 @@
+---
+// Simple page to test if environment variables are loaded correctly
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+---
+
+<html>
+  <head>
+    <title>Environment Variable Test</title>
+  </head>
+  <body>
+    <h1>Environment Variable Test</h1>
+    
+    <h2>PUBLIC_SUPABASE_URL:</h2>
+    {supabaseUrl ? 
+      <p style="color: green">✓ Set to: {supabaseUrl}</p> :
+      <p style="color: red">✗ Not set!</p>
+    }
+    
+    <h2>PUBLIC_SUPABASE_ANON_KEY:</h2>
+    {supabaseAnonKey ? 
+      <p style="color: green">✓ Set to: {supabaseAnonKey.substring(0, 5)}...{supabaseAnonKey.substring(supabaseAnonKey.length - 5)}</p> :
+      <p style="color: red">✗ Not set!</p>
+    }
+    
+    <div style="margin-top: 20px; padding: 10px; background-color: #f4f4f4; border-radius: 5px;">
+      <p><strong>Note:</strong> If these values are not set, check:</p>
+      <ol>
+        <li>Your .env file exists in the project root</li>
+        <li>The variables are correctly named (PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_ANON_KEY)</li>
+        <li>You've restarted the dev server after creating/editing .env</li>
+      </ol>
+    </div>
+  </body>
+</html> 

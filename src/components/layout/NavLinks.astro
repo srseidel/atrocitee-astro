@@ -1,0 +1,39 @@
+---
+// Props
+interface Props {
+  isAuthenticated?: boolean;
+  currentPath: string;
+}
+
+const { isAuthenticated = false, currentPath } = Astro.props;
+
+// Common navigation links for all users
+const commonNavLinks = [
+  { href: "/", label: "Home" },
+  { href: "/shop", label: "Shop" },
+  { href: "/about", label: "About" },
+  { href: "/about#impact", label: "Impact" },
+];
+
+// Auth-specific links
+const authLinks = isAuthenticated 
+  ? [
+      { href: "/account", label: "My Account" },
+      { href: "/account/orders", label: "My Orders" },
+    ]
+  : [];
+
+// All links to display
+const navLinks = [...commonNavLinks, ...authLinks];
+---
+
+{navLinks.map((link) => (
+  <a 
+    href={link.href} 
+    class={`text-sm font-medium ${currentPath === link.href 
+      ? 'text-primary' 
+      : 'text-neutral-700 hover:text-primary'}`}
+  >
+    {link.label}
+  </a>
+))} 

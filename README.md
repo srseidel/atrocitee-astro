@@ -13,8 +13,8 @@ Atrocitee is an e-commerce platform selling politically-themed t-shirts with a p
 - **Framework**: [Astro](https://astro.build/)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)
 - **Deployment**: [Cloudflare Pages](https://pages.cloudflare.com/)
-- **Database**: [Supabase](https://supabase.com/) (planned)
-- **Authentication**: Supabase Auth (planned)
+- **Database**: [Supabase](https://supabase.com/)
+- **Authentication**: [Supabase Auth](https://supabase.com/auth) with [@supabase/ssr](https://supabase.com/docs/guides/auth/auth-helpers) for server-side authentication
 
 ## 🔧 Local Development Setup
 
@@ -23,6 +23,7 @@ Atrocitee is an e-commerce platform selling politically-themed t-shirts with a p
 - Node.js (v16+)
 - npm or pnpm
 - Git
+- Supabase account (for database and authentication)
 
 ### Installation
 
@@ -39,14 +40,20 @@ Atrocitee is an e-commerce platform selling politically-themed t-shirts with a p
    pnpm install
    ```
 
-3. Start the development server:
+3. Create a `.env` file in the project root with your Supabase credentials:
+   ```
+   PUBLIC_SUPABASE_URL=your_supabase_url
+   PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   ```
+
+4. Start the development server:
    ```bash
    npm run dev
    # or
    pnpm dev
    ```
 
-4. View the site at `http://localhost:4321`
+5. View the site at `http://localhost:4321`
 
 ## 🔄 CI/CD Process
 
