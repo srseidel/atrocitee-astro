@@ -157,6 +157,7 @@ Phase 1 focuses on establishing the core technical architecture and development 
 - **Database Schema**: Initial schema design should anticipate future needs while keeping initial implementation simple
 - **Cloudflare Configuration**: Environment variables and settings must be properly configured for security
 - **Mobile Responsiveness**: All base UI components must be designed with mobile-first approach
+- **Reference Materials**: Astroship theme was used as design reference. The reference repository should not be tracked in Git to avoid Cloudflare deployment issues with submodules. Clone reference locally when needed.
 
 ## Success Criteria
 
