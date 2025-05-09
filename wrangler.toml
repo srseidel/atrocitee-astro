@@ -22,5 +22,5 @@ PUBLIC_SUPABASE_URL = "https://ssvvvpedcdyssmojaoln.supabase.co"
 # KV namespace for session storage
 [[kv_namespaces]]
 binding = "SESSION"
-# id = "your-kv-namespace-id-for-production"
+id = "1d2d30b2c22e494884a106265b67e6ae"
 # preview_id = "your-kv-namespace-id-for-preview" 
