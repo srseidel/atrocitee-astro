@@ -1,12 +1,29 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { createServerClient, createBrowserClient } from '@supabase/ssr';
 
-// Environment variables
-const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+// Environment variables with fallbacks for build time
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL || 'https://placeholder-url.supabase.co';
+const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
 
-// Create a client for browser usage
+// Check if we're in build/SSG mode
+const isBuild = process.env.NODE_ENV === 'production' && import.meta.env.SSR && !import.meta.env.DEV;
+
+// Create a client for browser usage - with safety check for build time
 export const createBrowserSupabaseClient = () => {
+  // During build, return a mock client if environment variables are missing
+  if (isBuild && (!import.meta.env.PUBLIC_SUPABASE_URL || !import.meta.env.PUBLIC_SUPABASE_ANON_KEY)) {
+    console.warn('Supabase client created with placeholder credentials during build');
+    // Return a minimal mock client for build time
+    return {
+      auth: {
+        getSession: () => Promise.resolve({ data: { session: null } }),
+        signInWithPassword: () => Promise.resolve({ data: null, error: null }),
+        signUp: () => Promise.resolve({ data: null, error: null }),
+        signOut: () => Promise.resolve({ error: null })
+      }
+    } as any;
+  }
+
   return createBrowserClient(
     supabaseUrl,
     supabaseAnonKey
@@ -18,6 +35,19 @@ export const supabase = createBrowserSupabaseClient();
 
 // Create a server client (for use in .astro files)
 export const createServerSupabaseClient = ({ cookies }: { cookies: any }) => {
+  // During build, return a mock client if environment variables are missing
+  if (isBuild && (!import.meta.env.PUBLIC_SUPABASE_URL || !import.meta.env.PUBLIC_SUPABASE_ANON_KEY)) {
+    console.warn('Supabase server client created with placeholder credentials during build');
+    // Return a minimal mock client for build time
+    return {
+      auth: {
+        getSession: () => Promise.resolve({ data: { session: null } }),
+        getUser: () => Promise.resolve({ data: { user: null }, error: null }),
+        signOut: () => Promise.resolve({ error: null })
+      }
+    } as any;
+  }
+
   return createServerClient(
     supabaseUrl,
     supabaseAnonKey,

@@ -6,6 +6,10 @@ compatibility_flags = ["nodejs_compat"]
 # Pages configuration
 pages_build_output_dir = "dist"
 
+# Environment variables - set these in Cloudflare Pages dashboard
+# - PUBLIC_SUPABASE_URL
+# - PUBLIC_SUPABASE_ANON_KEY
+
 # Uncomment and set up any KV namespaces if needed
 # [[kv_namespaces]]
 # binding = "SESSION"
