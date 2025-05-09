@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 console.log('Patching React DOM server module for Cloudflare compatibility...');
 
+// Get current directory in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Path to react-dom server module
-const modulePath = path.resolve('./node_modules/react-dom/server.js');
+const modulePath = path.resolve(path.join(__dirname, '../node_modules/react-dom/server.js'));
 
 // Check if the file exists
 if (!fs.existsSync(modulePath)) {
@@ -35,7 +40,7 @@ if (content.includes('MessageChannel')) {
 }
 
 // Path to react-dom server browser module
-const browserModulePath = path.resolve('./node_modules/react-dom/server.browser.js');
+const browserModulePath = path.resolve(path.join(__dirname, '../node_modules/react-dom/server.browser.js'));
 
 // Check if the browser file exists and patch it as well
 if (fs.existsSync(browserModulePath)) {

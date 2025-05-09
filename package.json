@@ -7,7 +7,7 @@
     "start": "astro dev",
     "prebuild": "node scripts/patch-react-dom.js",
     "build": "astro build",
-    "cloudflare-build": "PUBLIC_SUPABASE_URL=https://placeholder-for-build.supabase.co PUBLIC_SUPABASE_ANON_KEY=placeholder-for-build astro build",
+    "cloudflare-build": "PUBLIC_SUPABASE_URL=https://placeholder-for-build.supabase.co PUBLIC_SUPABASE_ANON_KEY=placeholder-for-build node scripts/patch-react-dom.js && astro build",
     "preview": "astro preview",
     "astro": "astro"
   },
