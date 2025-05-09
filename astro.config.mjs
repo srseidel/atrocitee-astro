@@ -15,13 +15,18 @@ export default defineConfig({
     })
   ],
   vite: {
-    // Use React DOM server.edge for Cloudflare compatibility
+    // CLOUDFLARE COMPATIBILITY FIX:
+    // Use React DOM's edge-compatible server module to fix "MessageChannel is not defined" errors
+    // in Cloudflare's edge environment. The default 'react-dom/server' uses Node.js APIs that aren't
+    // available in Cloudflare Workers/Pages, but 'react-dom/server.edge' is specifically built for
+    // edge runtimes and doesn't use MessageChannel.
+    // See Docs/Cloudflare-React-MessageChannel-Fix.md for more details.
     resolve: {
       alias: {
         'react-dom/server': 'react-dom/server.edge'
       }
     },
-    // Handle the MessageChannel issue
+    // These additional optimizations help with the build process
     optimizeDeps: {
       exclude: ['react-dom/server']
     },

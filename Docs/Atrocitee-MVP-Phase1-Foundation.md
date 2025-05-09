@@ -41,6 +41,20 @@ Phase 1 focuses on establishing the core technical architecture and development 
 - [x] Configure preview deployments for pull requests
 - [x] Implement environment-specific builds (dev/staging/prod)
 
+**Technical Notes**:
+- **React DOM MessageChannel Fix**: Resolved "MessageChannel is not defined" error in Cloudflare's edge environment by configuring Vite to use React DOM's edge-compatible server module:
+  ```js
+  // In astro.config.mjs
+  vite: {
+    resolve: {
+      alias: {
+        'react-dom/server': 'react-dom/server.edge'
+      }
+    }
+  }
+  ```
+  This approach uses React's official edge-compatible version rather than patching node_modules. The error occurs because Cloudflare Workers/Pages (edge environment) doesn't support the MessageChannel API used by React's default server-side rendering module.
+
 ### 4. Supabase Database Setup
 
 **Objective**: Create database structure and configure Supabase.
