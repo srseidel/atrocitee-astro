@@ -1,5 +1,8 @@
 ---
 import MainLayout from '../layouts/MainLayout.astro';
+
+// Pre-render this page at build time
+export const prerender = true;
 ---
 
 <MainLayout title="Page Not Found" description="The page you are looking for doesn't exist">

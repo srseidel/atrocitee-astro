@@ -2,6 +2,9 @@
 import MainLayout from '../layouts/MainLayout.astro';
 import Container from '../components/ui/Container.astro';
 import SectionHead from '../components/ui/SectionHead.astro';
+
+// Pre-render this page at build time
+export const prerender = true;
 ---
 
 <MainLayout title="About Us">

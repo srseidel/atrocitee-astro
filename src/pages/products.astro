@@ -2,6 +2,9 @@
 import MainLayout from '../layouts/MainLayout.astro';
 import ProductCard from '../components/ProductCard.astro';
 
+// Pre-render this page at build time
+export const prerender = true;
+
 // Sample products data
 const products = [
   {
