@@ -6,18 +6,21 @@ import cloudflare from '@astrojs/cloudflare';
 
 // https://astro.build/config
 export default defineConfig({
-  output: 'server', // Enable server-side rendering with static pre-rendering for some pages
+  output: 'server',
   adapter: cloudflare(),
   integrations: [
     tailwind(),
-    react()
+    react({
+      include: ['**/react/*', '**/components/**/*.tsx', '**/components/**/*.jsx']
+    })
   ],
   vite: {
-    resolve: {
-      alias: {
-        // Use the browser version of react-dom/server to avoid MessageChannel issues
-        'react-dom/server': 'react-dom/server.browser'
-      }
+    // Handle the MessageChannel issue
+    optimizeDeps: {
+      exclude: ['react-dom/server']
+    },
+    ssr: {
+      noExternal: ['react-dom/server']
     }
   }
 });
