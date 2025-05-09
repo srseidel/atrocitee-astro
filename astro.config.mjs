@@ -15,6 +15,12 @@ export default defineConfig({
     })
   ],
   vite: {
+    // Use React DOM server.edge for Cloudflare compatibility
+    resolve: {
+      alias: {
+        'react-dom/server': 'react-dom/server.edge'
+      }
+    },
     // Handle the MessageChannel issue
     optimizeDeps: {
       exclude: ['react-dom/server']
