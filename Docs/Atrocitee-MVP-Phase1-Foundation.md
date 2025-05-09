@@ -54,13 +54,14 @@ Phase 1 focuses on establishing the core technical architecture and development 
   }
   ```
   This approach uses React's official edge-compatible version rather than patching node_modules. The error occurs because Cloudflare Workers/Pages (edge environment) doesn't support the MessageChannel API used by React's default server-side rendering module.
+- **Authentication in Staging**: Authentication successfully works in staging and dev environments as of commit 4078327d0e76a07ec6a1ea023d018dd4df830594. This was achieved by properly configuring environment variables in wrangler.toml and implementing the MessageChannel fix.
 
 ### 4. Supabase Database Setup
 
 **Objective**: Create database structure and configure Supabase.
 
 **Implementation Tasks**:
-- [ ] Set up Supabase project
+- [x] Set up Supabase project
 - [ ] Design and implement initial database schema
 - [ ] Create essential tables:
   - [ ] users (managed by Supabase Auth)
@@ -162,7 +163,7 @@ Phase 1 focuses on establishing the core technical architecture and development 
 ### Monitoring
 - [ ] Sentry.io capturing client-side errors
 - [x] Server errors properly logged
-- [ ] Basic application health monitoring functioning
+- [x] Basic application health monitoring functioning
 - [ ] Error notifications properly configured
 
 ## Dependencies and Considerations
@@ -170,6 +171,9 @@ Phase 1 focuses on establishing the core technical architecture and development 
 - **Authentication Strategy**: Early consideration must be given to the authentication approach with Astro's SSR and Supabase Auth
 - **Database Schema**: Initial schema design should anticipate future needs while keeping initial implementation simple
 - **Cloudflare Configuration**: Environment variables and settings must be properly configured for security
+  - Environment variables must be defined in wrangler.toml, not in the Cloudflare dashboard
+  - Secret keys should be stored using wrangler secret commands
+  - KV namespace must be properly configured for SESSION storage
 - **Mobile Responsiveness**: All base UI components must be designed with mobile-first approach
 - **Reference Materials**: Astroship theme was used as design reference. The reference repository should not be tracked in Git to avoid Cloudflare deployment issues with submodules. Clone reference locally when needed.
 
