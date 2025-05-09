@@ -1,0 +1,12 @@
+# Wrangler configuration for Cloudflare Pages
+name = "atrocitee-astro"
+compatibility_date = "2023-06-14"
+compatibility_flags = ["nodejs_compat"]
+
+# Pages configuration
+pages_build_output_dir = "dist"
+
+# Uncomment and set up any KV namespaces if needed
+# [[kv_namespaces]]
+# binding = "SESSION"
+# id = "your-kv-namespace-id" 
