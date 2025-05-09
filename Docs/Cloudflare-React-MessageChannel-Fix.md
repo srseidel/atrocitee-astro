@@ -31,25 +31,53 @@ import tailwind from '@astrojs/tailwind';
 import react from '@astrojs/react';
 import cloudflare from '@astrojs/cloudflare';
 
+// Determine if we're in development or production mode
+const isDev = process.env.NODE_ENV === 'development';
+
 export default defineConfig({
-  output: 'server',
+  // In development, use static output to avoid SSR issues
+  // In production, use server output for dynamic features
+  output: isDev ? 'static' : 'server',
   adapter: cloudflare(),
   integrations: [
     // your integrations...
     react()
   ],
   vite: {
-    // Use React DOM server.edge for Cloudflare compatibility
-    resolve: {
-      alias: {
-        'react-dom/server': 'react-dom/server.edge'
+    // Only apply the alias in production builds
+    ...(isDev ? {} : {
+      resolve: {
+        alias: {
+          'react-dom/server': 'react-dom/server.edge'
+        }
       }
-    }
+    })
   }
 });
 ```
 
-This configuration tells Vite (the bundler used by Astro) to substitute all imports of `react-dom/server` with `react-dom/server.edge`, effectively using the edge-compatible version throughout your application.
+This configuration:
+1. Uses static rendering in development to avoid server-side rendering issues entirely
+2. Uses server rendering with the edge-compatible React DOM server module in production
+
+### Development vs Production Considerations
+
+This approach creates a clear separation between development and production environments:
+
+1. **Development Environment**:
+   - Uses static site generation (`output: 'static'`)
+   - Avoids server-side rendering entirely, eliminating the "require is not defined" errors
+   - Provides a faster development experience with fewer runtime errors
+   - All React components work properly in the client
+
+2. **Production Environment**:
+   - Uses server-side rendering (`output: 'server'`)
+   - Applies the `react-dom/server.edge` module alias for Cloudflare compatibility
+   - Maintains all dynamic server-rendered features needed in production
+
+This development/production split gives you the best of both worlds: a smooth development experience without SSR-related errors, while maintaining full server functionality in production.
+
+> **Note**: A consequence of this approach is that any server-only features (such as server-side data fetching) won't be testable in development mode. If you need to test these features locally, you may need to temporarily use the production configuration.
 
 ## Why This Works
 
@@ -75,4 +103,15 @@ This solution:
 - Uses official React functionality designed for edge environments
 - Doesn't require modifying node_modules
 - Is maintainable and less fragile than other approaches
-- Preserves server-side rendering capabilities 
+- Preserves server-side rendering capabilities
+
+## Related Issues and Solutions
+
+### Supabase Authentication in Cloudflare Pages
+
+If you're using Supabase for authentication with Cloudflare Pages, you might encounter "fetch failed" errors. This is typically due to environment variables not being properly configured.
+
+See [Cloudflare-Supabase-Setup.md](./Cloudflare-Supabase-Setup.md) for detailed instructions on:
+- Setting up Supabase environment variables in wrangler.toml
+- Managing secrets for Supabase API keys
+- Troubleshooting authentication issues in Cloudflare Pages 

@@ -4,9 +4,14 @@ import tailwind from '@astrojs/tailwind';
 import react from '@astrojs/react';
 import cloudflare from '@astrojs/cloudflare';
 
+// Determine if we're in development or production mode
+const isDev = process.env.NODE_ENV === 'development';
+
 // https://astro.build/config
 export default defineConfig({
-  output: 'server',
+  // In development, use static output to avoid SSR issues
+  // In production, use server output for dynamic features
+  output: isDev ? 'static' : 'server',
   adapter: cloudflare(),
   integrations: [
     tailwind(),
@@ -16,16 +21,18 @@ export default defineConfig({
   ],
   vite: {
     // CLOUDFLARE COMPATIBILITY FIX:
-    // Use React DOM's edge-compatible server module to fix "MessageChannel is not defined" errors
-    // in Cloudflare's edge environment. The default 'react-dom/server' uses Node.js APIs that aren't
-    // available in Cloudflare Workers/Pages, but 'react-dom/server.edge' is specifically built for
-    // edge runtimes and doesn't use MessageChannel.
+    // For Cloudflare deployment: Use React DOM's edge-compatible server module
+    // to fix "MessageChannel is not defined" errors in Cloudflare's edge environment.
+    //
     // See Docs/Cloudflare-React-MessageChannel-Fix.md for more details.
-    resolve: {
-      alias: {
-        'react-dom/server': 'react-dom/server.edge'
+    ...(isDev ? {} : {
+      resolve: {
+        alias: {
+          // Only apply this in production builds
+          'react-dom/server': 'react-dom/server.edge'
+        }
       }
-    },
+    }),
     // These additional optimizations help with the build process
     optimizeDeps: {
       exclude: ['react-dom/server']

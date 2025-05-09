@@ -6,11 +6,21 @@ compatibility_flags = ["nodejs_compat"]
 # Pages configuration
 pages_build_output_dir = "dist"
 
-# Environment variables - set these in Cloudflare Pages dashboard
-# - PUBLIC_SUPABASE_URL
-# - PUBLIC_SUPABASE_ANON_KEY
+# Environment variables 
+# Define non-secret environment variables here
+[vars]
+PUBLIC_SUPABASE_URL = "https://ssvvvpedcdyssmojaoln.supabase.co"
+#PUBLIC_SUPABASE_ANON_KEY = "" # Consider using secrets for this
 
-# Uncomment and set up any KV namespaces if needed
-# [[kv_namespaces]]
-# binding = "SESSION"
-# id = "your-kv-namespace-id" 
+# Preview environment variables
+[env.preview]
+# vars = { PUBLIC_SUPABASE_URL = "https://your-staging-project.supabase.co" }
+
+# For sensitive values, use secrets:
+# To set: npx wrangler secret put PUBLIC_SUPABASE_ANON_KEY
+
+# KV namespace for session storage
+[[kv_namespaces]]
+binding = "SESSION"
+# id = "your-kv-namespace-id-for-production"
+# preview_id = "your-kv-namespace-id-for-preview" 
