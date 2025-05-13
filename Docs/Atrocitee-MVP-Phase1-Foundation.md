@@ -71,7 +71,7 @@ Phase 1 focuses on establishing the core technical architecture and development 
   - [x] orders
   - [x] charity
 - [x] Configure Row Level Security policies
-- [ ] Set up database backup strategy
+- [x] Set up database backup strategy
 - [x] Create database documentation
 
 **Technical Notes**:

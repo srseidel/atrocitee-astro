@@ -1,7 +1,35 @@
+---
 import MainLayout from '../../layouts/MainLayout.astro';
 import Container from '../../components/ui/Container.astro';
-import { redirectIfNotAuthenticated, redirectIfNotAdmin, getUser } from '../../utils/auth';
+import { redirectIfNotAuthenticated } from '../../utils/auth';
+import { redirectIfNotAdmin } from '../../utils/auth';
+import { getUser } from '../../utils/auth';
 import { createServerSupabaseClient } from '../../lib/supabase';
+
+
+// Define TypeScript interfaces for backup data
+interface BackupFile {
+  filename: string;
+  size: string;
+  timestamp: number;
+}
+
+interface LastBackupInfo {
+  timestamp: number;
+  date: string;
+  status: 'success' | 'failed';
+  filename: string;
+  size: string;
+  duration_seconds: number;
+  error?: string;
+}
+
+interface BackupData {
+  last_backup: LastBackupInfo;
+  backups: BackupFile[];
+  retention_days: number;
+  backup_dir: string;
+}
 
 // Ensure this page is server-rendered, not statically generated
 export const prerender = false;
@@ -25,10 +53,11 @@ const { data: backupStatus, error } = await supabase
   .eq('id', 'latest')
   .single();
 
-const backupData = backupStatus?.data || null;
+const backupData = backupStatus?.data as BackupData | null || null;
 const lastBackup = backupData?.last_backup || null;
 const backups = backupData?.backups || [];
 
+---
 <MainLayout title="Backup Status | Admin">
   <Container>
     <div class="py-12">
@@ -59,7 +88,7 @@ const backups = backupData?.backups || [];
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
               <div class="bg-gray-50 p-4 rounded-lg">
                 <h3 class="text-sm text-gray-500 uppercase mb-1">Status</h3>
-                <div class={`font-medium text-lg ${lastBackup.status === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                <div class:list={['font-medium', 'text-lg', lastBackup.status === 'success' ? 'text-green-600' : 'text-red-600']}>
                   {lastBackup.status === 'success' ? 'Successful' : 'Failed'}
                 </div>
               </div>
@@ -86,7 +115,7 @@ const backups = backupData?.backups || [];
               
               <div class="bg-gray-50 p-4 rounded-lg">
                 <h3 class="text-sm text-gray-500 uppercase mb-1">Retention Policy</h3>
-                <div class="font-medium text-lg">{backupData.retention_days} days</div>
+                <div class="font-medium text-lg">{backupData?.retention_days} days</div>
               </div>
             </div>
             
@@ -115,7 +144,7 @@ const backups = backupData?.backups || [];
                   </tr>
                 </thead>
                 <tbody>
-                  {backups.map((backup) => (
+                  {backups.map((backup: BackupFile) => (
                     <tr class="border-b">
                       <td class="px-4 py-3 font-mono text-sm">{backup.filename}</td>
                       <td class="px-4 py-3">{new Date(backup.timestamp * 1000).toLocaleString()}</td>
