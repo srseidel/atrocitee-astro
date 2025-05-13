@@ -1,7 +1,7 @@
 ---
 import MainLayout from '../../layouts/MainLayout.astro';
 import Container from '../../components/ui/Container.astro';
-import { redirectIfNotAuthenticated, getUser } from '../../utils/auth';
+import { redirectIfNotAuthenticated, redirectIfNotAdmin, getUser } from '../../utils/auth';
 
 // Ensure this page is server-rendered, not statically generated
 export const prerender = false;
@@ -9,6 +9,10 @@ export const prerender = false;
 // Check authentication and redirect if not authenticated
 const redirectResponse = await redirectIfNotAuthenticated(Astro);
 if (redirectResponse) return redirectResponse;
+
+// Check admin role and redirect if not an admin
+const adminRedirectResponse = await redirectIfNotAdmin(Astro);
+if (adminRedirectResponse) return adminRedirectResponse;
 
 // Get user data for the page
 const user = await getUser(Astro);
@@ -22,6 +26,7 @@ const user = await getUser(Astro);
       <div class="bg-neutral-50 p-6 rounded-lg mb-8">
         <h2 class="text-xl font-semibold mb-4">Welcome, {user?.email}</h2>
         <p class="text-neutral-600 mb-4">Your account was created on {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</p>
+        <p class="text-emerald-600 font-medium mb-4">You have administrator privileges</p>
         
         <button 
           id="sign-out-btn"
