@@ -1,0 +1,70 @@
+---
+import MainLayout from '../../layouts/MainLayout.astro';
+import Container from '../../components/ui/Container.astro';
+import { createServerSupabaseClient } from '../../lib/supabase';
+import { redirectIfNotAuthenticated } from '../../utils/auth';
+
+// Ensure this page is server-rendered, not statically generated
+export const prerender = false;
+
+// Check authentication and redirect if not authenticated
+const redirectResponse = await redirectIfNotAuthenticated(Astro);
+if (redirectResponse) return redirectResponse;
+
+// Check the user's profile
+const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+const { data: session } = await supabase.auth.getSession();
+const userId = session?.session?.user?.id;
+
+// Get profile data
+const { data: profile, error } = await supabase
+  .from('profiles')
+  .select('*')
+  .eq('id', userId)
+  .single();
+---
+
+<MainLayout title="Role Check">
+  <Container>
+    <div class="py-12">
+      <h1 class="text-3xl font-bold mb-8">User Role Checker</h1>
+      
+      <div class="bg-neutral-50 p-6 rounded-lg">
+        <h2 class="text-xl font-semibold mb-4">User Information</h2>
+        
+        {error && (
+          <div class="bg-red-100 p-4 mb-4 rounded">
+            <p class="text-red-800">Error: {error.message}</p>
+          </div>
+        )}
+        
+        {profile && (
+          <div>
+            <p class="mb-2"><strong>User ID:</strong> {profile.id}</p>
+            <p class="mb-2"><strong>Email:</strong> {profile.email}</p>
+            <p class="mb-2">
+              <strong>Role:</strong> 
+              <span class={profile.role === 'admin' ? 'text-green-600 font-bold' : 'text-blue-600'}>
+                {profile.role || 'No role set'}
+              </span>
+            </p>
+            
+            <div class="mt-6 p-4 bg-gray-100 rounded">
+              <h3 class="font-semibold mb-2">Raw Profile Data:</h3>
+              <pre class="text-xs overflow-auto">{JSON.stringify(profile, null, 2)}</pre>
+            </div>
+          </div>
+        )}
+        
+        {!profile && !error && (
+          <p>No profile data found for the current user.</p>
+        )}
+        
+        <div class="mt-6">
+          <a href="/admin" class="btn btn-primary mr-4">Try Admin Page</a>
+          <a href="/" class="btn btn-secondary">Go Home</a>
+        </div>
+      </div>
+    </div>
+  </Container>
+</MainLayout> 

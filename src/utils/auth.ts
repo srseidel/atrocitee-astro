@@ -20,15 +20,28 @@ export async function isAdmin(context: { cookies: any }): Promise<boolean> {
   const { data } = await supabase.auth.getSession();
   
   if (!data.session) {
+    console.log("[DEBUG] isAdmin: No session found");
     return false;
   }
   
   // Fetch the user's profile to check the role
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from('profiles')
     .select('role')
     .eq('id', data.session.user.id)
     .single();
+  
+  if (error) {
+    console.log("[DEBUG] isAdmin error:", error.message);
+    return false;
+  }
+  
+  console.log("[DEBUG] isAdmin check:", {
+    userId: data.session.user.id,
+    userEmail: data.session.user.email,
+    role: profile?.role,
+    isAdmin: profile?.role === 'admin'
+  });
     
   return profile?.role === 'admin';
 }
