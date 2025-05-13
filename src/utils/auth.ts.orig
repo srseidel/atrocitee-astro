@@ -24,36 +24,26 @@ export async function isAdmin(context: { cookies: any }): Promise<boolean> {
     return false;
   }
   
-  // Call the is_admin database function (security definer)
-  // This bypasses RLS for checking the admin role
-  const { data: result, error } = await supabase
-    .rpc('is_admin', { user_id: data.session.user.id });
+  // Fetch the user's profile to check the role
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', data.session.user.id)
+    .single();
   
   if (error) {
     console.log("[DEBUG] isAdmin error:", error.message);
-    // Fallback to direct query if RPC not available yet
-    try {
-      // Try direct query with service role if available
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', data.session.user.id)
-        .single();
-      
-      const isAdminUser = profile?.role === 'admin';
-      console.log("[DEBUG] Fallback admin check:", { 
-        role: profile?.role, 
-        isAdmin: isAdminUser 
-      });
-      return isAdminUser;
-    } catch (err) {
-      console.log("[DEBUG] Both checks failed:", err);
-      return false;
-    }
+    return false;
   }
   
-  console.log("[DEBUG] isAdmin check result:", result);
-  return !!result;
+  console.log("[DEBUG] isAdmin check:", {
+    userId: data.session.user.id,
+    userEmail: data.session.user.email,
+    role: profile?.role,
+    isAdmin: profile?.role === 'admin'
+  });
+    
+  return profile?.role === 'admin';
 }
 
 // Redirect if not authenticated (for use in .astro files)
