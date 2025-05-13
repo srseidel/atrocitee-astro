@@ -78,7 +78,9 @@ Phase 1 focuses on establishing the core technical architecture and development 
 - Database schema implemented with proper relationships between tables
 - Row Level Security (RLS) policies implemented for all tables
 - Admin role permissions configured at the database level using RLS policies
+- Security definer function (`is_admin`) implemented to bypass RLS for role checking
 - Documentation created to support easy setup and maintenance
+- Supabase offers automatic backups depending on the plan, but a custom backup strategy still needs to be documented
 
 ### 5. Authentication Implementation
 
@@ -101,7 +103,8 @@ Phase 1 focuses on establishing the core technical architecture and development 
 - Two-layered approach to role-based access control:
   1. **Database-level**: Supabase RLS policies control data access based on user role
   2. **Application-level**: Middleware controls route access and UI rendering
-- Admin middleware checks the user's role in the profiles table
+- Admin middleware checks the user's role using a security definer function
+- This avoids the circular dependency of needing admin access to check if a user is admin
 - Unauthorized access redirects to a dedicated page with feedback
 
 ### 6. Basic Site Structure
@@ -193,6 +196,7 @@ Phase 1 focuses on establishing the core technical architecture and development 
   1. **Database Layer**: Supabase RLS policies control what data users can access based on their role
   2. **Application Layer**: Server-side middleware controls which routes/pages users can access
   This combined approach provides comprehensive security by protecting both data and UI components
+  - A `SECURITY DEFINER` function is used to bypass RLS when checking admin roles, avoiding circular permission dependencies
 
 ## Success Criteria
 

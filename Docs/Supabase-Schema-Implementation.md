@@ -274,6 +274,26 @@ CREATE POLICY "Admins can delete order items" ON order_items
   FOR DELETE USING (auth.jwt() ->> 'role' = 'admin');
 ```
 
+## Utility Functions
+
+For proper role-based access control, the following utility functions need to be implemented:
+
+```sql
+-- Create a security definer function to check admin status
+-- This bypasses RLS and allows middleware to check roles without permission issues
+CREATE OR REPLACE FUNCTION is_admin(user_id UUID)
+RETURNS BOOLEAN AS $$
+DECLARE
+  user_role TEXT;
+BEGIN
+  SELECT role INTO user_role FROM profiles WHERE id = user_id;
+  RETURN user_role = 'admin';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+This function is used by the application middleware to check if a user is an admin. The `SECURITY DEFINER` attribute ensures it runs with the privileges of the user who created it (postgres), bypassing Row Level Security. This solves the circular dependency problem of needing admin privileges to check if a user is an admin.
+
 ## Implementation Steps
 
 1. **Connect to Supabase SQL Editor**:
@@ -325,6 +345,12 @@ Supabase provides automatic daily backups for all projects. For additional backu
      DROP TABLE table_name CASCADE;
      ```
    - This will automatically drop all dependent objects
+
+3. **Permission Denied for Table Profiles**:
+   - This happens when checking admin status directly from the profiles table
+   - RLS policies prevent access to the profiles table before admin status is determined
+   - Use the `is_admin` security definer function instead of direct table queries
+   - This bypasses RLS for this specific security check
 
 ## Next Steps
 

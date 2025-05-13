@@ -247,4 +247,18 @@ CREATE POLICY "Admins can delete order items" ON order_items
 -- Replace '00000000-0000-0000-0000-000000000000' with the actual user UUID
 UPDATE profiles
 SET role = 'admin'
-WHERE id = '00000000-0000-0000-0000-000000000000'; 
+WHERE id = '00000000-0000-0000-0000-000000000000';
+
+## 9. Create Security Definer Functions
+
+-- Create a security definer function to check admin status
+-- This bypasses RLS and allows middleware to check roles without permission issues
+CREATE OR REPLACE FUNCTION is_admin(user_id UUID)
+RETURNS BOOLEAN AS $$
+DECLARE
+  user_role TEXT;
+BEGIN
+  SELECT role INTO user_role FROM profiles WHERE id = user_id;
+  RETURN user_role = 'admin';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER; 
