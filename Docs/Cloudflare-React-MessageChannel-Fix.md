@@ -30,6 +30,7 @@ import { defineConfig } from 'astro/config';
 import tailwind from '@astrojs/tailwind';
 import react from '@astrojs/react';
 import cloudflare from '@astrojs/cloudflare';
+import sentry from '@sentry/astro';
 
 // Determine if we're in development or production mode
 const isDev = process.env.NODE_ENV === 'development';
@@ -41,7 +42,10 @@ export default defineConfig({
   adapter: cloudflare(),
   integrations: [
     // your integrations...
-    react()
+    react(),
+    // Add Sentry integration - only enabled in non-development environments
+    // unless specifically enabled with env var
+    !isDev || process.env.ENABLE_SENTRY_IN_DEV ? sentry() : null,
   ],
   vite: {
     // Only apply the alias in production builds

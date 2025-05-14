@@ -1,0 +1,37 @@
+---
+import MainLayout from "../layouts/MainLayout.astro";
+---
+
+<MainLayout title="Sentry Error Test Page">
+  <div class="container mx-auto p-4">
+    <h1 class="text-2xl font-bold mb-4">Sentry Error Test</h1>
+    
+    <p class="mb-4">Click the button below to trigger a test error that will be captured by Sentry:</p>
+    
+    <button 
+      id="error-button"
+      class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
+    >
+      Throw test error
+    </button>
+    
+    <div class="mt-4 p-4 bg-gray-100 rounded">
+      <h2 class="font-bold">How to verify:</h2>
+      <ol class="list-decimal ml-4 mt-2">
+        <li>Click the button above</li>
+        <li>The page will show an error</li>
+        <li>Check the Sentry dashboard to verify the error was captured</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    function handleClick() {
+      // Add some custom context to the error
+      console.error("Manually triggered test error");
+      throw new Error('This is a test error for Sentry');
+    }
+    
+    document.querySelector("#error-button")?.addEventListener("click", handleClick);
+  </script>
+</MainLayout> 
