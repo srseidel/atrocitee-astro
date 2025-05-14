@@ -1,0 +1,140 @@
+---
+// Standalone Sentry test page with direct initialization
+---
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Direct Sentry Test</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+    button { background: #e63946; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; margin: 10px 0; }
+    .message { margin-top: 20px; padding: 15px; background: #f8d7da; color: #721c24; border-radius: 4px; display: none; }
+    pre { background: #f8f9fa; padding: 15px; border-radius: 4px; overflow: auto; }
+  </style>
+  <!-- Import Sentry directly from CDN for testing -->
+  <script src="https://browser.sentry-cdn.com/7.80.1/bundle.min.js" integrity="sha384-YVAIA2HQOp9+5VbbpFO+enofw6u3JnYKX/9HeP3/RAS+vytRO/LAlNNFZ9RQ6q0W" crossorigin="anonymous"></script>
+  <script>
+    // Define window.Sentry for TypeScript
+    declare global {
+      interface Window {
+        Sentry: any;
+      }
+    }
+  </script>
+</head>
+<body>
+  <h1>Direct Sentry Test</h1>
+  <p>This page directly initializes Sentry from a client script to test error reporting.</p>
+
+  <div>
+    <label>Current DSN:</label>
+    <pre id="dsn-display">https://7100a982ab62eb0613637edb1d26e93f@o4509319023558656.ingest.us.sentry.io/4509319237599232</pre>
+  </div>
+  
+  <button id="init-btn">1. Initialize Sentry</button>
+  <button id="error-btn" disabled>2. Throw Error</button>
+  <button id="message-btn" disabled>3. Send Message</button>
+  
+  <div id="message" class="message">Action completed! Check console and Sentry dashboard.</div>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const initBtn = document.getElementById('init-btn');
+      const errorBtn = document.getElementById('error-btn');
+      const messageBtn = document.getElementById('message-btn');
+      const messageDiv = document.getElementById('message');
+      const dsnDisplay = document.getElementById('dsn-display');
+      
+      // DSN for Sentry
+      const DSN = "https://7100a982ab62eb0613637edb1d26e93f@o4509319023558656.ingest.us.sentry.io/4509319237599232";
+      
+      if (dsnDisplay) {
+        dsnDisplay.textContent = DSN;
+      }
+      
+      // Step 1: Initialize button
+      if (initBtn) {
+        initBtn.addEventListener('click', function() {
+          try {
+            console.log("Initializing Sentry with DSN:", DSN);
+            
+            // Initialize Sentry directly from window global
+            window.Sentry.init({
+              dsn: DSN,
+              debug: true, // Enable debug mode to see verbose logs
+              environment: "test",
+              beforeSend(event: any) {
+                console.log("Sending event to Sentry:", event);
+                return event;
+              }
+            });
+            
+            // Update UI
+            if (messageDiv) {
+              messageDiv.style.display = 'block';
+              messageDiv.textContent = 'Sentry initialized! Check console for details.';
+            }
+            
+            // Enable other buttons
+            if (errorBtn) (errorBtn as HTMLButtonElement).disabled = false;
+            if (messageBtn) (messageBtn as HTMLButtonElement).disabled = false;
+            
+            console.log("Sentry initialization complete");
+          } catch (e) {
+            console.error("Error initializing Sentry:", e);
+            if (messageDiv) {
+              messageDiv.style.display = 'block';
+              messageDiv.textContent = 'Error initializing Sentry! Check console.';
+            }
+          }
+        });
+      }
+      
+      // Step 2: Error button
+      if (errorBtn) {
+        errorBtn.addEventListener('click', function() {
+          try {
+            if (messageDiv) {
+              messageDiv.style.display = 'block';
+              messageDiv.textContent = 'Error thrown! Check console and Sentry dashboard.';
+            }
+            
+            console.log("Throwing test error for Sentry");
+            
+            // Deliberately throw an error
+            throw new Error("Test error from direct Sentry test page");
+          } catch (e) {
+            console.error("Error caught:", e);
+            // Let Sentry catch it through the global handler
+          }
+        });
+      }
+      
+      // Step 3: Message button
+      if (messageBtn) {
+        messageBtn.addEventListener('click', function() {
+          try {
+            if (messageDiv) {
+              messageDiv.style.display = 'block';
+              messageDiv.textContent = 'Message sent to Sentry! Check dashboard.';
+            }
+            
+            console.log("Sending test message to Sentry");
+            
+            // Explicitly send a message
+            window.Sentry.captureMessage("Test message from direct Sentry test page", {
+              level: 'info'
+            });
+            
+            console.log("Message sent to Sentry");
+          } catch (e) {
+            console.error("Error sending message:", e);
+          }
+        });
+      }
+    });
+  </script>
+</body>
+</html> 

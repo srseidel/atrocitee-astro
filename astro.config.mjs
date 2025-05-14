@@ -46,7 +46,7 @@ export default defineConfig({
     },
     // Define public environment variables for Sentry
     define: {
-      'import.meta.env.PUBLIC_SENTRY_DSN': JSON.stringify("https://46121e36fe4737ca78f0cfdd9764ca43@o4509319023558656.ingest.us.sentry.io/4509319029784576"),
+      'import.meta.env.PUBLIC_SENTRY_DSN': JSON.stringify("https://7100a982ab62eb0613637edb1d26e93f@o4509319023558656.ingest.us.sentry.io/4509319237599232"),
       'import.meta.env.PUBLIC_SENTRY_ENVIRONMENT': JSON.stringify(
         process.env.PUBLIC_SENTRY_ENVIRONMENT || 
         (isDev ? 'development' : 'production')

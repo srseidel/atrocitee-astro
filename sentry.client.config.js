@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/astro";
 
 Sentry.init({
-  dsn: "https://46121e36fe4737ca78f0cfdd9764ca43@o4509319023558656.ingest.us.sentry.io/4509319029784576",
+  dsn: "https://7100a982ab62eb0613637edb1d26e93f@o4509319023558656.ingest.us.sentry.io/4509319237599232",
   
   // Adds request headers and IP for users
   sendDefaultPii: true,

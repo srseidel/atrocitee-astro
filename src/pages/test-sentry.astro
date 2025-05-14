@@ -1,5 +1,8 @@
 ---
 import MainLayout from "../layouts/MainLayout.astro";
+
+// Don't use server-side rendering to avoid cookie conflicts
+// export const prerender = false;
 ---
 
 <MainLayout title="Sentry Error Test Page">
@@ -14,24 +17,76 @@ import MainLayout from "../layouts/MainLayout.astro";
     >
       Throw test error
     </button>
+
+    <button 
+      id="sentry-message-button"
+      class="ml-2 bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded"
+    >
+      Send Sentry message
+    </button>
     
     <div class="mt-4 p-4 bg-gray-100 rounded">
       <h2 class="font-bold">How to verify:</h2>
       <ol class="list-decimal ml-4 mt-2">
-        <li>Click the button above</li>
-        <li>The page will show an error</li>
-        <li>Check the Sentry dashboard to verify the error was captured</li>
+        <li>Click one of the buttons above</li>
+        <li>The page will show a confirmation message</li>
+        <li>Check the Sentry dashboard to verify the message was captured</li>
       </ol>
+    </div>
+    
+    <div id="error-message" class="mt-4 hidden p-4 bg-red-100 text-red-700 rounded">
+      Error thrown! Check the console and Sentry dashboard.
     </div>
   </div>
 
   <script>
-    function handleClick() {
-      // Add some custom context to the error
-      console.error("Manually triggered test error");
-      throw new Error('This is a test error for Sentry');
-    }
-    
-    document.querySelector("#error-button")?.addEventListener("click", handleClick);
+    // Client-side error handling
+    document.addEventListener('DOMContentLoaded', () => {
+      const errorButton = document.getElementById('error-button');
+      const sentryMessageButton = document.getElementById('sentry-message-button');
+      const errorMessage = document.getElementById('error-message');
+      
+      if (errorButton) {
+        errorButton.addEventListener('click', () => {
+          // Make the error message visible
+          if (errorMessage) {
+            errorMessage.classList.remove('hidden');
+          }
+          
+          // Log to console for debugging
+          console.error("Manually triggered test error for Sentry");
+          
+          // Explicitly throw an error to be caught by Sentry
+          try {
+            // This will cause an error
+            const obj = null;
+            // @ts-ignore - Intentionally causing an error for Sentry testing
+            obj.nonExistentMethod();
+          } catch (e) {
+            // Browsers with Sentry installed will automatically capture this
+            console.error("Error caught:", e);
+            
+            // For manual error reporting, uncomment and use your own error tracking:
+            // window.Sentry?.captureException(e);
+          }
+        });
+      }
+
+      if (sentryMessageButton) {
+        sentryMessageButton.addEventListener('click', () => {
+          // Make the error message visible
+          if (errorMessage) {
+            errorMessage.classList.remove('hidden');
+            errorMessage.textContent = "Custom message sent to Sentry! Check the dashboard.";
+          }
+          
+          // This is caught by the browser's console
+          console.log("Test message for error tracking");
+          
+          // For manual message reporting, uncomment:
+          // window.Sentry?.captureMessage("Test message");
+        });
+      }
+    });
   </script>
 </MainLayout> 
