@@ -94,6 +94,14 @@ Atroci-Tee is a merchandise platform that turns political outrage and current ev
 #### 8. Local Category Management
 - **[MVP Required]** Basic category management for t-shirts
 - **[MVP Required]** Simple filtering and display by category
+- **[MVP Required]** Printful category mapping to Atrocitee categories
+  - Synchronization of Printful categories to internal system
+  - Admin interface for mapping Printful categories to Atrocitee categories
+  - Automatic category assignment for newly imported products
+- **[MVP Required]** Tag-based product organization for more granular filtering
+  - Tags to complement the broader category system
+  - Ability to filter products by multiple tags
+  - Admin interface for tag management
 - **[Post-MVP]** Advanced taxonomy and categorization features
 - **[Post-MVP]** Enhanced product filtering and search
 

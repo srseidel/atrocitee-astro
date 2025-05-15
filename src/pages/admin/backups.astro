@@ -1,9 +1,6 @@
 ---
 import MainLayout from '../../layouts/MainLayout.astro';
 import Container from '../../components/ui/Container.astro';
-import { redirectIfNotAuthenticated } from '../../utils/auth';
-import { redirectIfNotAdmin } from '../../utils/auth';
-import { getUser } from '../../utils/auth';
 import { createServerSupabaseClient } from '../../lib/supabase';
 
 
@@ -34,19 +31,14 @@ interface BackupData {
 // Ensure this page is server-rendered, not statically generated
 export const prerender = false;
 
-// Check authentication and redirect if not authenticated
-const redirectResponse = await redirectIfNotAuthenticated(Astro);
-if (redirectResponse) return redirectResponse;
-
-// Check admin role and redirect if not an admin
-const adminRedirectResponse = await redirectIfNotAdmin(Astro);
-if (adminRedirectResponse) return adminRedirectResponse;
+// Authentication is now handled by middleware in src/middleware.ts
 
 // Get user data for the page
-const user = await getUser(Astro);
+const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+const { data: userData } = await supabase.auth.getUser();
+const user = userData?.user;
 
 // Get backup status data
-const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
 const { data: backupStatus, error } = await supabase
   .from('backup_status')
   .select('*')

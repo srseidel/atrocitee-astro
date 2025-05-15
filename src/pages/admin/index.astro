@@ -1,21 +1,17 @@
 ---
 import MainLayout from '../../layouts/MainLayout.astro';
 import Container from '../../components/ui/Container.astro';
-import { redirectIfNotAuthenticated, redirectIfNotAdmin, getUser } from '../../utils/auth';
+import { createServerSupabaseClient } from '../../lib/supabase';
 
 // Ensure this page is server-rendered, not statically generated
 export const prerender = false;
 
-// Check authentication and redirect if not authenticated
-const redirectResponse = await redirectIfNotAuthenticated(Astro);
-if (redirectResponse) return redirectResponse;
-
-// Check admin role and redirect if not an admin
-const adminRedirectResponse = await redirectIfNotAdmin(Astro);
-if (adminRedirectResponse) return adminRedirectResponse;
+// Authentication is now handled by middleware in src/middleware.ts
 
 // Get user data for the page
-const user = await getUser(Astro);
+const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+const { data } = await supabase.auth.getUser();
+const user = data?.user;
 ---
 
 <MainLayout title="Admin Dashboard">

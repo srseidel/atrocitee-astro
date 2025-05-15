@@ -1,0 +1,194 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import { createServerSupabaseClient } from "../../lib/supabase";
+
+// Server-side rendering to ensure we can access cookies
+export const prerender = false;
+
+// Authentication is now handled by middleware in src/middleware.ts
+
+// Fetch dashboard data from the database
+const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+
+// Get order stats
+const { data: orderStats, error: orderError } = await supabase
+  .from('orders')
+  .select('count', { count: 'exact', head: true });
+
+// Get product stats
+const { data: productStats, error: productError } = await supabase
+  .from('products')
+  .select('count', { count: 'exact', head: true });
+
+// Get customer stats
+const { data: customerStats, error: customerError } = await supabase
+  .from('profiles')
+  .select('count', { count: 'exact', head: true });
+
+// Get pending changes count
+const { data: pendingChanges, error: pendingChangesError } = await supabase
+  .from('printful_product_changes')
+  .select('count', { count: 'exact', head: true })
+  .eq('status', 'pending_review');
+
+// Get recent orders
+const { data: recentOrders, error: recentOrdersError } = await supabase
+  .from('orders')
+  .select('id, created_at, total_amount, status, customer:user_id(email)')
+  .order('created_at', { ascending: false })
+  .limit(5);
+
+---
+<AdminLayout title="Admin Dashboard">
+  <div class="container mx-auto p-6">
+    <h1 class="text-3xl font-bold mb-6">Dashboard</h1>
+    
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <!-- Orders -->
+      <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-indigo-500">
+        <div class="flex items-center">
+          <div class="p-3 rounded-full bg-indigo-100 mr-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-gray-500 text-sm">Total Orders</p>
+            <p class="text-2xl font-bold">{orderStats?.count || 0}</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Products -->
+      <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+        <div class="flex items-center">
+          <div class="p-3 rounded-full bg-green-100 mr-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8 4l-8 4m8-4l-8-4m8-4v12m0 0l-8 4m8-4l8-4m-16 4l8 4m-8-4v-12m0 0l8 4" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-gray-500 text-sm">Total Products</p>
+            <p class="text-2xl font-bold">{productStats?.count || 0}</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Customers -->
+      <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
+        <div class="flex items-center">
+          <div class="p-3 rounded-full bg-blue-100 mr-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-gray-500 text-sm">Total Customers</p>
+            <p class="text-2xl font-bold">{customerStats?.count || 0}</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Pending Changes -->
+      <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-yellow-500">
+        <div class="flex items-center">
+          <div class="p-3 rounded-full bg-yellow-100 mr-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-gray-500 text-sm">Pending Changes</p>
+            <p class="text-2xl font-bold">{pendingChanges?.count || 0}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Recent Orders Panel -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold">Recent Orders</h2>
+        <a href="/admin/orders" class="text-blue-600 hover:text-blue-800 text-sm">View All</a>
+      </div>
+      
+      {recentOrders && recentOrders.length > 0 ? (
+        <div class="overflow-x-auto">
+          <table class="min-w-full">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
+                <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
+                <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th class="py-3 px-4 text-right text-xs font-medium text-gray-500 uppercase">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+              {recentOrders.map((order) => (
+                <tr>
+                  <td class="py-3 px-4 whitespace-nowrap text-sm">{order.id.substring(0, 8)}...</td>
+                  <td class="py-3 px-4 whitespace-nowrap text-sm">{new Date(order.created_at).toLocaleDateString()}</td>
+                  <td class="py-3 px-4 whitespace-nowrap text-sm">{order.customer?.email || 'Guest'}</td>
+                  <td class="py-3 px-4 whitespace-nowrap text-sm">${order.total_amount.toFixed(2)}</td>
+                  <td class="py-3 px-4 whitespace-nowrap text-sm">
+                    <span class={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                      ${order.status === 'completed' ? 'bg-green-100 text-green-800' : 
+                        order.status === 'processing' ? 'bg-blue-100 text-blue-800' : 
+                        order.status === 'canceled' ? 'bg-red-100 text-red-800' : 
+                        'bg-yellow-100 text-yellow-800'}`}>
+                      {order.status}
+                    </span>
+                  </td>
+                  <td class="py-3 px-4 whitespace-nowrap text-right text-sm">
+                    <a href={`/admin/orders/${order.id}`} class="text-blue-600 hover:text-blue-900">View</a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p class="text-gray-600">No recent orders found.</p>
+      )}
+    </div>
+    
+    <!-- Quick Links -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-lg font-semibold mb-3">Products</h3>
+        <p class="text-gray-600 mb-4">Manage your product catalog, categories, and inventory.</p>
+        <div class="flex flex-col space-y-2">
+          <a href="/admin/products" class="text-blue-600 hover:text-blue-800">All Products</a>
+          <a href="/admin/products/sync" class="text-blue-600 hover:text-blue-800">Sync with Printful</a>
+          <a href="/admin/products/categories" class="text-blue-600 hover:text-blue-800">Categories</a>
+          <a href="/admin/products/tags" class="text-blue-600 hover:text-blue-800">Tags</a>
+        </div>
+      </div>
+      
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-lg font-semibold mb-3">Orders</h3>
+        <p class="text-gray-600 mb-4">Track, manage, and fulfill customer orders.</p>
+        <div class="flex flex-col space-y-2">
+          <a href="/admin/orders" class="text-blue-600 hover:text-blue-800">All Orders</a>
+          <a href="/admin/orders?status=pending" class="text-blue-600 hover:text-blue-800">Pending Orders</a>
+          <a href="/admin/orders?status=processing" class="text-blue-600 hover:text-blue-800">Processing Orders</a>
+          <a href="/admin/orders/shipping" class="text-blue-600 hover:text-blue-800">Shipping Settings</a>
+        </div>
+      </div>
+      
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-lg font-semibold mb-3">Store Management</h3>
+        <p class="text-gray-600 mb-4">Configure your store settings and appearance.</p>
+        <div class="flex flex-col space-y-2">
+          <a href="/admin/settings" class="text-blue-600 hover:text-blue-800">Store Settings</a>
+          <a href="/admin/customers" class="text-blue-600 hover:text-blue-800">Customers</a>
+          <a href="/admin/discounts" class="text-blue-600 hover:text-blue-800">Discounts</a>
+          <a href="/admin/backups" class="text-blue-600 hover:text-blue-800">Backups</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</AdminLayout> 

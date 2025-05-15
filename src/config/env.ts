@@ -16,6 +16,13 @@ const ENV = {
   
   // Stripe (Public)
   PUBLIC_STRIPE_PUBLISHABLE_KEY: import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY as string,
+  
+  // Printful API Integration
+  PRINTFUL_API_KEY: import.meta.env.PRINTFUL_API_KEY as string,
+  PUBLIC_PRINTFUL_WEBHOOK_SECRET: import.meta.env.PUBLIC_PRINTFUL_WEBHOOK_SECRET as string,
+  
+  // Cron and Scheduling
+  CRON_SECRET: import.meta.env.CRON_SECRET as string,
 };
 
 // Validate required public environment variables
@@ -23,6 +30,7 @@ function validateEnv() {
   const requiredEnvVars = [
     'PUBLIC_SUPABASE_URL',
     'PUBLIC_SUPABASE_ANON_KEY',
+    'PRINTFUL_API_KEY',
   ];
   
   const missingEnvVars = requiredEnvVars.filter(

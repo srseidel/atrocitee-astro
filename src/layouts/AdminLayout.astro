@@ -1,0 +1,49 @@
+---
+import MainLayout from "./MainLayout.astro";
+
+interface Props {
+  title?: string;
+}
+
+const { title = "Admin Dashboard" } = Astro.props;
+---
+
+<MainLayout title={title}>
+  <div class="flex min-h-screen bg-gray-100">
+    <!-- Admin sidebar -->
+    <aside class="w-64 bg-white shadow-md">
+      <div class="p-4 border-b">
+        <h2 class="text-xl font-bold">Admin Panel</h2>
+      </div>
+      <nav class="p-4">
+        <ul class="space-y-2">
+          <li>
+            <a href="/admin/dashboard" class="block px-4 py-2 text-gray-700 hover:bg-blue-500 hover:text-white rounded">
+              Dashboard
+            </a>
+          </li>
+          <li>
+            <a href="/admin/products" class="block px-4 py-2 text-gray-700 hover:bg-blue-500 hover:text-white rounded">
+              Products
+            </a>
+          </li>
+          <li>
+            <a href="/admin/orders" class="block px-4 py-2 text-gray-700 hover:bg-blue-500 hover:text-white rounded">
+              Orders
+            </a>
+          </li>
+          <li>
+            <a href="/admin/users" class="block px-4 py-2 text-gray-700 hover:bg-blue-500 hover:text-white rounded">
+              Users
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+    
+    <!-- Main content -->
+    <main class="flex-1">
+      <slot />
+    </main>
+  </div>
+</MainLayout> 

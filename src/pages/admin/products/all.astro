@@ -1,0 +1,300 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { createServerSupabaseClient } from "../../../lib/supabase";
+
+// Ensure this page is server-rendered, not statically generated
+export const prerender = false;
+
+// Authentication is now handled by middleware in src/middleware.ts
+
+// Parse query parameters
+const { searchParams } = Astro.url;
+const page = parseInt(searchParams.get('page') || '1');
+const limit = 10;
+const offset = (page - 1) * limit;
+const search = searchParams.get('search') || '';
+const sortBy = searchParams.get('sortBy') || 'created_at';
+const sortOrder = searchParams.get('sortOrder') || 'desc';
+const filterActive = searchParams.get('active');
+
+// Get categories for filtering
+const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+const { data: categories } = await supabase
+  .from('categories')
+  .select('id, name')
+  .eq('active', true)
+  .order('name');
+
+// Build query for products
+let query = supabase
+  .from('products')
+  .select('*, product_categories(category_id, categories(name))', { count: 'exact' });
+
+// Apply filters
+if (search) {
+  query = query.ilike('name', `%${search}%`);
+}
+
+if (filterActive === 'true') {
+  query = query.eq('active', true);
+} else if (filterActive === 'false') {
+  query = query.eq('active', false);
+}
+
+// Apply sorting
+query = query.order(sortBy, { ascending: sortOrder === 'asc' });
+
+// Apply pagination
+query = query.range(offset, offset + limit - 1);
+
+// Execute query
+const { data: products, count: totalCount, error } = await query;
+
+// Calculate pagination info
+const totalPages = Math.ceil((totalCount || 0) / limit);
+const showPagination = totalPages > 1;
+const paginationRange = Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+  if (totalPages <= 5) return i + 1;
+  if (page <= 3) return i + 1;
+  if (page >= totalPages - 2) return totalPages - 4 + i;
+  return page - 2 + i;
+}).filter(p => p > 0 && p <= totalPages);
+
+// Helper to build pagination URLs
+const getPaginationUrl = (p: number) => {
+  const params = new URLSearchParams(searchParams);
+  params.set('page', p.toString());
+  return `?${params.toString()}`;
+};
+
+// Helper to build sort URLs
+const getSortUrl = (column: string) => {
+  const params = new URLSearchParams(searchParams);
+  if (sortBy === column) {
+    params.set('sortOrder', sortOrder === 'asc' ? 'desc' : 'asc');
+  } else {
+    params.set('sortBy', column);
+    params.set('sortOrder', 'asc');
+  }
+  params.set('page', '1');
+  return `?${params.toString()}`;
+};
+
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  active: boolean;
+  image_urls: string[];
+  donation_amount?: number;
+  created_at: string;
+  product_variants: any[];
+}
+--- 
+<AdminLayout title="All Products">
+  <div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-3xl font-bold">All Products</h1>
+      <a href="/admin/products" class="btn btn-secondary">Back to Dashboard</a>
+    </div>
+    
+    <!-- Search and Filter -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+      <form class="space-y-4">
+        <div class="flex flex-col md:flex-row gap-4">
+          <div class="flex-1">
+            <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Search Products</label>
+            <input
+              type="text"
+              id="search"
+              name="search"
+              value={search}
+              placeholder="Search by product name..."
+              class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+          
+          <div class="w-full md:w-40">
+            <label for="active" class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <select
+              id="active"
+              name="active"
+              class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="">All</option>
+              <option value="true" selected={filterActive === 'true'}>Active</option>
+              <option value="false" selected={filterActive === 'false'}>Inactive</option>
+            </select>
+          </div>
+          
+          <div class="w-full md:w-40 flex items-end">
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+              Filter
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+    
+    <!-- Products Table -->
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+      {error && (
+        <div class="p-4 bg-red-50 border border-red-200 text-red-700">
+          Error loading products: {error.message}
+        </div>
+      )}
+      
+      {(!products || products.length === 0) && !error && (
+        <div class="p-8 text-center text-gray-500">
+          <p class="mb-4">No products found.</p>
+          <div class="flex justify-center">
+            <a href="/admin/products/sync" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
+              Import Products from Printful
+            </a>
+          </div>
+        </div>
+      )}
+      
+      {products && products.length > 0 && (
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <a href={getSortUrl('name')} class="hover:text-gray-700 flex items-center">
+                    Product
+                    {sortBy === 'name' && (
+                      <span class="ml-1">
+                        {sortOrder === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </a>
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <a href={getSortUrl('price')} class="hover:text-gray-700 flex items-center">
+                    Price
+                    {sortBy === 'price' && (
+                      <span class="ml-1">
+                        {sortOrder === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </a>
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <a href={getSortUrl('created_at')} class="hover:text-gray-700 flex items-center">
+                    Added
+                    {sortBy === 'created_at' && (
+                      <span class="ml-1">
+                        {sortOrder === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </a>
+                </th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              {products.map((product: Product) => (
+                <tr>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex items-center">
+                      <div class="flex-shrink-0 h-10 w-10">
+                        <img 
+                          class="h-10 w-10 rounded-full object-cover" 
+                          src={product.image_urls?.[0] || '/placeholder-product.png'} 
+                          alt={product.name}
+                        />
+                      </div>
+                      <div class="ml-4">
+                        <div class="text-sm font-medium text-gray-900">{product.name}</div>
+                        <div class="text-sm text-gray-500">ID: {product.id.substring(0, 8)}...</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-900">${product.price.toFixed(2)}</div>
+                    {product.donation_amount && (
+                      <div class="text-xs text-green-600">Donation: ${product.donation_amount.toFixed(2)}</div>
+                    )}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <span class={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${product.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                      {product.active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(product.created_at).toLocaleDateString()}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <a href={`/admin/products/edit/${product.id}`} class="text-blue-600 hover:text-blue-900 mr-3">Edit</a>
+                    <a href={`/products/${product.id}`} class="text-green-600 hover:text-green-900">View</a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      
+      {/* Pagination */}
+      {showPagination && (
+        <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+          <div class="flex-1 flex justify-between sm:hidden">
+            <a
+              href={page > 1 ? getPaginationUrl(page - 1) : '#'}
+              class={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${page > 1 ? 'bg-white hover:bg-gray-50 text-gray-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+            >
+              Previous
+            </a>
+            <a
+              href={page < totalPages ? getPaginationUrl(page + 1) : '#'}
+              class={`ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${page < totalPages ? 'bg-white hover:bg-gray-50 text-gray-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+            >
+              Next
+            </a>
+          </div>
+          <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            <div>
+              <p class="text-sm text-gray-700">
+                Showing <span class="font-medium">{offset + 1}</span> to <span class="font-medium">{Math.min(offset + limit, totalCount || 0)}</span> of <span class="font-medium">{totalCount}</span> products
+              </p>
+            </div>
+            <div>
+              <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                <a
+                  href={page > 1 ? getPaginationUrl(page - 1) : '#'}
+                  class={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 text-sm font-medium ${page > 1 ? 'bg-white hover:bg-gray-50 text-gray-500' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                >
+                  <span class="sr-only">Previous</span>
+                  &laquo;
+                </a>
+                
+                {paginationRange.map((p: number) => (
+                  <a
+                    href={getPaginationUrl(p)}
+                    class={`relative inline-flex items-center px-4 py-2 border ${p === page ? 'z-10 bg-blue-50 border-blue-500 text-blue-600' : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'} text-sm font-medium`}
+                  >
+                    {p}
+                  </a>
+                ))}
+                
+                <a
+                  href={page < totalPages ? getPaginationUrl(page + 1) : '#'}
+                  class={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 text-sm font-medium ${page < totalPages ? 'bg-white hover:bg-gray-50 text-gray-500' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                >
+                  <span class="sr-only">Next</span>
+                  &raquo;
+                </a>
+              </nav>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+</AdminLayout> 
