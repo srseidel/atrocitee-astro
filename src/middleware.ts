@@ -3,7 +3,9 @@ import type { MiddlewareHandler } from 'astro';
 
 // Pattern matching for protected routes
 const ADMIN_ROUTE_PATTERN = /^\/admin\//;
-const ACCOUNT_ROUTE_PATTERN = /^\/account\//;
+const ACCOUNT_ROUTE_PATTERN = /^\/account(\/|$)/;
+const ACCOUNTS_SETTINGS_PATH = '/accounts/setting';
+const ACCOUNTS_ORDER_PATH = '/accounts/order';
 const AUTH_PATHS = ['/auth/login', '/auth/register', '/auth/reset-password', '/auth/forgot-password'];
 
 // Authentication middleware
@@ -11,7 +13,10 @@ const authMiddleware: MiddlewareHandler = async ({ cookies, request, url }, next
   // Skip auth check for non-protected routes and auth pages
   const pathname = url.pathname;
   const isAuthPage = AUTH_PATHS.includes(pathname);
-  const isProtectedRoute = ADMIN_ROUTE_PATTERN.test(pathname) || ACCOUNT_ROUTE_PATTERN.test(pathname);
+  const isProtectedRoute = ADMIN_ROUTE_PATTERN.test(pathname) || 
+                           ACCOUNT_ROUTE_PATTERN.test(pathname) || 
+                           pathname === ACCOUNTS_SETTINGS_PATH || 
+                           pathname === ACCOUNTS_ORDER_PATH;
   
   if (!isProtectedRoute || isAuthPage) {
     return next();

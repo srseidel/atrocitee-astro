@@ -1,0 +1,45 @@
+---
+// Mark as server-rendered (required for authentication)
+export const prerender = false;
+
+import MainLayout from "../../layouts/MainLayout.astro";
+import Container from "../../components/ui/Container.astro";
+---
+
+<MainLayout title="Account Settings">
+  <Container>
+    <div class="py-8">
+      <h1 class="text-3xl font-bold mb-6">Account Settings</h1>
+      
+      <div class="bg-white rounded-lg shadow p-6">
+        <div class="mb-8">
+          <h2 class="text-xl font-semibold mb-4">Profile Information</h2>
+          
+          <!-- Placeholder for profile settings form -->
+          <div class="space-y-4">
+            <div class="form-group">
+              <label class="form-label" for="name">Full Name</label>
+              <input type="text" id="name" class="form-input" placeholder="Your full name" />
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label" for="email">Email Address</label>
+              <input type="email" id="email" class="form-input" disabled />
+              <p class="text-sm text-neutral-500 mt-1">To change your email, please contact support.</p>
+            </div>
+            
+            <button class="btn btn-primary mt-4">Save Changes</button>
+          </div>
+        </div>
+        
+        <div class="pt-6 border-t border-neutral-200">
+          <h2 class="text-xl font-semibold mb-4">Password</h2>
+          
+          <div class="space-y-4">
+            <button class="btn btn-outline">Change Password</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Container>
+</MainLayout> 

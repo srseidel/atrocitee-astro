@@ -18,42 +18,16 @@ let printfulServiceInstance: PrintfulService | null = null;
  */
 class MockPrintfulClient {
   async getSyncProducts(): Promise<any[]> {
-    // Create a properly structured mock response based on Printful API format
+    // Return mock products in the format that the real API returns
     return [
       { 
-        sync_product: { 
-          id: 1, 
-          external_id: 'mock-product-1',
-          name: 'Mock T-shirt',
-          variants: 2,
-          synced: 2,
-          thumbnail_url: 'https://example.com/thumbnail.jpg',
-          is_ignored: false
-        }, 
-        sync_variants: [
-          { 
-            id: 1,
-            external_id: 'mock-variant-1',
-            sync_product_id: 1,
-            name: 'Mock T-shirt - S / Black',
-            synced: true,
-            variant_id: 101,
-            main_category_id: 12,
-            warehouse_product_variant_id: 1001,
-            retail_price: '24.99',
-            sku: 'MOCK-TS-S-BLK',
-            currency: 'USD',
-            product: {
-              variant_id: 101,
-              product_id: 1,
-              image: 'https://example.com/mock-product.jpg',
-              name: 'Black T-shirt S'
-            },
-            files: [],
-            options: [{id: 'size', value: 'S'}, {id: 'color', value: 'Black'}],
-            is_ignored: false
-          }
-        ] 
+        id: 1, 
+        external_id: 'mock-product-1',
+        name: 'Mock T-shirt',
+        variants: 2,
+        synced: 2,
+        thumbnail_url: 'https://example.com/thumbnail.jpg',
+        is_ignored: false
       }
     ];
   }
@@ -80,8 +54,43 @@ class MockPrintfulClient {
     ];
   }
   
-  // Implement other methods as needed with proper return types
-  async getSyncProduct(): Promise<any> { return {}; }
+  async getSyncProduct(id: number): Promise<any> { 
+    return {
+      sync_product: { 
+        id: id, 
+        external_id: `mock-product-${id}`,
+        name: 'Mock Product',
+        variants: 2,
+        synced: 2,
+        thumbnail_url: 'https://example.com/thumbnail.jpg',
+        is_ignored: false
+      }, 
+      sync_variants: [
+        { 
+          id: 1,
+          external_id: 'mock-variant-1',
+          sync_product_id: id,
+          name: 'Mock Product - S / Black',
+          synced: true,
+          variant_id: 101,
+          main_category_id: 12,
+          warehouse_product_variant_id: 1001,
+          retail_price: '24.99',
+          sku: 'MOCK-TS-S-BLK',
+          currency: 'USD',
+          product: {
+            variant_id: 101,
+            product_id: id,
+            image: 'https://example.com/mock-product.jpg',
+            name: 'Black T-shirt S'
+          },
+          files: [],
+          options: [{id: 'size', value: 'S'}, {id: 'color', value: 'Black'}],
+          is_ignored: false
+        }
+      ] 
+    };
+  }
   
   async getCatalogProduct(): Promise<PrintfulCatalogProduct> { 
     return {
@@ -146,15 +155,49 @@ export default class PrintfulService {
     try {
       console.log('[PrintfulService] Attempting to get all products from Printful');
       const result = await this.client.getSyncProducts();
+      
+      // Handle empty results safely
+      if (!result || !Array.isArray(result)) {
+        console.warn('[PrintfulService] Printful API returned non-array result:', result);
+        return [];
+      }
+      
       console.log(`[PrintfulService] Successfully received ${result.length} products from Printful`);
-      return result;
+      
+      // Transform direct product format to expected structure if needed
+      const transformedProducts = result.map(product => {
+        // Check if the product is already in the expected format (has sync_product property)
+        if (product && product.sync_product) {
+          return product;
+        }
+        
+        // If it's a direct product object (like in API response), transform it
+        if (product && product.id) {
+          console.log(`[PrintfulService] Transforming product to expected format: ${product.id}`);
+          return {
+            sync_product: product,
+            sync_variants: [] // We'll fetch variants separately if needed
+          };
+        }
+        
+        // Invalid product
+        console.warn('[PrintfulService] Found invalid product in Printful response:', product);
+        return null;
+      }).filter(Boolean); // Remove any null items
+      
+      if (transformedProducts.length < result.length) {
+        console.warn(`[PrintfulService] Filtered out ${result.length - transformedProducts.length} invalid products`);
+      }
+      
+      return transformedProducts;
     } catch (error) {
       console.error('[PrintfulService] Failed to get products from Printful:', error);
       console.error(error instanceof Error ? error.stack : 'No stack trace available');
       Sentry.captureException(error, {
         tags: { service: 'printful', operation: 'getAllProducts' }
       });
-      throw error;
+      // Return empty array instead of throwing to allow the sync process to complete
+      return [];
     }
   }
 

@@ -21,7 +21,7 @@ export default function LoginForm() {
       } else {
         setSuccess(true);
         // Redirect or update UI as needed
-        window.location.href = '/admin';
+        window.location.href = '/account';
       }
     } catch (err) {
       setError('An unexpected error occurred');

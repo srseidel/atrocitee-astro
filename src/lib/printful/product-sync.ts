@@ -137,7 +137,7 @@ export default class PrintfulProductSync {
     const { data, error } = await this.supabase
       .from('products')
       .select('id')
-      .eq('printful_product_id', printfulProductId)
+      .eq('printful_id', printfulProductId)
       .maybeSingle();
 
     if (error) {
@@ -168,13 +168,12 @@ export default class PrintfulProductSync {
       name: printfulProduct.name,
       slug,
       description: '', // Printful sync products don't have descriptions
-      price: basePrice,
-      inventory_count: variants.length, // Use variant count as inventory for now
-      image_urls: printfulProduct.thumbnail_url ? [printfulProduct.thumbnail_url] : [],
-      active: true,
-      version: 1,
-      printful_product_id: printfulProduct.id,
-      printful_sync_product_id: printfulProduct.id
+      thumbnail_url: printfulProduct.thumbnail_url || null,
+      printful_id: printfulProduct.id,
+      printful_external_id: printfulProduct.external_id,
+      printful_synced: true,
+      is_ignored: printfulProduct.is_ignored,
+      active: true
     };
   }
 
@@ -188,20 +187,25 @@ export default class PrintfulProductSync {
     // Extract options from the variant
     const options: Record<string, string> = {};
     
-    variant.options.forEach(option => {
-      options[option.id] = option.value.toString();
-    });
+    if (variant.options && Array.isArray(variant.options)) {
+      variant.options.forEach(option => {
+        options[option.id] = option.value.toString();
+      });
+    }
 
     return {
       product_id: productId,
       name: variant.name,
       sku: variant.sku,
-      price: parseFloat(variant.retail_price),
-      options,
-      printful_variant_id: variant.variant_id,
-      printful_sync_variant_id: variant.id,
-      inventory_count: 1, // Printful doesn't provide inventory counts directly
-      active: true
+      retail_price: parseFloat(variant.retail_price),
+      options: options,
+      files: variant.files || [],
+      printful_id: variant.id,
+      printful_external_id: variant.external_id,
+      printful_product_id: variant.sync_product_id,
+      printful_synced: variant.synced || false,
+      in_stock: true,
+      currency: variant.currency || 'USD'
     };
   }
 
@@ -332,11 +336,11 @@ export default class PrintfulProductSync {
       }
       
       // Check image changes
-      if (JSON.stringify(currentProduct.image_urls) !== JSON.stringify(newProductData.image_urls)) {
+      if (JSON.stringify(currentProduct.thumbnail_url) !== JSON.stringify(newProductData.thumbnail_url)) {
         changes.push({
-          field: 'image_urls',
-          old: JSON.stringify(currentProduct.image_urls),
-          new: JSON.stringify(newProductData.image_urls),
+          field: 'thumbnail_url',
+          old: currentProduct.thumbnail_url,
+          new: newProductData.thumbnail_url,
           type: 'image',
           severity: 'standard'
         });
@@ -401,15 +405,15 @@ export default class PrintfulProductSync {
             const currentVariant = currentVariantMap.get(variant.id);
             
             // Check for price changes
-            if (currentVariant.price !== variantData.price) {
+            if (currentVariant.retail_price !== variantData.retail_price) {
               await this.logProductChange(
                 productId,
                 printfulProduct.id,
                 'price',
                 'critical',
                 `variant_price_${variant.id}`,
-                currentVariant.price.toString(),
-                variantData.price.toString(),
+                currentVariant.retail_price.toString(),
+                variantData.retail_price.toString(),
                 syncHistoryId
               );
             }
@@ -512,39 +516,83 @@ export default class PrintfulProductSync {
       // Get all products from Printful
       const printfulProducts = await this.printfulService.getAllProducts();
       
+      // Validate products data 
+      if (!printfulProducts || !Array.isArray(printfulProducts)) {
+        console.error('Invalid products data received from Printful:', printfulProducts);
+        throw new Error('Invalid products data received from Printful API');
+      }
+      
+      console.log(`[PrintfulProductSync] Processing ${printfulProducts.length} products from Printful`);
+      
       for (const productList of printfulProducts) {
-        const { sync_product, sync_variants } = productList;
-        
-        // Check if the product already exists in our database
-        const existingProductId = await this.productExists(sync_product.id);
-        
-        if (existingProductId) {
-          // Update the existing product
-          const success = await this.updateProduct(
-            existingProductId, 
-            sync_product, 
-            sync_variants,
-            syncId
-          );
-          
-          if (success) {
-            successCount++;
-          } else {
+        try {
+          // Validate product data structure
+          if (!productList || !productList.sync_product) {
+            console.error('Invalid product structure in Printful response:', productList);
             failureCount++;
+            continue;
           }
-        } else {
-          // Import as a new product
-          const newProductId = await this.importProduct(
-            sync_product, 
-            sync_variants,
-            syncId
-          );
           
-          if (newProductId) {
-            successCount++;
-          } else {
+          const { sync_product, sync_variants } = productList;
+          
+          // Validate required fields
+          if (!sync_product.id) {
+            console.error('Product is missing required ID:', sync_product);
             failureCount++;
+            continue;
           }
+          
+          // If no variants were provided, try to fetch them
+          let variants = sync_variants || [];
+          if ((!variants || variants.length === 0) && sync_product.variants > 0) {
+            console.log(`[PrintfulProductSync] Fetching variants for product ${sync_product.id}`);
+            try {
+              // We need to fetch variants for this product
+              const productDetails = await this.printfulService.getProduct(sync_product.id);
+              if (productDetails && productDetails.sync_variants) {
+                variants = productDetails.sync_variants;
+                console.log(`[PrintfulProductSync] Successfully fetched ${variants.length} variants for product ${sync_product.id}`);
+              }
+            } catch (variantError) {
+              console.error(`Error fetching variants for product ${sync_product.id}:`, variantError);
+              // Continue with empty variants rather than failing completely
+            }
+          }
+          
+          // Check if the product already exists in our database
+          const existingProductId = await this.productExists(sync_product.id);
+          
+          if (existingProductId) {
+            // Update the existing product
+            const success = await this.updateProduct(
+              existingProductId, 
+              sync_product, 
+              variants, // Now using the potentially fetched variants
+              syncId
+            );
+            
+            if (success) {
+              successCount++;
+            } else {
+              failureCount++;
+            }
+          } else {
+            // Import as a new product
+            const newProductId = await this.importProduct(
+              sync_product, 
+              variants, // Now using the potentially fetched variants
+              syncId
+            );
+            
+            if (newProductId) {
+              successCount++;
+            } else {
+              failureCount++;
+            }
+          }
+        } catch (productError) {
+          console.error('Error processing individual product:', productError);
+          failureCount++;
         }
       }
       
@@ -594,7 +642,7 @@ export default class PrintfulProductSync {
         .from('printful_product_changes')
         .select(`
           *,
-          product:products(id, name, slug, image_urls)
+          product:products(id, name, slug)
         `)
         .order('created_at', { ascending: false });
       

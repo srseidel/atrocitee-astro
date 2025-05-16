@@ -1,244 +1,160 @@
 ---
-// Import statements
-import MainLayout from "../../layouts/MainLayout.astro";
-
-// This page uses client-side JavaScript to fetch data from the API
-// Authentication is now handled by middleware
-
-// Ensure this page is server-rendered, not statically generated
+// Server-side rendering for auth
 export const prerender = false;
+
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import PrintfulService from "../../lib/printful/service";
+import PrintfulProductSync from "../../lib/printful/product-sync";
+import { createServerSupabaseClient } from "../../lib/supabase";
+
+// Get Printful service
+const printfulService = PrintfulService.getInstance();
+let products: any[] = [];
+let error: Error | null = null;
+let dbProducts: any[] = [];
+let dbVariants: any[] = [];
+let dbError: any = null;
+
+try {
+  // Get products from API
+  products = await printfulService.getAllProducts();
+  
+  // Get products from database
+  const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+  const { data: productsData, error: productsError } = await supabase
+    .from('products')
+    .select('*')
+    .limit(10);
+    
+  if (productsError) {
+    dbError = productsError;
+  } else {
+    dbProducts = productsData || [];
+    
+    // If we have products, get some variants too
+    if (dbProducts.length > 0) {
+      const { data: variantsData } = await supabase
+        .from('product_variants')
+        .select('*')
+        .eq('product_id', dbProducts[0].id)
+        .limit(5);
+        
+      dbVariants = variantsData || [];
+    }
+  }
+} catch (e) {
+  error = e as Error;
+}
 ---
 
-<MainLayout title="Printful API Test">
-  <div class="container mx-auto px-4 py-8">
-    <div class="mb-8">
-      <h1 class="text-3xl font-bold mb-2">Printful API Integration Test</h1>
-      <p class="text-gray-600 mb-4">
-        This page tests the connection to Printful API and displays basic product information.
-      </p>
-      
-      <div class="flex flex-wrap gap-2">
-        <button
-          id="test-api-btn"
-          class="bg-primary text-white px-4 py-2 rounded hover:bg-primary-dark transition-colors"
-        >
-          Test Printful API Connection
-        </button>
+<AdminLayout title="Printful API Test">
+  <div class="container mx-auto p-6">
+    <h1 class="text-3xl font-bold mb-6">Printful API Test</h1>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- API Products -->
+      <div class="bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-xl font-bold mb-4">Printful API Products</h2>
         
-        <button
-          id="test-api-mock-btn"
-          class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
-        >
-          Test with Mock Data
-        </button>
+        {error ? (
+          <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            <p class="font-bold">Error</p>
+            <p>{error.message}</p>
+          </div>
+        ) : products.length === 0 ? (
+          <p class="text-gray-500">No products found in Printful API.</p>
+        ) : (
+          <div class="space-y-4">
+            <p class="text-green-600 font-medium">
+              Found {products.length} products in Printful API
+            </p>
+            
+            <ul class="divide-y">
+              {products.map((product) => (
+                <li class="py-3">
+                  <div class="flex items-start">
+                    {product.sync_product.thumbnail_url && (
+                      <img 
+                        src={product.sync_product.thumbnail_url} 
+                        alt={product.sync_product.name}
+                        class="w-16 h-16 object-cover rounded mr-4"
+                      />
+                    )}
+                    <div>
+                      <p class="font-medium">{product.sync_product.name}</p>
+                      <p class="text-sm text-gray-500">ID: {product.sync_product.id}</p>
+                      <p class="text-sm text-gray-500">Variants: {product.sync_product.variants}</p>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
       
-      <div class="mt-2 text-sm text-gray-500">
-        <p>If you don't have a Printful API key configured, use the "Test with Mock Data" option.</p>
+      <!-- Database Products -->
+      <div class="bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-xl font-bold mb-4">Database Products</h2>
+        
+        {dbError ? (
+          <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            <p class="font-bold">Database Error</p>
+            <p>{dbError.message}</p>
+          </div>
+        ) : dbProducts.length === 0 ? (
+          <p class="text-gray-500">No products found in database. Try syncing first.</p>
+        ) : (
+          <div class="space-y-4">
+            <p class="text-green-600 font-medium">
+              Found {dbProducts.length} products in database
+            </p>
+            
+            <ul class="divide-y">
+              {dbProducts.map((product) => (
+                <li class="py-3">
+                  <div>
+                    <p class="font-medium">{product.name}</p>
+                    <p class="text-sm text-gray-500">ID: {product.id}</p>
+                    <p class="text-sm text-gray-500">Printful ID: {product.printful_id}</p>
+                    {product.thumbnail_url && (
+                      <img 
+                        src={product.thumbnail_url} 
+                        alt={product.name}
+                        class="w-16 h-16 object-cover rounded mt-2"
+                      />
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            
+            {dbVariants.length > 0 && (
+              <div class="mt-6">
+                <h3 class="text-lg font-medium mb-2">Variants for {dbProducts[0].name}</h3>
+                <ul class="divide-y">
+                  {dbVariants.map((variant) => (
+                    <li class="py-2">
+                      <p class="font-medium">{variant.name}</p>
+                      <p class="text-sm text-gray-500">SKU: {variant.sku}</p>
+                      <p class="text-sm text-gray-500">Price: ${variant.retail_price}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
     
-    <!-- Environment Warning -->
-    <div id="env-warning" class="hidden bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-      <h3 class="font-semibold text-yellow-800">Environment Setup Required</h3>
-      <p class="text-yellow-700">
-        The Printful API key (PRINTFUL_API_KEY) is not properly configured in your environment.
-        Add it to your .env file and restart the server to use real Printful data.
-      </p>
-    </div>
-    
-    <!-- Results container (initially hidden) -->
-    <div id="results-container" class="hidden mt-4">
-      <div id="loading" class="text-center p-8">
-        <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-300 border-t-primary"></div>
-        <p class="mt-2">Testing API connection...</p>
-      </div>
-      
-      <div id="success-container" class="hidden bg-green-50 border border-green-200 rounded-lg p-6">
-        <h2 class="text-xl font-bold text-green-800 mb-2">Connection Successful</h2>
-        <div id="success-details" class="space-y-4">
-          <!-- Results will be inserted here -->
-        </div>
-      </div>
-      
-      <div id="error-container" class="hidden bg-red-50 border border-red-200 rounded-lg p-6">
-        <h2 class="text-xl font-bold text-red-800 mb-2">Connection Error</h2>
-        <p id="error-message" class="text-red-700"></p>
-      </div>
+    <div class="mt-6">
+      <a 
+        href="/admin/products/sync" 
+        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+      >
+        Go to Sync Page
+      </a>
     </div>
   </div>
-  
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const testApiBtn = document.getElementById('test-api-btn');
-      const testApiMockBtn = document.getElementById('test-api-mock-btn');
-      const resultsContainer = document.getElementById('results-container');
-      const loadingContainer = document.getElementById('loading');
-      const successContainer = document.getElementById('success-container');
-      const successDetails = document.getElementById('success-details');
-      const errorContainer = document.getElementById('error-container');
-      const errorMessage = document.getElementById('error-message');
-      const envWarning = document.getElementById('env-warning');
-      
-      const testApi = async (useMock = false) => {
-        // Show loading state
-        resultsContainer?.classList.remove('hidden');
-        loadingContainer?.classList.remove('hidden');
-        successContainer?.classList.add('hidden');
-        errorContainer?.classList.add('hidden');
-        
-        try {
-          // Call the test API endpoint
-          const endpoint = useMock ? '/api/printful/test?mock=true' : '/api/printful/test';
-          const response = await fetch(endpoint);
-          const data = await response.json();
-          
-          // Hide loading
-          loadingContainer?.classList.add('hidden');
-          
-          // Check for environment issue
-          if (data.message?.includes('API key is not configured')) {
-            envWarning?.classList.remove('hidden');
-          }
-          
-          if (response.ok && data.status === 'success') {
-            // Show success container
-            successContainer?.classList.remove('hidden');
-            
-            // Create and populate results
-            const { storeProductCount, availableTshirtCount, sampleStoreProducts, sampleCatalogProducts } = data.data;
-            
-            // Add mock indicator if using mock data
-            const mockIndicator = useMock ? ' <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">MOCK DATA</span>' : '';
-            
-            const infoSection = document.createElement('div');
-            infoSection.className = 'bg-white p-4 rounded shadow mb-4';
-            infoSection.innerHTML = `
-              <h3 class="font-semibold mb-2">API Summary${mockIndicator}</h3>
-              <ul class="list-disc pl-5">
-                <li>Store Products: ${storeProductCount}</li>
-                <li>Available T-shirt Products: ${availableTshirtCount}</li>
-              </ul>
-            `;
-            
-            // Ensure array is valid before trying to use it
-            const validStoreProducts = Array.isArray(sampleStoreProducts) ? sampleStoreProducts : [];
-            
-            // Create store products section only if we have data
-            const storeSection = document.createElement('div');
-            storeSection.className = 'bg-white p-4 rounded shadow mb-4';
-            storeSection.innerHTML = `
-              <h3 class="font-semibold mb-2">Sample Store Products</h3>
-              <div class="overflow-auto">
-                ${validStoreProducts.length > 0 ? `
-                <table class="w-full text-sm">
-                  <thead class="bg-gray-100">
-                    <tr>
-                      <th class="p-2 text-left">ID</th>
-                      <th class="p-2 text-left">Name</th>
-                      <th class="p-2 text-left">Variants</th>
-                      <th class="p-2 text-left">Thumbnail</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${validStoreProducts.map((product) => {
-                      // Check for valid product data structure - accept both direct product objects
-                      // and the nested structure with sync_product property
-                      const productData = product.sync_product || product;
-                      if (!productData) {
-                        return `<tr><td colspan="4" class="p-2 text-red-500">Invalid product data</td></tr>`;
-                      }
-                      
-                      // Render the thumbnail if available
-                      const thumbnail = productData.thumbnail_url 
-                        ? `<img src="${productData.thumbnail_url}" alt="${productData.name || 'Product'}" class="w-12 h-12 object-contain">`
-                        : 'No image';
-                        
-                      return `
-                        <tr class="border-t border-gray-200">
-                          <td class="p-2">${productData.id || 'N/A'}</td>
-                          <td class="p-2">${productData.name || 'No name'}</td>
-                          <td class="p-2">${productData.variants || 0}</td>
-                          <td class="p-2">${thumbnail}</td>
-                        </tr>
-                      `;
-                    }).join('')}
-                  </tbody>
-                </table>
-                ` : '<p class="text-gray-500">No store products available</p>'}
-              </div>
-            `;
-            
-            // Ensure array is valid before trying to use it
-            const validCatalogProducts = Array.isArray(sampleCatalogProducts) ? sampleCatalogProducts : [];
-            
-            const catalogSection = document.createElement('div');
-            catalogSection.className = 'bg-white p-4 rounded shadow';
-            
-            if (validCatalogProducts.length > 0) {
-              catalogSection.innerHTML = `
-                <h3 class="font-semibold mb-2">Sample Catalog T-shirts</h3>
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  ${validCatalogProducts.map((product) => {
-                    // Check for valid product data structure
-                    if (!product) {
-                      return `<div class="border rounded p-3 text-red-500">Invalid product data</div>`;
-                    }
-                    return `
-                      <div class="border rounded overflow-hidden">
-                        <img src="${product.image || 'https://via.placeholder.com/300x300?text=No+Image'}" 
-                             alt="${product.title || 'Untitled'}" 
-                             class="w-full h-40 object-contain bg-gray-50">
-                        <div class="p-3">
-                          <h4 class="font-semibold text-sm">${product.title || 'Untitled Product'}</h4>
-                          <p class="text-xs text-gray-600">${product.type || 'Unknown Type'}</p>
-                        </div>
-                      </div>
-                    `;
-                  }).join('')}
-                </div>
-              `;
-            } else {
-              catalogSection.innerHTML = `
-                <h3 class="font-semibold mb-2">Sample Catalog T-shirts</h3>
-                <p class="text-gray-500">No catalog products available</p>
-              `;
-            }
-            
-            // Clear previous results and append new ones
-            if (successDetails) {
-              successDetails.innerHTML = '';
-              successDetails.appendChild(infoSection);
-              
-              if (validStoreProducts.length > 0) {
-                successDetails.appendChild(storeSection);
-              }
-              
-              successDetails.appendChild(catalogSection);
-            }
-          } else {
-            // Show error
-            errorContainer?.classList.remove('hidden');
-            if (errorMessage) {
-              errorMessage.textContent = data.message || 'Unknown error occurred';
-            }
-          }
-        } catch (error) {
-          // Hide loading and show error
-          loadingContainer?.classList.add('hidden');
-          errorContainer?.classList.remove('hidden');
-          
-          if (errorMessage) {
-            errorMessage.textContent = error instanceof Error 
-              ? error.message 
-              : 'Failed to connect to the API';
-          }
-        }
-      };
-      
-      // Add click handlers for both buttons
-      testApiBtn?.addEventListener('click', () => testApi(false));
-      testApiMockBtn?.addEventListener('click', () => testApi(true));
-    });
-  </script>
-</MainLayout> 
+</AdminLayout> 

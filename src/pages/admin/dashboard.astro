@@ -32,6 +32,14 @@ const { data: pendingChanges, error: pendingChangesError } = await supabase
   .eq('status', 'pending_review');
 
 // Get recent orders
+interface Order {
+  id: string;
+  created_at: string;
+  total_amount: number;
+  status: string;
+  customer?: { email?: string };
+}
+
 const { data: recentOrders, error: recentOrdersError } = await supabase
   .from('orders')
   .select('id, created_at, total_amount, status, customer:user_id(email)')
@@ -127,7 +135,7 @@ const { data: recentOrders, error: recentOrdersError } = await supabase
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200">
-              {recentOrders.map((order) => (
+              {recentOrders.map((order: Order) => (
                 <tr>
                   <td class="py-3 px-4 whitespace-nowrap text-sm">{order.id.substring(0, 8)}...</td>
                   <td class="py-3 px-4 whitespace-nowrap text-sm">{new Date(order.created_at).toLocaleDateString()}</td>

@@ -1,0 +1,19 @@
+---
+// Mark as server-rendered (required for authentication)
+export const prerender = false;
+
+// Redirect to the correct URL
+export function getServerSideProps({ redirect }: any) {
+  return {
+    redirect: {
+      destination: "/account/order",
+      permanent: true,
+    },
+  };
+}
+---
+
+<meta http-equiv="refresh" content="0;url=/account/order">
+<script>
+  window.location.href = "/account/order";
+</script> 
