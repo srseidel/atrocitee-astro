@@ -5,31 +5,49 @@ import Logo from '../components/layout/Logo.astro';
 import NavLinks from '../components/layout/NavLinks.astro';
 import { createServerSupabaseClient } from '../lib/supabase';
 
-interface Props {
-  title: string;
+export interface Props {
+  title?: string;
   description?: string;
 }
 
-const { 
-  title, 
-  description = "Atrocitee - Political t-shirts for making a difference" 
-} = Astro.props;
+const { title = 'Atrocitee', description = 'Political t-shirts that donate profits to causes that matter.' } = Astro.props;
 
-// Current path for highlighting active links
+// Get current path for active link detection
 const currentPath = Astro.url.pathname;
 
-// Check authentication status if on server
+// Check for authentication state
 let isAuthenticated = false;
+let isAdmin = false;
+
 try {
   // Only attempt to check auth on the server
   if (Astro.request.headers) {
     const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
     const { data } = await supabase.auth.getSession();
     isAuthenticated = !!data.session;
+    
+    // If authenticated, check if user is admin
+    if (isAuthenticated && data.session) {
+      // Check user app metadata for admin role
+      isAdmin = data.session.user.app_metadata?.role === 'admin' || 
+                data.session.user.app_metadata?.is_admin === true;
+                
+      // If not found in app_metadata, try to check in the profiles table
+      if (!isAdmin) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data.session.user.id)
+          .single();
+          
+        isAdmin = profileData?.role === 'admin';
+      }
+    }
   }
 } catch (error) {
   // If there's an error or we're in static mode, default to not authenticated
   isAuthenticated = false;
+  isAdmin = false;
 }
 ---
 
@@ -60,7 +78,7 @@ try {
 
           <!-- Main navigation - desktop -->
           <nav class="hidden md:flex space-x-8">
-            <NavLinks isAuthenticated={isAuthenticated} currentPath={currentPath} />
+            <NavLinks isAuthenticated={isAuthenticated} isAdmin={isAdmin} currentPath={currentPath} />
           </nav>
 
           <!-- Right-side actions -->
@@ -109,7 +127,8 @@ try {
               { href: "/about#impact", label: "Impact" },
               ...(isAuthenticated ? [
                 { href: "/account", label: "My Account" },
-                { href: "/account/orders", label: "My Orders" }
+                { href: "/account/orders", label: "My Orders" },
+                ...(isAdmin ? [{ href: "/admin/dashboard", label: "Admin" }] : [])
               ] : [])
             ].map((link) => (
               <a 

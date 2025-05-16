@@ -2,10 +2,11 @@
 // Props
 interface Props {
   isAuthenticated?: boolean;
+  isAdmin?: boolean;
   currentPath: string;
 }
 
-const { isAuthenticated = false, currentPath } = Astro.props;
+const { isAuthenticated = false, isAdmin = false, currentPath } = Astro.props;
 
 // Common navigation links for all users
 const commonNavLinks = [
@@ -20,6 +21,7 @@ const authLinks = isAuthenticated
   ? [
       { href: "/account", label: "My Account" },
       { href: "/account/orders", label: "My Orders" },
+      ...(isAdmin ? [{ href: "/admin/dashboard", label: "Admin" }] : [])
     ]
   : [];
 
