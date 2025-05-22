@@ -4,8 +4,8 @@ import type { MiddlewareHandler } from 'astro';
 // Pattern matching for protected routes
 const ADMIN_ROUTE_PATTERN = /^\/admin\//;
 const ACCOUNT_ROUTE_PATTERN = /^\/account(\/|$)/;
-const ACCOUNTS_SETTINGS_PATH = '/accounts/setting';
-const ACCOUNTS_ORDER_PATH = '/accounts/order';
+const ACCOUNT_SETTINGS_PATH = '/account/setting';
+const ACCOUNT_ORDER_PATH = '/account/order';
 const AUTH_PATHS = ['/auth/login', '/auth/register', '/auth/reset-password', '/auth/forgot-password'];
 
 // Authentication middleware
@@ -15,8 +15,8 @@ const authMiddleware: MiddlewareHandler = async ({ cookies, request, url }, next
   const isAuthPage = AUTH_PATHS.includes(pathname);
   const isProtectedRoute = ADMIN_ROUTE_PATTERN.test(pathname) || 
                            ACCOUNT_ROUTE_PATTERN.test(pathname) || 
-                           pathname === ACCOUNTS_SETTINGS_PATH || 
-                           pathname === ACCOUNTS_ORDER_PATH;
+                           pathname === ACCOUNT_SETTINGS_PATH || 
+                           pathname === ACCOUNT_ORDER_PATH;
   
   if (!isProtectedRoute || isAuthPage) {
     return next();
@@ -29,14 +29,14 @@ const authMiddleware: MiddlewareHandler = async ({ cookies, request, url }, next
     // Create Supabase client
     const supabase = createServerSupabaseClient({ cookies });
     
-    // Get session
-    const { data: { session }, error } = await supabase.auth.getSession();
+    // Get user
+    const { data: { user }, error } = await supabase.auth.getUser();
     
-    console.log(`[Middleware] Auth check for ${pathname}, Session:`, session?.user?.id || 'none');
+    console.log(`[Middleware] Auth check for ${pathname}, User:`, user?.id || 'none');
     
-    // If no session or error, redirect to login
-    if (error || !session) {
-      console.log(`[Middleware] No authenticated session found:`, error?.message);
+    // If no user or error, redirect to login
+    if (error || !user) {
+      console.log(`[Middleware] No authenticated user found:`, error?.message);
       return new Response(null, {
         status: 302,
         headers: {
@@ -48,15 +48,15 @@ const authMiddleware: MiddlewareHandler = async ({ cookies, request, url }, next
     // If admin route, check admin permissions
     if (requiresAdmin) {
       // Check user metadata for admin role
-      const isAdminUser = session.user.app_metadata?.role === 'admin' || 
-                          session.user.user_metadata?.role === 'admin';
+      const isAdminUser = user.app_metadata?.role === 'admin' || 
+                          user.user_metadata?.role === 'admin';
       
-      console.log(`[Middleware] Admin check for user ${session.user.id}, metadata check:`, isAdminUser);
+      console.log(`[Middleware] Admin check for user ${user.id}, metadata check:`, isAdminUser);
       
       if (!isAdminUser) {
         // Make RPC call to check admin status in database
         const { data: adminCheckResult, error: adminCheckError } = await supabase
-          .rpc('is_admin', { user_id: session.user.id });
+          .rpc('is_admin', { user_id: user.id });
         
         console.log(`[Middleware] Admin DB check result:`, adminCheckResult, adminCheckError?.message);
         

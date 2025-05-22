@@ -1,5 +1,5 @@
 import type { APIContext } from 'astro';
-import { isAdmin } from '../../../utils/auth-fixed';
+import { isAdmin } from '../../../utils/auth';
 import ENV from '../../../config/env';
 import PrintfulClient from '../../../lib/printful/api-client';
 

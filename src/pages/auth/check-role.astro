@@ -13,8 +13,17 @@ if (redirectResponse) return redirectResponse;
 
 // Check the user's profile
 const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
-const { data: session } = await supabase.auth.getSession();
-const userId = session?.session?.user?.id;
+const { data: { user }, error: userError } = await supabase.auth.getUser();
+const userId = user?.id;
+
+if (userError || !userId) {
+  return new Response(null, {
+    status: 302,
+    headers: {
+      'Location': '/auth/login'
+    }
+  });
+}
 
 // Get profile data
 const { data: profile, error } = await supabase

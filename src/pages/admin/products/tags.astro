@@ -252,7 +252,7 @@ interface Tag {
         const tagId = button.getAttribute('data-id');
         
         try {
-          const response = await fetch(`/api/tags/${tagId}`, {
+          const response = await fetch(`/api/tags?id=${tagId}`, {
             method: 'DELETE'
           });
           

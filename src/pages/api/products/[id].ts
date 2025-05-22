@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { createServerSupabaseClient } from '../../../lib/supabase';
-import { isAdmin } from '../../../utils/auth-fixed';
+import { isAdmin } from '../../../utils/auth';
 
 export const prerender = false;
 

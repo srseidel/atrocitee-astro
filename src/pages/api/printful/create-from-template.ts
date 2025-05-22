@@ -1,5 +1,5 @@
 import type { APIContext } from 'astro';
-import { isAdmin } from '../../../utils/auth-fixed';
+import { isAdmin } from '../../../utils/auth';
 import PrintfulService from '../../../lib/printful/service';
 import { createServerSupabaseClient } from '../../../lib/supabase';
 import * as Sentry from '@sentry/astro';

@@ -598,17 +598,11 @@ export default class PrintfulProductSync {
       // Verify Supabase connection
       console.log('[ProductSync] Verifying Supabase connection');
       try {
-        // First, try a simpler query to check if the database is accessible at all
-        console.log('[ProductSync] Testing basic database connectivity');
-        const { data: testAuth, error: authError } = await this.supabase.auth.getSession();
+        // Test authentication
+        const { data: { user }, error: authError } = await this.supabase.auth.getUser();
         
-        console.log('[ProductSync] Auth session result:', testAuth ? 'Session exists' : 'No session');
-        console.log('[ProductSync] Auth user:', testAuth?.session?.user?.email || 'No user');
-        console.log('[ProductSync] Auth role:', testAuth?.session?.user?.role || 'No role');
-        
-        if (authError) {
-          console.error('[ProductSync] Authentication check failed:', authError);
-          throw new Error(`Authentication error: ${authError.message || 'Unknown auth error'}`);
+        if (authError || !user) {
+          throw new Error('Authentication required for sync operation');
         }
         
         console.log('[ProductSync] Auth check passed, testing table access');

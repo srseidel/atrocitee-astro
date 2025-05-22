@@ -23,11 +23,12 @@ export async function isAdmin(context: { cookies: any }): Promise<boolean> {
     console.log("[DEBUG] isAdmin: No user found");
     return false;
   }
+
+  const user = userData.user;
   
-  // Use the user's metadata to check for admin role
-  // This avoids querying the profiles table directly
-  if (userData.user.app_metadata?.role === 'admin' || 
-      userData.user.user_metadata?.role === 'admin') {
+  // First check user metadata for admin role
+  if (user.app_metadata?.role === 'admin' || 
+      user.user_metadata?.role === 'admin') {
     console.log("[DEBUG] User metadata indicates admin role");
     return true;
   }
@@ -35,12 +36,29 @@ export async function isAdmin(context: { cookies: any }): Promise<boolean> {
   // Call the is_admin database function (security definer)
   // This bypasses RLS for checking the admin role
   const { data: result, error } = await supabase
-    .rpc('is_admin', { user_id: userData.user.id });
+    .rpc('is_admin', { user_id: user.id });
   
   if (error) {
     console.log("[DEBUG] isAdmin error:", error.message);
-    // No fallback to querying profiles directly - this causes permission issues
-    return false;
+    // Fallback to direct query if RPC not available yet
+    try {
+      // Try direct query with service role if available
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      
+      const isAdminUser = profile?.role === 'admin';
+      console.log("[DEBUG] Fallback admin check:", { 
+        role: profile?.role, 
+        isAdmin: isAdminUser 
+      });
+      return isAdminUser;
+    } catch (err) {
+      console.log("[DEBUG] Both checks failed:", err);
+      return false;
+    }
   }
   
   console.log("[DEBUG] isAdmin check result:", result);

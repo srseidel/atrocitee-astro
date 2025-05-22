@@ -1,5 +1,6 @@
 import type { APIContext } from 'astro';
 import { createServerSupabaseClient } from '../../../lib/supabase';
+import { isAdmin } from '../../../utils/auth';
 
 // Do not pre-render this endpoint at build time
 export const prerender = false;
@@ -20,7 +21,7 @@ export async function GET({ request, cookies }: APIContext) {
     
     // 1. Test authentication
     console.log('[API] Testing authentication');
-    const { data: authData, error: authError } = await supabase.auth.getSession();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     // 2. Test if printful_category_mapping exists
     console.log('[API] Testing table existence');
@@ -59,8 +60,7 @@ export async function GET({ request, cookies }: APIContext) {
     return new Response(JSON.stringify({
       success: true,
       auth: {
-        session: authData?.session ? 'Session exists' : 'No session',
-        user: authData?.session?.user?.email || 'No user',
+        user: user?.email || 'No user',
         error: authError?.message || null
       },
       tables: tableResults

@@ -71,7 +71,12 @@ This document provides a comprehensive mapping of all files in the atrocitee-ast
 ### Authentication
 - `auth/` - Authentication pages
 - `account/` - User account pages
-- `accounts/` - Account management
+  - `index.astro` - Account dashboard
+  - `setting.astro` - Account settings
+  - `order.astro` - Order management
+  - Status: ACTIVE
+  - Purpose: User account management
+  - Note: Consolidated from old accounts/ directory
 
 ### Shop
 - `shop/` - Shop pages
@@ -294,6 +299,161 @@ Would you like me to:
 1. Start analyzing specific directories in detail?
 2. Create a list of files that can be safely archived?
 3. Propose a new, cleaner structure?
+
+## Reorganization Commands
+
+The following commands will move unused and duplicate files to a `re-org` directory for review. Each command is paired with its reverse command to undo the changes if needed.
+
+```bash
+# Create re-org directory structure
+mkdir -p re-org/{admin,api,components,layouts,types,utils,styles,config,lib}
+
+# Move duplicate/unused files to re-org directory
+# Admin Section
+mv src/pages/admin/old_revisions re-org/admin/
+mv src/pages/admin/products/archive re-org/admin/products/
+mv src/pages/admin/backups re-org/admin/
+mv src/pages/admin/printful-test.astro re-org/admin/
+
+# API Section
+mv src/pages/api/archive re-org/api/
+mv src/pages/api/printful/archive re-org/api/printful/
+mv src/pages/api/printful/old_revisions re-org/api/printful/
+mv src/pages/api/test-db.ts re-org/api/
+mv src/pages/api/test-database.ts re-org/api/
+mv src/pages/api/debug-api.ts re-org/api/
+mv src/pages/api/test-config.ts re-org/api/
+mv src/pages/api/test.ts re-org/api/
+
+# Components Section
+mv src/components/archive re-org/components/
+mv src/components/admin re-org/components/
+mv src/components/product re-org/components/
+mv src/components/checkout re-org/components/
+mv src/components/cart re-org/components/
+
+# Layouts Section
+mv src/layouts/archive re-org/layouts/
+mv src/layouts/auth re-org/layouts/
+mv src/layouts/shop re-org/layouts/
+
+# Types Section
+mv src/types/archive re-org/types/
+
+# Utils Section
+mv src/utils/auth.ts.orig re-org/utils/
+mv src/utils/auth-fixed.ts re-org/utils/
+mv src/utils/archive re-org/utils/
+
+# Styles Section
+mv src/styles/design-system.css.bak re-org/styles/
+
+# Lib Section
+mv src/lib/db/migrations re-org/lib/db/
+
+# Pages Section
+mv src/pages/shop re-org/pages/
+mv src/pages/about re-org/pages/
+mv src/pages/checkout re-org/pages/
+
+# Reverse Commands (to undo the reorganization)
+# Admin Section
+mv re-org/admin/old_revisions src/pages/admin/
+mv re-org/admin/products/archive src/pages/admin/products/
+mv re-org/admin/backups src/pages/admin/
+mv re-org/admin/printful-test.astro src/pages/admin/
+
+# API Section
+mv re-org/api/archive src/pages/api/
+mv re-org/api/printful/archive src/pages/api/printful/
+mv re-org/api/printful/old_revisions src/pages/api/printful/
+mv re-org/api/test-db.ts src/pages/api/
+mv re-org/api/test-database.ts src/pages/api/
+mv re-org/api/debug-api.ts src/pages/api/
+mv re-org/api/test-config.ts src/pages/api/
+mv re-org/api/test.ts src/pages/api/
+
+# Components Section
+mv re-org/components/archive src/components/
+mv re-org/components/admin src/components/
+mv re-org/components/product src/components/
+mv re-org/components/checkout src/components/
+mv re-org/components/cart src/components/
+
+# Layouts Section
+mv re-org/layouts/archive src/layouts/
+mv re-org/layouts/auth src/layouts/
+mv re-org/layouts/shop src/layouts/
+
+# Types Section
+mv re-org/types/archive src/types/
+
+# Utils Section
+mv re-org/utils/auth.ts.orig src/utils/
+mv re-org/utils/auth-fixed.ts src/utils/
+mv re-org/utils/archive src/utils/
+
+# Styles Section
+mv re-org/styles/design-system.css.bak src/styles/
+
+# Lib Section
+mv re-org/lib/db/migrations src/lib/db/
+
+# Pages Section
+mv re-org/pages/shop src/pages/
+mv re-org/pages/about src/pages/
+mv re-org/pages/checkout src/pages/
+```
+
+### Files and Directories Moved to Re-org
+
+1. **Admin Section**
+   - Old revisions of admin pages
+   - Archived product pages
+   - Backup management pages
+   - Printful test page
+
+2. **API Section**
+   - Archived API endpoints
+   - Test and debug files
+   - Old Printful implementations
+
+3. **Components Section**
+   - Archived components
+   - Empty component directories (admin, product, checkout, cart)
+
+4. **Layouts Section**
+   - Archived layouts
+   - Empty layout directories (auth, shop)
+
+5. **Types Section**
+   - Archived type definitions
+
+6. **Utils Section**
+   - Old auth implementations
+   - Archived utilities
+
+7. **Styles Section**
+   - Design system backup
+
+8. **Lib Section**
+   - Empty migrations directory
+
+9. **Pages Section**
+   - Empty page directories (shop, about, checkout)
+
+### Next Steps After Reorganization
+
+1. Review files in the re-org directory
+2. Document any important functionality
+3. Create a timeline for final cleanup
+4. Update architecture documentation
+5. Test the application after reorganization
+
+Would you like to:
+1. Execute these reorganization commands?
+2. Review specific sections in more detail?
+3. Modify the reorganization plan?
 
 ### Components Directory (`src/components/`)
 

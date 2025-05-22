@@ -1,5 +1,5 @@
 import type { APIContext } from 'astro';
-import { isAdmin } from '../../../utils/auth-fixed';
+import { isAdmin } from '../../../utils/auth';
 import { createServerSupabaseClient } from '../../../lib/supabase';
 
 // Do not pre-render this endpoint at build time

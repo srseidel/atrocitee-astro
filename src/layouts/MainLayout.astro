@@ -23,21 +23,21 @@ try {
   // Only attempt to check auth on the server
   if (Astro.request.headers) {
     const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
-    const { data } = await supabase.auth.getSession();
-    isAuthenticated = !!data.session;
+    const { data: { user }, error } = await supabase.auth.getUser();
+    isAuthenticated = !!user;
     
     // If authenticated, check if user is admin
-    if (isAuthenticated && data.session) {
+    if (isAuthenticated && user) {
       // Check user app metadata for admin role
-      isAdmin = data.session.user.app_metadata?.role === 'admin' || 
-                data.session.user.app_metadata?.is_admin === true;
+      isAdmin = user.app_metadata?.role === 'admin' || 
+                user.app_metadata?.is_admin === true;
                 
       // If not found in app_metadata, try to check in the profiles table
       if (!isAdmin) {
         const { data: profileData } = await supabase
           .from('profiles')
           .select('role')
-          .eq('id', data.session.user.id)
+          .eq('id', user.id)
           .single();
           
         isAdmin = profileData?.role === 'admin';

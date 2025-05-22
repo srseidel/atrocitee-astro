@@ -1,78 +1,20 @@
 import type { APIContext } from 'astro';
-import { createServerSupabaseClient } from '../../lib/supabase';
-import { isAdmin } from '../../utils/auth';
+import { createServerSupabaseClient } from '../../../lib/supabase';
+import { isAdmin } from '../../../utils/auth';
 
 // Do not pre-render this endpoint at build time
 export const prerender = false;
 
-// GET: Fetch all tags
-export async function GET({ request, cookies }: APIContext) {
+// GET: Fetch a single tag
+export async function GET({ params, cookies }: APIContext) {
   try {
-    // Initialize Supabase client
     const supabase = createServerSupabaseClient({ cookies });
-    
-    // Fetch tags with basic error handling
-    const { data, error } = await supabase
-      .from('tags')
-      .select('*')
-      .eq('active', true)
-      .order('name');
-    
-    if (error) {
-      console.error('Error fetching tags:', error);
-      return new Response(JSON.stringify({
-        error: 'Database Error',
-        message: error.message,
-        success: false
-      }), {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-    }
-    
-    // Return successful response
-    return new Response(JSON.stringify({
-      data: data || [],
-      success: true
-    }), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-  } catch (error) {
-    console.error('Error in tags API:', error);
-    
-    return new Response(JSON.stringify({
-      error: 'Server Error',
-      message: error instanceof Error ? error.message : 'Unknown error fetching tags',
-      success: false
-    }), {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-  }
-}
+    const { id } = params;
 
-// POST: Create a new tag
-export async function POST({ request, cookies }: APIContext) {
-  try {
-    const supabase = createServerSupabaseClient({ cookies });
-    
-    // Verify admin permissions would go here in a real implementation
-    
-    // Get tag data from request
-    const body = await request.json();
-    
-    // Basic validation
-    if (!body.name || !body.slug) {
+    if (!id) {
       return new Response(JSON.stringify({
         error: 'Validation Error',
-        message: 'Name and slug are required',
+        message: 'Tag ID is required',
         success: false
       }), {
         status: 400,
@@ -81,21 +23,15 @@ export async function POST({ request, cookies }: APIContext) {
         }
       });
     }
-    
-    // Insert new tag
+
     const { data, error } = await supabase
       .from('tags')
-      .insert({
-        name: body.name,
-        slug: body.slug,
-        description: body.description || null,
-        active: body.active !== undefined ? body.active : true
-      })
-      .select()
+      .select('*')
+      .eq('id', id)
       .single();
-    
+
     if (error) {
-      console.error('Error creating tag:', error);
+      console.error('Error fetching tag:', error);
       return new Response(JSON.stringify({
         error: 'Database Error',
         message: error.message,
@@ -107,24 +43,34 @@ export async function POST({ request, cookies }: APIContext) {
         }
       });
     }
-    
-    // Return successful response
+
+    if (!data) {
+      return new Response(JSON.stringify({
+        error: 'Not Found',
+        message: 'Tag not found',
+        success: false
+      }), {
+        status: 404,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
     return new Response(JSON.stringify({
       data,
-      message: 'Tag created successfully',
       success: true
     }), {
-      status: 201,
+      status: 200,
       headers: {
         'Content-Type': 'application/json'
       }
     });
   } catch (error) {
-    console.error('Error in tags API:', error);
-    
+    console.error('Error in tag API:', error);
     return new Response(JSON.stringify({
       error: 'Server Error',
-      message: error instanceof Error ? error.message : 'Unknown error creating tag',
+      message: error instanceof Error ? error.message : 'Unknown error fetching tag',
       success: false
     }), {
       status: 500,
@@ -135,16 +81,13 @@ export async function POST({ request, cookies }: APIContext) {
   }
 }
 
-// DELETE: Delete a tag
-export async function DELETE({ request, cookies }: APIContext) {
+// PUT: Update a tag
+export async function PUT({ params, request, cookies }: APIContext) {
   try {
     const supabase = createServerSupabaseClient({ cookies });
-    
-    // Get tag ID from URL
-    const url = new URL(request.url);
-    const tagId = url.searchParams.get('id');
+    const { id } = params;
 
-    if (!tagId) {
+    if (!id) {
       return new Response(JSON.stringify({
         error: 'Validation Error',
         message: 'Tag ID is required',
@@ -158,7 +101,109 @@ export async function DELETE({ request, cookies }: APIContext) {
     }
 
     // Check if user is admin
-    const isUserAdmin = await isAdmin({ cookies });
+    const isUserAdmin = await isAdmin(supabase);
+    if (!isUserAdmin) {
+      return new Response(JSON.stringify({
+        error: 'Unauthorized',
+        message: 'Admin privileges required',
+        success: false
+      }), {
+        status: 403,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
+    const body = await request.json();
+
+    // Basic validation
+    if (!body.name || !body.slug) {
+      return new Response(JSON.stringify({
+        error: 'Validation Error',
+        message: 'Name and slug are required',
+        success: false
+      }), {
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('tags')
+      .update({
+        name: body.name,
+        slug: body.slug,
+        description: body.description || null,
+        active: body.active !== undefined ? body.active : true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating tag:', error);
+      return new Response(JSON.stringify({
+        error: 'Database Error',
+        message: error.message,
+        success: false
+      }), {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
+    return new Response(JSON.stringify({
+      data,
+      message: 'Tag updated successfully',
+      success: true
+    }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+  } catch (error) {
+    console.error('Error in tag API:', error);
+    return new Response(JSON.stringify({
+      error: 'Server Error',
+      message: error instanceof Error ? error.message : 'Unknown error updating tag',
+      success: false
+    }), {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+  }
+}
+
+// DELETE: Delete a tag
+export async function DELETE({ params, cookies }: APIContext) {
+  try {
+    const supabase = createServerSupabaseClient({ cookies });
+    const { id } = params;
+
+    if (!id) {
+      return new Response(JSON.stringify({
+        error: 'Validation Error',
+        message: 'Tag ID is required',
+        success: false
+      }), {
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
+    // Check if user is admin
+    const isUserAdmin = await isAdmin(supabase);
     if (!isUserAdmin) {
       return new Response(JSON.stringify({
         error: 'Unauthorized',
@@ -176,7 +221,7 @@ export async function DELETE({ request, cookies }: APIContext) {
     const { error: productTagError } = await supabase
       .from('product_tags')
       .delete()
-      .eq('tag_id', tagId);
+      .eq('tag_id', id);
 
     if (productTagError) {
       console.error('Error deleting product tag associations:', productTagError);
@@ -196,7 +241,7 @@ export async function DELETE({ request, cookies }: APIContext) {
     const { error: deleteError } = await supabase
       .from('tags')
       .delete()
-      .eq('id', tagId);
+      .eq('id', id);
 
     if (deleteError) {
       console.error('Error deleting tag:', deleteError);
@@ -222,7 +267,7 @@ export async function DELETE({ request, cookies }: APIContext) {
       }
     });
   } catch (error) {
-    console.error('Error in tags API:', error);
+    console.error('Error in tag API:', error);
     return new Response(JSON.stringify({
       error: 'Server Error',
       message: error instanceof Error ? error.message : 'Unknown error deleting tag',

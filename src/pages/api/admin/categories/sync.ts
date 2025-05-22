@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { isAdmin } from '../../../utils/auth-fixed';
+import { isAdmin } from '../../../utils/auth';
 import PrintfulProductSync from '../../../lib/printful/product-sync';
 import { createServerSupabaseClient } from '../../../lib/supabase';
 import { PrintfulService } from '../../../lib/printful/service';
