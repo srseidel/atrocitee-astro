@@ -83,7 +83,7 @@ const { title } = Astro.props;
               <a href="/admin" class="block px-4 py-2 hover:bg-gray-700">Dashboard</a>
             </li>
             <li>
-              <a href="/admin/products" class="block px-4 py-2 hover:bg-gray-700">Products</a>
+              <a href="/admin/products/dashboard" class="block px-4 py-2 hover:bg-gray-700">Products</a>
             </li>
             <li>
               <a href="/admin/categories" class="block px-4 py-2 hover:bg-gray-700">Categories</a>

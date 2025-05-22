@@ -83,13 +83,13 @@ console.log('Tags query:', {
       </header>
       <main>
         <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
-          <!-- Sync Section -->
+          <!-- Management Section -->
           <div class="px-4 py-5 sm:px-6">
             <div class="flex items-center justify-between">
               <div>
-                <h2 class="text-lg font-medium leading-6 text-gray-900">Product Sync</h2>
+                <h2 class="text-lg font-medium leading-6 text-gray-900">Product Management</h2>
                 <p class="mt-1 text-sm text-gray-500">
-                  Sync products from your Printful store to Atrocitee
+                  Manage your product catalog, tags, and categories
                 </p>
               </div>
               <div class="flex space-x-4">
@@ -99,6 +99,26 @@ console.log('Tags query:', {
                 >
                   Manage Tags
                 </a>
+                <a 
+                  href="/admin/products/all" 
+                  class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  View All Products
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sync Section -->
+          <div class="px-4 py-5 sm:px-6 mt-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <h2 class="text-lg font-medium leading-6 text-gray-900">Printful Synchronization</h2>
+                <p class="mt-1 text-sm text-gray-500">
+                  Sync products from your Printful store to Atrocitee
+                </p>
+              </div>
+              <div class="flex space-x-4">
                 <button
                   type="button"
                   class="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
@@ -106,6 +126,12 @@ console.log('Tags query:', {
                 >
                   Sync Products
                 </button>
+                <a
+                  href="/admin/printful-test"
+                  class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                >
+                  Test Connection
+                </a>
               </div>
             </div>
           </div>
