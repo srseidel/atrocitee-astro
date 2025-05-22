@@ -98,26 +98,22 @@ export default class PrintfulClient {
       },
     };
 
-    console.log(`[Printful] Making request to: ${endpoint} with API key: ${this.apiKey ? this.apiKey.substring(0, 4) + '...' : 'missing'}`);
+    console.log(`[Printful] Making request to: ${endpoint}`);
 
     try {
-      console.log(`[Printful] Sending request to: ${url}`);
       const response = await fetch(url, requestOptions);
-      
-      // Debug HTTP status
-      console.log(`[Printful] Response status: ${response.status}`);
-      
-      // Log full response for debugging if there's an issue
       const responseText = await response.text();
+      
+      // Debug HTTP status and response
+      console.log(`[Printful] Response status: ${response.status}`);
       console.log(`[Printful] Raw response: ${responseText}`);
       
       // Parse the response as JSON
-      let data;
+      let data: PrintfulResponse<T>;
       try {
-        data = JSON.parse(responseText) as PrintfulResponse<T>;
+        data = JSON.parse(responseText);
       } catch (parseError) {
-        console.error(`[Printful] Error parsing JSON response: ${parseError}`);
-        console.error(`[Printful] Response text: ${responseText}`);
+        console.error('[Printful] Error parsing JSON response:', parseError);
         throw new PrintfulApiError(
           `Failed to parse Printful API response: ${parseError instanceof Error ? parseError.message : 'Unknown parsing error'}`,
           500,
@@ -126,11 +122,27 @@ export default class PrintfulClient {
       }
 
       // Check if the API returned an error
+      if (!data || typeof data !== 'object') {
+        throw new PrintfulApiError(
+          'Invalid response format from Printful API',
+          500,
+          'invalid_response'
+        );
+      }
+
       if (data.error) {
         throw new PrintfulApiError(
-          data.error.message,
-          data.error.code,
-          data.error.reason
+          data.error.message || 'Unknown error from Printful API',
+          data.error.code || 500,
+          data.error.reason || 'api_error'
+        );
+      }
+
+      if (!data.result) {
+        throw new PrintfulApiError(
+          'No result data in Printful API response',
+          500,
+          'missing_result'
         );
       }
 
@@ -140,7 +152,7 @@ export default class PrintfulClient {
       if (retries > 0 && this.shouldRetry(error)) {
         const delayMs = RETRY_DELAY_MS * Math.pow(RETRY_BACKOFF_FACTOR, MAX_RETRIES - retries);
         
-        console.warn(`Printful API request failed, retrying in ${delayMs}ms...`, { endpoint, error });
+        console.warn(`[Printful] Request failed, retrying in ${delayMs}ms...`, { endpoint, error });
         
         // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -161,7 +173,8 @@ export default class PrintfulClient {
       } else {
         throw new PrintfulApiError(
           'Unknown error occurred during Printful API request',
-          500
+          500,
+          'unknown_error'
         );
       }
     }
@@ -189,7 +202,7 @@ export default class PrintfulClient {
    * Get a list of sync products
    */
   async getSyncProducts(): Promise<PrintfulProductList[]> {
-    const response = await this.request<PrintfulProductList[]>('/store/products');
+    const response = await this.request<PrintfulProductList[]>('/sync/products');
     return response.result;
   }
 
@@ -197,7 +210,7 @@ export default class PrintfulClient {
    * Get a specific sync product by ID
    */
   async getSyncProduct(id: number): Promise<PrintfulProductList> {
-    const response = await this.request<PrintfulProductList>(`/store/products/${id}`);
+    const response = await this.request<PrintfulProductList>(`/sync/products/${id}`);
     return response.result;
   }
 
@@ -205,7 +218,7 @@ export default class PrintfulClient {
    * Get catalog products (available for creation)
    */
   async getCatalogProducts(): Promise<PrintfulCatalogProduct[]> {
-    const response = await this.request<PrintfulCatalogProduct[]>('/products');
+    const response = await this.request<PrintfulCatalogProduct[]>('/catalog/products');
     return response.result;
   }
 
@@ -213,7 +226,7 @@ export default class PrintfulClient {
    * Get a specific catalog product
    */
   async getCatalogProduct(id: number): Promise<PrintfulCatalogProduct> {
-    const response = await this.request<PrintfulCatalogProduct>(`/products/${id}`);
+    const response = await this.request<PrintfulCatalogProduct>(`/catalog/products/${id}`);
     return response.result;
   }
 
@@ -221,7 +234,7 @@ export default class PrintfulClient {
    * Get variants for a catalog product
    */
   async getCatalogVariants(productId: number): Promise<PrintfulCatalogVariant[]> {
-    const response = await this.request<PrintfulCatalogVariant[]>(`/products/${productId}/variants`);
+    const response = await this.request<PrintfulCatalogVariant[]>(`/catalog/products/${productId}/variants`);
     return response.result;
   }
 
@@ -229,7 +242,7 @@ export default class PrintfulClient {
    * Create a new sync product
    */
   async createSyncProduct(productData: any): Promise<PrintfulProductList> {
-    const response = await this.request<PrintfulProductList>('/store/products', {
+    const response = await this.request<PrintfulProductList>('/sync/products', {
       method: 'POST',
       body: JSON.stringify(productData),
     });
@@ -237,10 +250,10 @@ export default class PrintfulClient {
   }
 
   /**
-   * Update a sync product
+   * Update an existing sync product
    */
   async updateSyncProduct(id: number, productData: any): Promise<PrintfulProductList> {
-    const response = await this.request<PrintfulProductList>(`/store/products/${id}`, {
+    const response = await this.request<PrintfulProductList>(`/sync/products/${id}`, {
       method: 'PUT',
       body: JSON.stringify(productData),
     });
@@ -251,44 +264,16 @@ export default class PrintfulClient {
    * Delete a sync product
    */
   async deleteSyncProduct(id: number): Promise<void> {
-    await this.request<void>(`/store/products/${id}`, {
+    await this.request<void>(`/sync/products/${id}`, {
       method: 'DELETE',
     });
   }
 
   /**
-   * Get all catalog categories
-   * Returns a list of categories from Printful catalog
+   * Get catalog categories
    */
   async getCatalogCategories(): Promise<any[]> {
-    try {
-      console.log('[Printful] Getting catalog categories');
-      const response = await this.request<any>('/categories');
-      
-      // Validate the response structure
-      if (!response || !response.result) {
-        console.error('[Printful] Invalid response structure:', response);
-        return [];
-      }
-      
-      // Handle nested categories array
-      if (response.result.categories && Array.isArray(response.result.categories)) {
-        console.log(`[Printful] Successfully retrieved ${response.result.categories.length} categories`);
-        return response.result.categories;
-      }
-      
-      // If no nested structure but result is an array
-      if (Array.isArray(response.result)) {
-        console.log(`[Printful] Successfully retrieved ${response.result.length} categories`);
-        return response.result;
-      }
-      
-      console.error('[Printful] Unexpected categories structure:', response.result);
-      return [];
-    } catch (error) {
-      console.error('[Printful] Error fetching categories:', error);
-      // Return empty array on error
-      return [];
-    }
+    const response = await this.request<any[]>('/catalog/categories');
+    return response.result;
   }
 } 

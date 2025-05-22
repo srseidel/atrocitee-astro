@@ -28,13 +28,15 @@ const authMiddleware: MiddlewareHandler = async ({ cookies, request, url }, next
   try {
     // Create Supabase client
     const supabase = createServerSupabaseClient({ cookies });
-    const { data, error } = await supabase.auth.getUser();
     
-    console.log(`[Middleware] Auth check for ${pathname}, User:`, data?.user?.id || 'none');
+    // Get session
+    const { data: { session }, error } = await supabase.auth.getSession();
     
-    // If no user or error, redirect to login
-    if (error || !data.user) {
-      console.log(`[Middleware] No authenticated user found:`, error?.message);
+    console.log(`[Middleware] Auth check for ${pathname}, Session:`, session?.user?.id || 'none');
+    
+    // If no session or error, redirect to login
+    if (error || !session) {
+      console.log(`[Middleware] No authenticated session found:`, error?.message);
       return new Response(null, {
         status: 302,
         headers: {
@@ -46,15 +48,15 @@ const authMiddleware: MiddlewareHandler = async ({ cookies, request, url }, next
     // If admin route, check admin permissions
     if (requiresAdmin) {
       // Check user metadata for admin role
-      const isAdminUser = data.user.app_metadata?.role === 'admin' || 
-                          data.user.user_metadata?.role === 'admin';
+      const isAdminUser = session.user.app_metadata?.role === 'admin' || 
+                          session.user.user_metadata?.role === 'admin';
       
-      console.log(`[Middleware] Admin check for user ${data.user.id}, metadata check:`, isAdminUser);
+      console.log(`[Middleware] Admin check for user ${session.user.id}, metadata check:`, isAdminUser);
       
       if (!isAdminUser) {
         // Make RPC call to check admin status in database
         const { data: adminCheckResult, error: adminCheckError } = await supabase
-          .rpc('is_admin', { user_id: data.user.id });
+          .rpc('is_admin', { user_id: session.user.id });
         
         console.log(`[Middleware] Admin DB check result:`, adminCheckResult, adminCheckError?.message);
         

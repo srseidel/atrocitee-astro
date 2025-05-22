@@ -6,21 +6,16 @@
 export interface PrintfulResponse<T> {
   code: number;
   result: T;
-  error?: {
-    message: string;
-    code: number;
-    reason?: string;
-  };
 }
 
 // Product types
 export interface PrintfulProduct {
   id: number;
-  external_id: string | null;
+  external_id: string;
   name: string;
   variants: number;
   synced: number;
-  thumbnail_url: string | null;
+  thumbnail_url: string;
   is_ignored: boolean;
 }
 
@@ -31,22 +26,12 @@ export interface PrintfulProductList {
 
 export interface PrintfulVariant {
   id: number;
-  external_id: string | null;
-  sync_product_id: number;
+  external_id: string;
+  product_id: number;
   name: string;
-  synced: boolean;
-  variant_id: number;
-  main_category_id: number;
-  warehouse_product_variant_id: number;
-  retail_price: string;
   sku: string;
+  retail_price: string;
   currency: string;
-  product: {
-    variant_id: number;
-    product_id: number;
-    image: string;
-    name: string;
-  };
   files: PrintfulFile[];
   options: PrintfulOption[];
   is_ignored: boolean;
@@ -55,25 +40,15 @@ export interface PrintfulVariant {
 export interface PrintfulFile {
   id: number;
   type: string;
-  hash: string;
+  title: string;
   url: string;
-  filename: string;
-  mime_type: string;
-  size: number;
-  width: number;
-  height: number;
-  dpi: number | null;
-  status: string;
-  created: number;
-  thumbnail_url: string;
   preview_url: string;
   visible: boolean;
-  is_temporary: boolean;
 }
 
 export interface PrintfulOption {
   id: string;
-  value: string | number | boolean;
+  value: string;
 }
 
 // Webhook types

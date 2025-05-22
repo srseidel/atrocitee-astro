@@ -1,0 +1,683 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import PrintfulProductSync from "../../../lib/printful/product-sync";
+import PrintfulService from "../../../lib/printful/service";
+import { createServerSupabaseClient } from "../../../lib/supabase";
+
+// Server-side rendering to ensure we can access cookies
+export const prerender = false;
+
+// Authentication is now handled by middleware in src/middleware.ts
+
+// Define types for the data
+interface SyncHistory {
+  id: string;
+  created_at: string;
+  sync_type: string;
+  status: string;
+  products_synced: number;
+  products_failed: number;
+}
+
+interface ProductChange {
+  id: string;
+  product?: {
+    name: string;
+  };
+  change_type: string;
+  change_severity: string;
+  field_name: string;
+  old_value: string;
+  new_value: string;
+}
+
+interface CategoryMapping {
+  id: string;
+  printful_category_id: number;
+  printful_category_name: string;
+  atrocitee_category_id: string | null;
+  is_active: boolean;
+}
+
+// Get necessary data from database
+const productSync = new PrintfulProductSync(Astro.cookies);
+const pendingChanges = await productSync.getProductChanges('pending_review');
+const syncHistory = await productSync.getSyncHistory(5);
+
+// Check if the mapping table exists but don't load all mappings yet
+const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+let mappingTableExists = false;
+try {
+  // Try to query one row from the table directly instead of using RPC
+  const { count } = await supabase
+    .from('printful_category_mapping')
+    .select('*', { count: 'exact', head: true });
+  
+  // If we get here without error, the table exists
+  mappingTableExists = true;
+} catch (error) {
+  console.error("Error checking mapping table:", error);
+  mappingTableExists = false;
+}
+
+// Remove the initial category mappings load
+let categoryMappings: any[] = [];
+let atrociteeCategories: any[] = [];
+
+// Get Atrocitee categories (we still need these for the dropdown)
+const { data: atrociteeCategoriesData, error: categoriesError } = await supabase
+  .from('categories')
+  .select('id, name')
+  .order('name');
+
+if (!categoriesError) {
+  atrociteeCategories = atrociteeCategoriesData || [];
+}
+
+// Get active products from our database that need configuration (no category assigned)
+const { data: newProducts, error: newProductsError } = await supabase
+  .from('products')
+  .select(`
+    id,
+    name,
+    printful_id,
+    category_id,
+    thumbnail_url,
+    active,
+    created_at
+  `)
+  .is('category_id', null)
+  .eq('printful_synced', true)
+  .order('created_at', { ascending: false });
+
+// Get catalog products (templates)
+const printfulService = PrintfulService.getInstance();
+let catalogProducts = [];
+let catalogError = null;
+
+try {
+  catalogProducts = await printfulService.getCatalogProducts();
+} catch (error) {
+  console.error("Error fetching catalog products:", error);
+  catalogError = error instanceof Error ? error.message : "Unknown error fetching catalog products";
+}
+---
+<AdminLayout title="Product Synchronization">
+  <div class="container mx-auto p-4">
+    <h1 class="text-3xl font-bold mb-6">Printful Product Synchronization</h1>
+    
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+      <h2 class="text-xl font-semibold mb-4">Sync Products from Printful</h2>
+      <p class="text-gray-600 mb-4">
+        This will import products you've created on Printful into your store. The synchronization process:
+      </p>
+      <ul class="list-disc pl-6 mb-4 text-gray-600">
+        <li>Imports new products that exist on Printful but not in your store</li>
+        <li>Updates pricing, inventory, and variants for existing products</li>
+        <li>Preserves your custom product descriptions, tags, and categories</li>
+        <li>New products will need to be assigned to categories after import</li>
+      </ul>
+      
+      <div class="flex space-x-4 mb-4">
+        <button
+          id="sync-button"
+          class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+        >
+          Sync Products
+        </button>
+        
+        <button
+          id="sync-categories-button"
+          class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+        >
+          Sync Printful Categories
+        </button>
+        
+        <button
+          id="load-catalog-button"
+          class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
+        >
+          Load Catalog Products
+        </button>
+        
+        <a
+          href="/admin/printful-test"
+          class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
+        >
+          Debug API Connection
+        </a>
+      </div>
+      
+      <div id="sync-loading" class="hidden mt-2 text-gray-600">
+        <div class="animate-spin inline-block w-4 h-4 border-2 border-gray-600 border-t-blue-600 rounded-full mr-2"></div>
+        <span id="sync-loading-text">Synchronizing products...</span>
+      </div>
+      
+      <div id="sync-result" class="hidden mt-2 py-2 px-4 rounded"></div>
+    </div>
+    
+    <!-- Category Mapping Panel -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+      <h2 class="text-xl font-semibold mb-4">Category Mapping</h2>
+      <p class="text-gray-600 mb-4">
+        Map Printful categories to your Atrocitee store categories. This helps automatically assign categories to new products during sync.
+      </p>
+      
+      <div class="flex space-x-4 mb-4">
+        <button
+          id="load-mappings-button"
+          class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+        >
+          Load Category Mappings
+        </button>
+      </div>
+      
+      <div id="loading-indicator" class="hidden mt-2 text-gray-600">
+        <div class="animate-spin inline-block w-4 h-4 border-2 border-gray-600 border-t-blue-600 rounded-full mr-2"></div>
+        <span>Loading category mappings...</span>
+      </div>
+      
+      <div id="result-message" class="hidden mt-2 py-2 px-4 rounded"></div>
+      
+      <div id="category-mappings" class="mt-4">
+        <div class="bg-blue-100 text-blue-800 p-4 rounded mb-4">
+          <p>Click "Load Category Mappings" to view and manage category mappings.</p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Catalog Products Panel -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+      <h2 class="text-xl font-semibold mb-4">Printful Catalog Products</h2>
+      <p class="text-gray-600 mb-4">
+        View and import products from the Printful catalog. Click "Load Catalog Products" to see available templates.
+      </p>
+      
+      <div id="catalog-products-container">
+        <div class="bg-blue-100 text-blue-800 p-4 rounded mb-4">
+          <p>Click "Load Catalog Products" above to view available catalog products.</p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- New Products Panel -->
+    {newProducts && newProducts.length > 0 && (
+      <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4">New Products Needing Configuration</h2>
+        <p class="text-gray-600 mb-4">
+          These products have been synced from Printful but need category assignments before they're visible on your site.
+        </p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {newProducts.map((product: any) => (
+            <div class="border rounded-lg overflow-hidden">
+              <div class="h-48 bg-gray-100 flex items-center justify-center">
+                {product.thumbnail_url ? (
+                  <img src={product.thumbnail_url} alt={product.name} class="max-h-full max-w-full object-contain" />
+                ) : (
+                  <div class="text-gray-400">No image available</div>
+                )}
+              </div>
+              <div class="p-4">
+                <h3 class="font-medium text-lg">{product.name}</h3>
+                <p class="text-sm text-gray-600 mb-3">Added on {new Date(product.created_at).toLocaleDateString()}</p>
+                <a 
+                  href={`/admin/products/edit?id=${product.id}`}
+                  class="block bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-1 px-3 rounded text-center"
+                >
+                  Configure Product
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+    
+    <!-- Sync History Panel -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+      <h2 class="text-xl font-semibold mb-4">Recent Synchronization History</h2>
+      
+      {syncHistory.length === 0 ? (
+        <p class="text-gray-600">No synchronization history yet.</p>
+      ) : (
+        <div class="overflow-x-auto">
+          <table class="min-w-full">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Products</th>
+              </tr>
+            </thead>
+            <tbody>
+              {syncHistory.map((history: SyncHistory) => (
+                <tr class="bg-white border-b">
+                  <td class="py-2 px-3 text-sm text-gray-900">
+                    {new Date(history.created_at).toLocaleDateString()}
+                  </td>
+                  <td class="py-2 px-3 text-sm text-gray-900 capitalize">
+                    {history.sync_type}
+                  </td>
+                  <td class="py-2 px-3 text-sm">
+                    <span class={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                      ${history.status === 'success' ? 'bg-green-100 text-green-800' : 
+                        history.status === 'partial' ? 'bg-yellow-100 text-yellow-800' : 
+                        'bg-red-100 text-red-800'}`}>
+                      {history.status}
+                    </span>
+                  </td>
+                  <td class="py-2 px-3 text-sm text-gray-900">
+                    {history.products_synced} succeeded, {history.products_failed} failed
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  // Store categories globally
+  let categories: any[] = [];
+
+  // Function to show loading state
+  function showLoading(elementId: string, text: string) {
+    const element = document.getElementById(elementId);
+    if (element) {
+      element.classList.remove('hidden');
+      const textElement = element.querySelector('span');
+      if (textElement) {
+        textElement.textContent = text;
+      }
+    }
+  }
+
+  // Function to hide loading state
+  function hideLoading(elementId: string) {
+    const element = document.getElementById(elementId);
+    if (element) {
+      element.classList.add('hidden');
+    }
+  }
+
+  // Function to show result message
+  function showResult(message: string, isError = false) {
+    const resultElement = document.getElementById('sync-result');
+    if (resultElement) {
+      resultElement.textContent = message;
+      resultElement.classList.remove('hidden');
+      resultElement.classList.remove('bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800');
+      
+      // Add classes individually
+      if (isError) {
+        resultElement.classList.add('bg-red-100');
+        resultElement.classList.add('text-red-800');
+      } else {
+        resultElement.classList.add('bg-green-100');
+        resultElement.classList.add('text-green-800');
+      }
+    }
+  }
+
+  // Function to load catalog products
+  async function loadCatalogProducts() {
+    const button = document.getElementById('load-catalog-button') as HTMLButtonElement;
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const resultMessage = document.getElementById('result-message');
+    const catalogProductsContainer = document.getElementById('catalog-products-container');
+    
+    if (!button || !loadingIndicator || !resultMessage || !catalogProductsContainer) {
+      console.error('Required elements not found:', {
+        button: !!button,
+        loadingIndicator: !!loadingIndicator,
+        resultMessage: !!resultMessage,
+        catalogProductsContainer: !!catalogProductsContainer
+      });
+      return;
+    }
+    
+    try {
+      button.disabled = true;
+      loadingIndicator.classList.remove('hidden');
+      resultMessage.classList.add('hidden');
+      catalogProductsContainer.innerHTML = '';
+      
+      console.log('Fetching catalog products...');
+      const response = await fetch('/api/printful/catalog');
+      const data = await response.json();
+      
+      console.log('Catalog products response:', data);
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to load catalog products');
+      }
+      
+      if (data.products && data.products.length > 0) {
+        const productsList = document.createElement('div');
+        productsList.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4';
+        
+        data.products.forEach((product: any) => {
+          const productElement = document.createElement('div');
+          productElement.className = 'bg-white p-4 rounded-lg shadow';
+          
+          const content = `
+            <div class="flex items-start">
+              ${product.thumbnail_url ? `
+                <img 
+                  src="${product.thumbnail_url}" 
+                  alt="${product.name}"
+                  class="w-16 h-16 object-cover rounded mr-4"
+                />
+              ` : ''}
+              <div>
+                <p class="font-medium">${product.name}</p>
+                <p class="text-sm text-gray-500">ID: ${product.id}</p>
+                <p class="text-sm text-gray-500">Type: ${product.type}</p>
+                ${product.variants && product.variants.length > 0 ? `
+                  <div class="mt-2">
+                    <p class="text-sm font-medium">Variants:</p>
+                    <ul class="text-sm text-gray-500">
+                      ${product.variants.map((variant: any) => `
+                        <li>${variant.name} - $${variant.price} (${variant.in_stock ? 'In Stock' : 'Out of Stock'})</li>
+                      `).join('')}
+                    </ul>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          `;
+          
+          productElement.innerHTML = content;
+          productsList.appendChild(productElement);
+        });
+        
+        catalogProductsContainer.appendChild(productsList);
+      } else {
+        catalogProductsContainer.innerHTML = '<p class="text-gray-500">No catalog products found.</p>';
+      }
+    } catch (error) {
+      console.error('Error loading catalog products:', error);
+      resultMessage.textContent = error instanceof Error ? error.message : 'Failed to load catalog products';
+      resultMessage.classList.remove('hidden');
+      resultMessage.classList.add('bg-red-100');
+      resultMessage.classList.add('text-red-800');
+    } finally {
+      button.disabled = false;
+      loadingIndicator.classList.add('hidden');
+    }
+  }
+
+  // Function to sync categories
+  async function syncCategories() {
+    showLoading('sync-loading', 'Syncing Printful categories...');
+    try {
+      const response = await fetch('/api/printful/sync-categories', {
+        method: 'POST'
+      });
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      const container = document.getElementById('category-mapping-container');
+      if (container) {
+        container.innerHTML = `
+          <div class="bg-green-100 text-green-800 p-4 rounded mb-4">
+            <p>Successfully synced ${data.added} new categories and found ${data.existing} existing categories.</p>
+          </div>
+        `;
+      }
+      
+      showResult('Categories synced successfully');
+    } catch (error) {
+      console.error('Error syncing categories:', error);
+      showResult(error instanceof Error ? error.message : 'Failed to sync categories', true);
+    } finally {
+      hideLoading('sync-loading');
+    }
+  }
+
+  // Function to sync products
+  async function syncProducts() {
+    showLoading('sync-loading', 'Syncing products from Printful...');
+    try {
+      const response = await fetch('/api/printful/sync', {
+        method: 'POST'
+      });
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to sync products');
+      }
+      
+      showResult(`Successfully synced ${data.success || 0} products. ${data.failed || 0} products failed.`);
+      
+      // Reload the page to show updated data
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (error) {
+      console.error('Error syncing products:', error);
+      showResult(error instanceof Error ? error.message : 'Failed to sync products', true);
+    } finally {
+      hideLoading('sync-loading');
+    }
+  }
+
+  // Function to update category mapping
+  async function updateCategoryMapping(printfulCategoryId: string, atrociteeCategoryId: string) {
+    const resultMessage = document.getElementById('result-message');
+    if (!resultMessage) return;
+    
+    try {
+      resultMessage.classList.add('hidden');
+      
+      const response = await fetch('/api/printful/update-category-mapping', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          printfulCategoryId,
+          atrociteeCategoryId,
+          isActive: true
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update category mapping');
+      }
+      
+      resultMessage.textContent = 'Category mapping updated successfully';
+      resultMessage.classList.remove('hidden');
+      resultMessage.classList.add('bg-green-100');
+      resultMessage.classList.add('text-green-800');
+      
+      // Reload mappings after update
+      await loadCategoryMappings();
+    } catch (error) {
+      console.error('Error updating category mapping:', error);
+      resultMessage.textContent = error instanceof Error ? error.message : 'Failed to update category mapping';
+      resultMessage.classList.remove('hidden');
+      resultMessage.classList.add('bg-red-100');
+      resultMessage.classList.add('text-red-800');
+    }
+  }
+
+  // Function to toggle category mapping active status
+  async function toggleCategoryMapping(printfulCategoryId: string, isActive: boolean) {
+    const resultMessage = document.getElementById('result-message');
+    if (!resultMessage) return;
+    
+    try {
+      resultMessage.classList.add('hidden');
+      
+      const response = await fetch('/api/printful/update-category-mapping', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          printfulCategoryId,
+          isActive
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update category mapping');
+      }
+      
+      resultMessage.textContent = 'Category mapping updated successfully';
+      resultMessage.classList.remove('hidden');
+      resultMessage.classList.add('bg-green-100');
+      resultMessage.classList.add('text-green-800');
+      
+      // Reload mappings after update
+      await loadCategoryMappings();
+    } catch (error) {
+      console.error('Error updating category mapping:', error);
+      resultMessage.textContent = error instanceof Error ? error.message : 'Failed to update category mapping';
+      resultMessage.classList.remove('hidden');
+      resultMessage.classList.add('bg-red-100');
+      resultMessage.classList.add('text-red-800');
+    }
+  }
+
+  // Function to load category mappings
+  async function loadCategoryMappings() {
+    const button = document.getElementById('load-mappings-button') as HTMLButtonElement;
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const resultMessage = document.getElementById('result-message');
+    const mappingsContainer = document.getElementById('category-mappings');
+    
+    if (!button || !loadingIndicator || !resultMessage || !mappingsContainer) {
+      console.error('Required elements not found:', {
+        button: !!button,
+        loadingIndicator: !!loadingIndicator,
+        resultMessage: !!resultMessage,
+        mappingsContainer: !!mappingsContainer
+      });
+      return;
+    }
+    
+    try {
+      button.disabled = true;
+      loadingIndicator.classList.remove('hidden');
+      resultMessage.classList.add('hidden');
+      mappingsContainer.innerHTML = '';
+      
+      // First, fetch categories if we haven't already
+      if (categories.length === 0) {
+        console.log('Fetching categories...');
+        const categoriesResponse = await fetch('/api/categories');
+        const categoriesData = await categoriesResponse.json();
+        
+        if (!categoriesResponse.ok) {
+          throw new Error(categoriesData.message || 'Failed to load categories');
+        }
+        
+        categories = categoriesData.categories || [];
+      }
+      
+      console.log('Fetching category mappings...');
+      const response = await fetch('/api/printful/category-mappings');
+      const data = await response.json();
+      
+      console.log('Category mappings response:', data);
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to load category mappings');
+      }
+      
+      if (data.mappings && data.mappings.length > 0) {
+        const mappingsList = document.createElement('div');
+        mappingsList.className = 'space-y-4';
+        
+        data.mappings.forEach((mapping: any) => {
+          const mappingElement = document.createElement('div');
+          mappingElement.className = 'bg-white p-4 rounded-lg shadow';
+          
+          const content = `
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="font-medium">${mapping.printful_category_name}</p>
+                <p class="text-sm text-gray-500">Printful ID: ${mapping.printful_category_id}</p>
+                <p class="text-sm text-gray-500">Atrocitee Category: ${mapping.atrocitee_category_name || 'Not mapped'}</p>
+              </div>
+              <div class="flex items-center space-x-2">
+                <select 
+                  class="border rounded px-2 py-1"
+                  onchange="updateCategoryMapping('${mapping.printful_category_id}', this.value)"
+                >
+                  <option value="">Select Category</option>
+                  ${categories.map((cat: any) => `
+                    <option value="${cat.id}" ${mapping.atrocitee_category_id === cat.id ? 'selected' : ''}>
+                      ${cat.name}
+                    </option>
+                  `).join('')}
+                </select>
+                <button 
+                  onclick="toggleCategoryMapping('${mapping.printful_category_id}', ${!mapping.is_active})"
+                  class="px-3 py-1 rounded ${mapping.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}"
+                >
+                  ${mapping.is_active ? 'Active' : 'Inactive'}
+                </button>
+              </div>
+            </div>
+          `;
+          
+          mappingElement.innerHTML = content;
+          mappingsList.appendChild(mappingElement);
+        });
+        
+        mappingsContainer.appendChild(mappingsList);
+      } else {
+        mappingsContainer.innerHTML = '<p class="text-gray-500">No category mappings found.</p>';
+      }
+    } catch (error) {
+      console.error('Error loading category mappings:', error);
+      resultMessage.textContent = error instanceof Error ? error.message : 'Failed to load category mappings';
+      resultMessage.classList.remove('hidden');
+      resultMessage.classList.add('bg-red-100');
+      resultMessage.classList.add('text-red-800');
+    } finally {
+      button.disabled = false;
+      loadingIndicator.classList.add('hidden');
+    }
+  }
+
+  // Add event listeners when the DOM is loaded
+  document.addEventListener('DOMContentLoaded', () => {
+    const syncButton = document.getElementById('sync-button');
+    const syncCategoriesButton = document.getElementById('sync-categories-button');
+    const loadCatalogButton = document.getElementById('load-catalog-button');
+    const loadMappingsButton = document.getElementById('load-mappings-button');
+    
+    if (syncButton) {
+      syncButton.addEventListener('click', syncProducts);
+    }
+    
+    if (syncCategoriesButton) {
+      syncCategoriesButton.addEventListener('click', syncCategories);
+    }
+    
+    if (loadCatalogButton) {
+      loadCatalogButton.addEventListener('click', loadCatalogProducts);
+    }
+    
+    if (loadMappingsButton) {
+      console.log('Adding click listener to load mappings button');
+      loadMappingsButton.addEventListener('click', loadCategoryMappings);
+    }
+  });
+</script> 

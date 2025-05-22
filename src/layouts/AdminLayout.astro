@@ -1,5 +1,16 @@
 ---
+// Server-side rendering for auth
+export const prerender = false;
+
 import MainLayout from "./MainLayout.astro";
+import { redirectIfNotAdmin } from "../utils/auth";
+
+// Check if user is admin and redirect if not
+const redirectResponse = await redirectIfNotAdmin(Astro);
+if (redirectResponse) {
+  console.log("[DEBUG] AdminLayout: Redirecting to", redirectResponse.headers.get('Location'));
+  return redirectResponse;
+}
 
 interface Props {
   title?: string;
@@ -23,7 +34,7 @@ const { title = "Admin Dashboard" } = Astro.props;
             </a>
           </li>
           <li>
-            <a href="/admin/products" class="block px-4 py-2 text-gray-700 hover:bg-blue-500 hover:text-white rounded">
+            <a href="/admin/products-dashboard" class="block px-4 py-2 text-gray-700 hover:bg-blue-500 hover:text-white rounded">
               Products
             </a>
           </li>

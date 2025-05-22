@@ -167,12 +167,12 @@ const { data: recentOrders, error: recentOrdersError } = await supabase
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <div class="bg-white rounded-lg shadow-md p-6">
         <h3 class="text-lg font-semibold mb-3">Products</h3>
-        <p class="text-gray-600 mb-4">Manage your product catalog, categories, and inventory.</p>
+        <p class="text-gray-600 mb-4">
+          Manage your product catalog, sync with Printful, review pending changes, and configure product settings. 
+          You can edit product details, set prices, manage variants, and control product visibility.
+        </p>
         <div class="flex flex-col space-y-2">
-          <a href="/admin/products" class="text-blue-600 hover:text-blue-800">All Products</a>
-          <a href="/admin/products/sync" class="text-blue-600 hover:text-blue-800">Sync with Printful</a>
-          <a href="/admin/products/categories" class="text-blue-600 hover:text-blue-800">Categories</a>
-          <a href="/admin/products/tags" class="text-blue-600 hover:text-blue-800">Tags</a>
+          <a href="/admin/products-dashboard" class="text-blue-600 hover:text-blue-800">Manage Products</a>
         </div>
       </div>
       

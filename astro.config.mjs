@@ -4,6 +4,8 @@ import tailwind from '@astrojs/tailwind';
 import react from '@astrojs/react';
 import cloudflare from '@astrojs/cloudflare';
 import sentry from '@sentry/astro';
+import vercel from '@astrojs/vercel/serverless';
+import { VitePWA } from 'vite-plugin-pwa';
 
 // Determine if we're in development or production mode
 const isDev = process.env.NODE_ENV === 'development';
@@ -22,6 +24,28 @@ export default defineConfig({
     // Add Sentry integration without direct configuration
     // Configuration is handled in sentry.client.config.js and sentry.server.config.js
     !isDev || process.env.ENABLE_SENTRY_IN_DEV ? sentry() : null,
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'masked-icon.svg'],
+      manifest: {
+        name: 'Atrocitee',
+        short_name: 'Atrocitee',
+        description: 'Atrocitee - Shop for a Cause',
+        theme_color: '#ffffff',
+        icons: [
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+          },
+        ],
+      },
+    }),
   ].filter(Boolean), // Filter out null values
   vite: {
     // CLOUDFLARE COMPATIBILITY FIX:
@@ -51,6 +75,25 @@ export default defineConfig({
         process.env.PUBLIC_SENTRY_ENVIRONMENT || 
         (isDev ? 'development' : 'production')
       ),
+    }
+  },
+  // Add CSP configuration
+  server: {
+    headers: {
+      'Content-Security-Policy': `
+        default-src 'self';
+        script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.tailwindcss.com;
+        style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com;
+        img-src 'self' data: https: blob:;
+        font-src 'self' data:;
+        connect-src 'self' https://*.supabase.co https://api.printful.com;
+        frame-src 'self';
+        object-src 'none';
+        base-uri 'self';
+        form-action 'self';
+        frame-ancestors 'none';
+        upgrade-insecure-requests;
+      `.replace(/\s+/g, ' ').trim()
     }
   }
 });

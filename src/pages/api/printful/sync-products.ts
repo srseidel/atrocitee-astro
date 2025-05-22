@@ -1,27 +1,27 @@
-import type { APIContext } from 'astro';
-import { isAdmin } from '../../../utils/auth-fixed';
+import { createServerSupabaseClient } from '../../../lib/supabase';
+import type { APIRoute } from 'astro';
+import PrintfulService from '../../../lib/printful/service';
 import PrintfulProductSync from '../../../lib/printful/product-sync';
+import { isAdmin } from '../../../utils/auth';
 import * as Sentry from '@sentry/astro';
 import ENV from '../../../config/env';
 
 // Do not pre-render this endpoint at build time
 export const prerender = false;
 
-export async function POST({ request, cookies }: APIContext) {
+export const POST: APIRoute = async ({ request, cookies }) => {
+  const supabase = createServerSupabaseClient({ cookies });
+  const printfulService = PrintfulService.getInstance();
+  const productSync = new PrintfulProductSync(supabase, printfulService);
+
   try {
     // Check if user is admin
-    const isAdminUser = await isAdmin({ cookies });
-    
-    if (!isAdminUser) {
-      return new Response(JSON.stringify({
-        error: 'Unauthorized',
-        message: 'Admin access required'
-      }), {
-        status: 403,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user || !isAdmin(user)) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401 }
+      );
     }
 
     // Check if API key exists
@@ -40,76 +40,74 @@ export async function POST({ request, cookies }: APIContext) {
     
     console.log('[Sync API] Starting sync with API key:', ENV.PRINTFUL_API_KEY ? 'Present (first chars: ' + ENV.PRINTFUL_API_KEY.substring(0, 4) + '...)' : 'Missing');
 
-    // Initialize the product sync service
-    const productSync = new PrintfulProductSync(cookies);
-    
-    // Run the sync operation
-    try {
-      const { success, failed, syncId } = await productSync.syncAllProducts('manual');
-      
-      // Return response with sync results
-      return new Response(JSON.stringify({
-        message: `Product sync completed: ${success} products synced successfully, ${failed} failures.`,
-        data: {
-          success_count: success,
-          failure_count: failed,
-          sync_id: syncId,
-          details: 'Products from your Printful store have been imported. New products will need to be assigned to categories. Existing products have preserved their descriptions, tags, and categories.'
-        }
-      }), {
+    // Start sync process
+    const syncResult = await productSync.syncAllProducts();
+
+    // Log sync history
+    await supabase
+      .from('printful_sync_history')
+      .insert({
+        sync_type: 'full',
+        status: 'completed',
+        message: 'Successfully synced all products from Printful',
+        started_at: syncResult.startedAt,
+        completed_at: new Date().toISOString(),
+        products_synced: syncResult.syncedCount,
+        products_failed: syncResult.failedCount
+      });
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: 'Product sync completed successfully',
+        syncedCount: syncResult.syncedCount,
+        failedCount: syncResult.failedCount
+      }),
+      {
         status: 200,
         headers: {
           'Content-Type': 'application/json'
         }
-      });
-    } catch (syncError) {
-      console.error('Error during product sync operation:', syncError);
-      
-      // Log to Sentry
-      Sentry.captureException(syncError, {
-        tags: { endpoint: 'sync-products', operation: 'syncAllProducts' }
-      });
-      
-      // Extract useful error information
-      const errorMessage = syncError instanceof Error ? syncError.message : 'Unknown error during product synchronization';
-      const errorStack = syncError instanceof Error ? syncError.stack : null;
-      
-      // Return error response with more details
-      return new Response(JSON.stringify({
-        error: 'Sync Failed',
-        message: errorMessage,
-        details: errorStack,
-        time: new Date().toISOString()
-      }), {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-    }
+      }
+    );
   } catch (error) {
-    console.error('Error during product sync:', error);
-    
+    console.error('Error syncing products:', error);
+
+    // Log sync failure
+    await supabase
+      .from('printful_sync_history')
+      .insert({
+        sync_type: 'full',
+        status: 'failed',
+        message: error instanceof Error ? error.message : 'Unknown error during sync',
+        started_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+        products_synced: 0,
+        products_failed: 0
+      });
+
     // Log to Sentry
     Sentry.captureException(error, {
       tags: { endpoint: 'sync-products' }
     });
     
     // Extract useful error information
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error during product synchronization';
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error during sync';
     const errorStack = error instanceof Error ? error.stack : null;
     
-    // Return error response with more details
-    return new Response(JSON.stringify({
-      error: 'Sync Failed',
-      message: errorMessage,
-      details: errorStack,
-      time: new Date().toISOString()
-    }), {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json'
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: errorMessage,
+        details: errorStack,
+        time: new Date().toISOString()
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json'
+        }
       }
-    });
+    );
   }
-} 
+}; 

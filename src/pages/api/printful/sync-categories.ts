@@ -1,12 +1,12 @@
-import type { APIContext } from 'astro';
+import type { APIRoute } from 'astro';
 import { isAdmin } from '../../../utils/auth-fixed';
 import PrintfulProductSync from '../../../lib/printful/product-sync';
 import { createServerSupabaseClient } from '../../../lib/supabase';
 
-// Do not pre-render this endpoint at build time
+// Ensure this endpoint is server-rendered
 export const prerender = false;
 
-export async function POST({ request, cookies }: APIContext) {
+export const POST: APIRoute = async ({ request, cookies }) => {
   try {
     console.log('[API] Starting category sync process');
     
@@ -98,4 +98,4 @@ export async function POST({ request, cookies }: APIContext) {
       }
     });
   }
-} 
+}; 

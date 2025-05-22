@@ -5,7 +5,7 @@
  */
 
 import { createServerSupabaseClient } from '../supabase';
-import PrintfulService from './service';
+import { PrintfulService } from './service';
 import * as Sentry from '@sentry/astro';
 import type { 
   PrintfulProduct, 
@@ -15,28 +15,25 @@ import type {
   PrintfulCatalogVariant
 } from '../../types/printful';
 import slugify from 'slugify';
+import { SupabaseClient } from '@supabase/supabase-js';
+
+interface SyncResult {
+  startedAt: string;
+  completedAt: string;
+  syncedCount: number;
+  failedCount: number;
+}
 
 /**
  * Class for managing product synchronization with Printful
  */
 export default class PrintfulProductSync {
   private printfulService: PrintfulService;
-  private supabase: any; // Using any type here since the Supabase client type is complex
+  private supabase: SupabaseClient;
 
-  constructor(cookies: any) {
-    this.printfulService = PrintfulService.getInstance();
-    console.log('[PrintfulProductSync] Initializing with cookies:', cookies ? 'Present' : 'Missing');
-    this.supabase = createServerSupabaseClient({ cookies });
-    console.log('[PrintfulProductSync] Supabase client created:', this.supabase ? 'Success' : 'Failed');
-    
-    // Check if important methods exist
-    const hasAuth = this.supabase && this.supabase.auth && typeof this.supabase.auth.getSession === 'function';
-    const hasFrom = this.supabase && typeof this.supabase.from === 'function';
-    console.log('[PrintfulProductSync] Supabase client validity check:', { 
-      hasAuth, 
-      hasFrom, 
-      isValidClient: hasAuth && hasFrom 
-    });
+  constructor(supabase: SupabaseClient, printfulService: PrintfulService) {
+    this.printfulService = printfulService;
+    this.supabase = supabase;
   }
 
   /**
@@ -151,6 +148,19 @@ export default class PrintfulProductSync {
     return data?.id || null;
   }
 
+  private async getCatalogVariantId(variantId: number): Promise<number | null> {
+    try {
+      const variant = await this.printfulService.getVariant(variantId);
+      return variant.variant_id;
+    } catch (error) {
+      console.error('Error fetching variant:', error);
+      Sentry.captureException(error, {
+        tags: { operation: 'getCatalogVariantId' }
+      });
+      return null;
+    }
+  }
+
   /**
    * Transform a Printful product to our database format
    */
@@ -173,17 +183,25 @@ export default class PrintfulProductSync {
       printful_external_id: printfulProduct.external_id,
       printful_synced: true,
       is_ignored: printfulProduct.is_ignored,
-      active: true
+      atrocitee_active: true,
+      atrocitee_featured: false,
+      atrocitee_tags: [],
+      atrocitee_metadata: {},
+      atrocitee_base_price: basePrice,
+      atrocitee_donation_amount: 0
     };
   }
 
   /**
    * Transform a Printful variant to our database format
    */
-  private transformPrintfulVariant(
+  private async transformPrintfulVariant(
     variant: PrintfulVariant, 
     productId: string
-  ): any {
+  ): Promise<any> {
+    // Get catalog variant ID
+    const catalogVariantId = await this.getCatalogVariantId(variant.id);
+
     // Extract options from the variant
     const options: Record<string, string> = {};
     
@@ -204,6 +222,7 @@ export default class PrintfulProductSync {
       printful_external_id: variant.external_id,
       printful_product_id: variant.sync_product_id,
       printful_synced: variant.synced || false,
+      printful_catalog_variant_id: catalogVariantId,
       in_stock: true,
       currency: variant.currency || 'USD'
     };
@@ -239,7 +258,7 @@ export default class PrintfulProductSync {
 
       // Now import all the variants
       for (const variant of variants) {
-        const variantData = this.transformPrintfulVariant(variant, product.id);
+        const variantData = await this.transformPrintfulVariant(variant, product.id);
         
         const { error: variantError } = await this.supabase
           .from('product_variants')
@@ -286,207 +305,49 @@ export default class PrintfulProductSync {
     syncHistoryId: string
   ): Promise<boolean> {
     try {
-      // Get the current product data
-      const { data: currentProduct, error: fetchError } = await this.supabase
+      // Get existing product data
+      const { data: existingProduct, error: fetchError } = await this.supabase
         .from('products')
-        .select('*, product_categories(*), product_tags(*)')
+        .select('*')
         .eq('id', productId)
         .single();
 
       if (fetchError) {
-        console.error('Error fetching current product:', fetchError);
-        Sentry.captureException(fetchError, {
-          tags: { operation: 'updateProduct' }
-        });
+        console.error('Error fetching existing product:', fetchError);
         return false;
       }
 
       // Transform the new product data
       const newProductData = this.transformPrintfulProduct(printfulProduct, variants);
-      
-      // Preserve existing metadata fields that shouldn't be overwritten
-      newProductData.description = currentProduct.description || newProductData.description;
-      
-      // Don't override slug for existing products to preserve SEO
-      newProductData.slug = currentProduct.slug || newProductData.slug;
-      
-      // Check for significant changes
-      const changes: Array<{ field: string, old: any, new: any, type: 'price' | 'inventory' | 'metadata' | 'image', severity: 'critical' | 'standard' | 'minor' }> = [];
-      
-      // Check name change
-      if (currentProduct.name !== newProductData.name) {
-        changes.push({
-          field: 'name',
-          old: currentProduct.name,
-          new: newProductData.name,
-          type: 'metadata',
-          severity: 'standard'
-        });
-      }
-      
-      // Check price change
-      if (currentProduct.price !== newProductData.price) {
-        changes.push({
-          field: 'price',
-          old: currentProduct.price.toString(),
-          new: newProductData.price.toString(),
-          type: 'price',
-          severity: 'critical'
-        });
-      }
-      
-      // Check image changes
-      if (JSON.stringify(currentProduct.thumbnail_url) !== JSON.stringify(newProductData.thumbnail_url)) {
-        changes.push({
-          field: 'thumbnail_url',
-          old: currentProduct.thumbnail_url,
-          new: newProductData.thumbnail_url,
-          type: 'image',
-          severity: 'standard'
-        });
+
+      // Compare and log changes
+      const changes = this.detectChanges(existingProduct, newProductData);
+      for (const change of changes) {
+        await this.logProductChange(
+          productId,
+          printfulProduct.id,
+          change.type,
+          change.severity,
+          change.field,
+          change.oldValue,
+          change.newValue,
+          syncHistoryId
+        );
       }
 
-      // Update the product if changes exist
-      if (changes.length > 0) {
-        const { error: updateError } = await this.supabase
-          .from('products')
-          .update(newProductData)
-          .eq('id', productId);
+      // Update the product
+      const { error: updateError } = await this.supabase
+        .from('products')
+        .update(newProductData)
+        .eq('id', productId);
 
-        if (updateError) {
-          console.error('Error updating product:', updateError);
-          Sentry.captureException(updateError, {
-            tags: { operation: 'updateProduct' }
-          });
-          return false;
-        }
-
-        // Log all the changes
-        for (const change of changes) {
-          await this.logProductChange(
-            productId,
-            printfulProduct.id,
-            change.type,
-            change.severity,
-            change.field,
-            change.old,
-            change.new,
-            syncHistoryId
-          );
-        }
+      if (updateError) {
+        console.error('Error updating product:', updateError);
+        return false;
       }
 
-      // Now update the variants
-      // First get all current variants
-      const { data: currentVariants, error: variantFetchError } = await this.supabase
-        .from('product_variants')
-        .select('*')
-        .eq('product_id', productId);
-
-      if (variantFetchError) {
-        console.error('Error fetching current variants:', variantFetchError);
-        Sentry.captureException(variantFetchError, {
-          tags: { operation: 'updateProduct' }
-        });
-      } else {
-        // Create a map of current variants by Printful ID
-        const currentVariantMap = new Map();
-        currentVariants.forEach((variant: any) => {
-          currentVariantMap.set(variant.printful_sync_variant_id, variant);
-        });
-
-        // Process each incoming variant
-        for (const variant of variants) {
-          const variantData = this.transformPrintfulVariant(variant, productId);
-          
-          // Check if this variant already exists
-          if (currentVariantMap.has(variant.id)) {
-            // Update the existing variant
-            const currentVariant = currentVariantMap.get(variant.id);
-            
-            // Check for price changes
-            if (currentVariant.retail_price !== variantData.retail_price) {
-              await this.logProductChange(
-                productId,
-                printfulProduct.id,
-                'price',
-                'critical',
-                `variant_price_${variant.id}`,
-                currentVariant.retail_price.toString(),
-                variantData.retail_price.toString(),
-                syncHistoryId
-              );
-            }
-            
-            const { error: updateVariantError } = await this.supabase
-              .from('product_variants')
-              .update(variantData)
-              .eq('id', currentVariant.id);
-
-            if (updateVariantError) {
-              console.error('Error updating variant:', updateVariantError);
-              Sentry.captureException(updateVariantError, {
-                tags: { operation: 'updateProduct' }
-              });
-            }
-            
-            // Remove this variant from the map to track which ones no longer exist
-            currentVariantMap.delete(variant.id);
-          } else {
-            // Insert a new variant
-            const { error: insertVariantError } = await this.supabase
-              .from('product_variants')
-              .insert(variantData);
-
-            if (insertVariantError) {
-              console.error('Error inserting new variant:', insertVariantError);
-              Sentry.captureException(insertVariantError, {
-                tags: { operation: 'updateProduct' }
-              });
-            }
-            
-            // Log the new variant
-            await this.logProductChange(
-              productId,
-              printfulProduct.id,
-              'variant',
-              'standard',
-              `variant_added_${variant.id}`,
-              null,
-              `New variant added: ${variant.name}`,
-              syncHistoryId
-            );
-          }
-        }
-        
-        // Any variants left in the map no longer exist in Printful
-        for (const [variantId, variant] of currentVariantMap.entries()) {
-          // Deactivate rather than delete
-          const { error: deactivateError } = await this.supabase
-            .from('product_variants')
-            .update({ active: false })
-            .eq('id', variant.id);
-
-          if (deactivateError) {
-            console.error('Error deactivating variant:', deactivateError);
-            Sentry.captureException(deactivateError, {
-              tags: { operation: 'updateProduct' }
-            });
-          }
-          
-          // Log the removed variant
-          await this.logProductChange(
-            productId,
-            printfulProduct.id,
-            'variant',
-            'critical',
-            `variant_removed_${variantId}`,
-            `Variant removed: ${variant.name}`,
-            null,
-            syncHistoryId
-          );
-        }
-      }
+      // Update variants
+      await this.syncVariants(productId, variants);
 
       return true;
     } catch (error) {
@@ -498,138 +359,154 @@ export default class PrintfulProductSync {
     }
   }
 
+  private detectChanges(oldData: any, newData: any): Array<{
+    type: 'price' | 'inventory' | 'metadata' | 'image' | 'variant' | 'other';
+    severity: 'critical' | 'standard' | 'minor';
+    field: string;
+    oldValue: string | null;
+    newValue: string | null;
+  }> {
+    const changes: Array<{
+      type: 'price' | 'inventory' | 'metadata' | 'image' | 'variant' | 'other';
+      severity: 'critical' | 'standard' | 'minor';
+      field: string;
+      oldValue: string | null;
+      newValue: string | null;
+    }> = [];
+
+    // Check critical fields
+    if (oldData.name !== newData.name) {
+      changes.push({
+        type: 'metadata',
+        severity: 'critical',
+        field: 'name',
+        oldValue: oldData.name,
+        newValue: newData.name
+      });
+    }
+
+    if (oldData.thumbnail_url !== newData.thumbnail_url) {
+      changes.push({
+        type: 'image',
+        severity: 'critical',
+        field: 'thumbnail_url',
+        oldValue: oldData.thumbnail_url,
+        newValue: newData.thumbnail_url
+      });
+    }
+
+    // Check standard fields
+    if (oldData.printful_external_id !== newData.printful_external_id) {
+      changes.push({
+        type: 'metadata',
+        severity: 'standard',
+        field: 'printful_external_id',
+        oldValue: oldData.printful_external_id,
+        newValue: newData.printful_external_id
+      });
+    }
+
+    // Check minor fields
+    if (oldData.is_ignored !== newData.is_ignored) {
+      changes.push({
+        type: 'metadata',
+        severity: 'minor',
+        field: 'is_ignored',
+        oldValue: oldData.is_ignored?.toString() || null,
+        newValue: newData.is_ignored?.toString() || null
+      });
+    }
+
+    return changes;
+  }
+
   /**
    * Synchronize all products from Printful to our database
    */
-  async syncAllProducts(type: 'manual' | 'scheduled' | 'webhook' = 'manual'): Promise<{ 
-    success: number; 
-    failed: number; 
-    syncId: string 
-  }> {
-    // Start the sync process
-    const syncId = await this.startSyncProcess(type);
-    
-    let successCount = 0;
-    let failureCount = 0;
-    
+  async syncAllProducts(): Promise<SyncResult> {
+    const startedAt = new Date().toISOString();
+    let syncedCount = 0;
+    let failedCount = 0;
+
     try {
+      // Start sync process
+      const syncId = await this.startSyncProcess('manual');
+
       // Get all products from Printful
-      const printfulProducts = await this.printfulService.getAllProducts();
-      
-      // Validate products data 
-      if (!printfulProducts || !Array.isArray(printfulProducts)) {
-        console.error('Invalid products data received from Printful:', printfulProducts);
-        throw new Error('Invalid products data received from Printful API');
-      }
-      
-      console.log(`[PrintfulProductSync] Processing ${printfulProducts.length} products from Printful`);
-      
-      for (const productList of printfulProducts) {
+      const products = await this.printfulService.getProducts();
+
+      // Process each product
+      for (const product of products) {
         try {
-          // Validate product data structure
-          if (!productList || !productList.sync_product) {
-            console.error('Invalid product structure in Printful response:', productList);
-            failureCount++;
-            continue;
-          }
-          
-          const { sync_product, sync_variants } = productList;
-          
-          // Validate required fields
-          if (!sync_product.id) {
-            console.error('Product is missing required ID:', sync_product);
-            failureCount++;
-            continue;
-          }
-          
-          // If no variants were provided, try to fetch them
-          let variants = sync_variants || [];
-          if ((!variants || variants.length === 0) && sync_product.variants > 0) {
-            console.log(`[PrintfulProductSync] Fetching variants for product ${sync_product.id}`);
-            try {
-              // We need to fetch variants for this product
-              const productDetails = await this.printfulService.getProduct(sync_product.id);
-              if (productDetails && productDetails.sync_variants) {
-                variants = productDetails.sync_variants;
-                console.log(`[PrintfulProductSync] Successfully fetched ${variants.length} variants for product ${sync_product.id}`);
-              }
-            } catch (variantError) {
-              console.error(`Error fetching variants for product ${sync_product.id}:`, variantError);
-              // Continue with empty variants rather than failing completely
-            }
-          }
-          
-          // Check if the product already exists in our database
-          const existingProductId = await this.productExists(sync_product.id);
-          
-          if (existingProductId) {
-            // Update the existing product
-            const success = await this.updateProduct(
-              existingProductId, 
-              sync_product, 
-              variants, // Now using the potentially fetched variants
-              syncId
-            );
-            
-            if (success) {
-              successCount++;
-            } else {
-              failureCount++;
-            }
-          } else {
-            // Import as a new product
-            const newProductId = await this.importProduct(
-              sync_product, 
-              variants, // Now using the potentially fetched variants
-              syncId
-            );
-            
-            if (newProductId) {
-              successCount++;
-            } else {
-              failureCount++;
-            }
-          }
-        } catch (productError) {
-          console.error('Error processing individual product:', productError);
-          failureCount++;
+          const variants = await this.printfulService.getProductVariants(product.id);
+          await this.syncProduct({ sync_product: product, sync_variants: variants });
+          syncedCount++;
+        } catch (error) {
+          console.error(`Failed to sync product ${product.id}:`, error);
+          failedCount++;
         }
       }
-      
-      // Determine overall status
-      let status: 'success' | 'partial' | 'failed' = 'success';
-      if (failureCount > 0 && successCount === 0) {
-        status = 'failed';
-      } else if (failureCount > 0) {
-        status = 'partial';
-      }
-      
-      // Complete the sync process
+
+      // Complete sync process
       await this.completeSyncProcess(
         syncId,
-        successCount,
-        failureCount,
-        status,
-        `Sync completed with ${successCount} successful products and ${failureCount} failures.`
+        syncedCount,
+        failedCount,
+        failedCount === 0 ? 'success' : 'partial'
       );
-      
-      return { success: successCount, failed: failureCount, syncId };
+
+      return {
+        startedAt,
+        completedAt: new Date().toISOString(),
+        syncedCount,
+        failedCount
+      };
     } catch (error) {
       console.error('Error in syncAllProducts:', error);
       Sentry.captureException(error, {
         tags: { operation: 'syncAllProducts' }
       });
-      
-      // Complete the sync process with failure
-      await this.completeSyncProcess(
-        syncId,
-        successCount,
-        failureCount,
-        'failed',
-        `Sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      throw error;
+    }
+  }
+
+  private async syncProduct(printfulProduct: { sync_product: PrintfulProduct; sync_variants: PrintfulVariant[] }) {
+    const { sync_product, sync_variants } = printfulProduct;
+
+    // Check if product exists
+    const existingProductId = await this.productExists(sync_product.id);
+
+    if (existingProductId) {
+      // Update existing product
+      await this.updateProduct(
+        existingProductId,
+        sync_product,
+        sync_variants,
+        'manual'
       );
-      
-      return { success: successCount, failed: failureCount, syncId };
+    } else {
+      // Import new product
+      await this.importProduct(
+        sync_product,
+        sync_variants,
+        'manual'
+      );
+    }
+  }
+
+  private async syncVariants(productId: string, variants: any[]) {
+    // Delete existing variants
+    await this.supabase
+      .from('product_variants')
+      .delete()
+      .eq('product_id', productId);
+
+    // Create new variants
+    for (const variant of variants) {
+      const variantData = await this.transformPrintfulVariant(variant, productId);
+      await this.supabase
+        .from('product_variants')
+        .insert(variantData);
     }
   }
 
@@ -637,66 +514,54 @@ export default class PrintfulProductSync {
    * Get all product change records
    */
   async getProductChanges(status?: 'pending_review' | 'approved' | 'rejected' | 'applied') {
-    try {
-      let query = this.supabase
-        .from('printful_product_changes')
-        .select(`
-          *,
-          product:products(id, name, slug)
-        `)
-        .order('created_at', { ascending: false });
-      
-      if (status) {
-        query = query.eq('status', status);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) {
-        console.error('Error fetching product changes:', error);
-        Sentry.captureException(error, {
-          tags: { operation: 'getProductChanges' }
-        });
-        return [];
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('Error in getProductChanges:', error);
+    let query = this.supabase
+      .from('printful_product_changes')
+      .select(`
+        *,
+        products (
+          id,
+          name,
+          printful_id
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching product changes:', error);
       Sentry.captureException(error, {
         tags: { operation: 'getProductChanges' }
       });
-      return [];
+      throw error;
     }
+
+    return data;
   }
 
   /**
    * Get sync history records
    */
   async getSyncHistory(limit = 10) {
-    try {
-      const { data, error } = await this.supabase
-        .from('printful_sync_history')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit);
-      
-      if (error) {
-        console.error('Error fetching sync history:', error);
-        Sentry.captureException(error, {
-          tags: { operation: 'getSyncHistory' }
-        });
-        return [];
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('Error in getSyncHistory:', error);
+    const { data, error } = await this.supabase
+      .from('printful_sync_history')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Error fetching sync history:', error);
       Sentry.captureException(error, {
         tags: { operation: 'getSyncHistory' }
       });
-      return [];
+      throw error;
     }
+
+    return data;
   }
 
   /**
@@ -937,31 +802,21 @@ export default class PrintfulProductSync {
     status: 'approved' | 'rejected', 
     userId: string
   ) {
-    try {
-      const { error } = await this.supabase
-        .from('printful_product_changes')
-        .update({
-          status,
-          reviewed_by: userId,
-          reviewed_at: new Date().toISOString()
-        })
-        .eq('id', changeId);
-      
-      if (error) {
-        console.error('Error reviewing product change:', error);
-        Sentry.captureException(error, {
-          tags: { operation: 'reviewProductChange' }
-        });
-        return false;
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('Error in reviewProductChange:', error);
+    const { error } = await this.supabase
+      .from('printful_product_changes')
+      .update({
+        status,
+        reviewed_by: userId,
+        reviewed_at: new Date().toISOString()
+      })
+      .eq('id', changeId);
+
+    if (error) {
+      console.error('Error reviewing product change:', error);
       Sentry.captureException(error, {
         tags: { operation: 'reviewProductChange' }
       });
-      return false;
+      throw error;
     }
   }
 } 

@@ -16,7 +16,7 @@ export const createBrowserSupabaseClient = () => {
     // Return a minimal mock client for build time
     return {
       auth: {
-        getSession: () => Promise.resolve({ data: { session: null } }),
+        getUser: () => Promise.resolve({ data: { user: null }, error: null }),
         signInWithPassword: () => Promise.resolve({ data: null, error: null }),
         signUp: () => Promise.resolve({ data: null, error: null }),
         signOut: () => Promise.resolve({ error: null })
@@ -41,7 +41,6 @@ export const createServerSupabaseClient = ({ cookies }: { cookies: any }) => {
     // Return a minimal mock client for build time
     return {
       auth: {
-        getSession: () => Promise.resolve({ data: { session: null } }),
         getUser: () => Promise.resolve({ data: { user: null }, error: null }),
         signOut: () => Promise.resolve({ error: null })
       }
@@ -97,6 +96,6 @@ export const signOut = async () => {
 
 export const getCurrentUser = async () => {
   const client = createBrowserSupabaseClient();
-  const { data } = await client.auth.getSession();
-  return data.session?.user;
+  const { data } = await client.auth.getUser();
+  return data.user;
 }; 

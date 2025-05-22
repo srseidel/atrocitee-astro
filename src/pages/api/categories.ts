@@ -1,39 +1,24 @@
-import type { APIContext } from 'astro';
+import type { APIRoute } from 'astro';
 import { createServerSupabaseClient } from '../../lib/supabase';
 
-// Do not pre-render this endpoint at build time
+// Ensure this endpoint is server-rendered
 export const prerender = false;
 
-// GET: Fetch all categories
-export async function GET({ request, cookies }: APIContext) {
+export const GET: APIRoute = async ({ cookies }) => {
   try {
-    // Initialize Supabase client
     const supabase = createServerSupabaseClient({ cookies });
     
-    // Fetch categories with basic error handling
-    const { data, error } = await supabase
+    const { data: categories, error } = await supabase
       .from('categories')
-      .select('*')
-      .eq('active', true)
+      .select('id, name')
       .order('name');
     
     if (error) {
-      console.error('Error fetching categories:', error);
-      return new Response(JSON.stringify({
-        error: 'Database Error',
-        message: error.message,
-        success: false
-      }), {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      throw error;
     }
     
-    // Return successful response
     return new Response(JSON.stringify({
-      data: data || [],
+      categories: categories || [],
       success: true
     }), {
       status: 200,
@@ -42,11 +27,10 @@ export async function GET({ request, cookies }: APIContext) {
       }
     });
   } catch (error) {
-    console.error('Error in categories API:', error);
-    
+    console.error('Error loading categories:', error);
     return new Response(JSON.stringify({
-      error: 'Server Error',
-      message: error instanceof Error ? error.message : 'Unknown error fetching categories',
+      error: 'Failed to load categories',
+      message: error instanceof Error ? error.message : 'Unknown error',
       success: false
     }), {
       status: 500,
@@ -55,4 +39,4 @@ export async function GET({ request, cookies }: APIContext) {
       }
     });
   }
-} 
+}; 

@@ -1,0 +1,433 @@
+---
+// Server-side rendering for auth
+export const prerender = false;
+
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import { createServerSupabaseClient } from "../../../../lib/supabase";
+import { PrintfulService } from "../../../../lib/printful/service";
+import type { PrintfulProductList, PrintfulProduct } from "../../../../types/printful";
+import { redirectIfNotAdmin } from "../../../../utils/auth";
+import { CORE_CATEGORIES } from "../../../../lib/constants/categories";
+
+interface ProductVariant {
+  id: string;
+  name: string;
+  sku: string;
+  retail_price: number;
+  in_stock: boolean;
+  options: Record<string, string>;
+}
+
+interface Charity {
+  id: string;
+  name: string;
+}
+
+interface Tag {
+  id: string;
+  name: string;
+}
+
+interface ProductTag {
+  tag_id: string;
+  tags: Tag;
+}
+
+// Check if user is admin and redirect if not
+const redirectResponse = await redirectIfNotAdmin(Astro);
+if (redirectResponse) return redirectResponse;
+
+// Get product ID from URL
+const { id } = Astro.params;
+
+// Initialize Supabase client
+const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+
+// Get product details
+const { data: product, error: productError } = await supabase
+  .from('products')
+  .select(`
+    *,
+    product_variants!product_variants_product_id_fkey (*),
+    product_tags (
+      tag_id,
+      tags (
+        id,
+        name
+      )
+    )
+  `)
+  .eq('id', id)
+  .single();
+
+// Handle product not found error first
+if (productError || !product) {
+  console.error('Product error:', productError);
+  return new Response('Product not found', { status: 404 });
+}
+
+// Get category mapping if it exists
+const { data: categoryMapping } = await supabase
+  .from('printful_category_mapping')
+  .select(`
+    atrocitee_category_id,
+    categories (
+      id,
+      name
+    )
+  `)
+  .eq('printful_category_id', product.printful_id)
+  .single();
+
+// Get Printful details if product has a Printful ID
+let printfulProduct: PrintfulProduct | null = null;
+if (product.printful_id) {
+  const printfulService = PrintfulService.getInstance();
+  try {
+    const response = await printfulService.getProduct(product.printful_id);
+    printfulProduct = response;
+  } catch (error) {
+    console.error('Error fetching Printful product:', error);
+  }
+}
+
+// Fetch all charities for the dropdown
+const { data: charities } = await supabase
+  .from('charities')
+  .select('id, name')
+  .eq('active', true)
+  .order('name');
+
+// Fetch all tags for the tag selector
+const { data: tags } = await supabase
+  .from('tags')
+  .select('id, name')
+  .eq('active', true)
+  .order('name');
+---
+
+<AdminLayout title={`Configure Product: ${product.name}`}>
+  <div class="container mx-auto p-6">
+    <div class="mb-6 flex justify-between items-center">
+      <h1 class="text-3xl font-bold">Configure Product</h1>
+      <a href="/admin/products" class="text-blue-600 hover:text-blue-800">
+        ← Back to Products
+      </a>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Product Details -->
+      <div class="bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-xl font-bold mb-4">Product Details</h2>
+        
+        <form id="productConfigForm" class="space-y-4">
+          <input type="hidden" name="productId" value={product.id} />
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Name</label>
+            <input 
+              type="text" 
+              name="name" 
+              value={product.name}
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              required
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Slug</label>
+            <input 
+              type="text" 
+              name="slug" 
+              value={product.slug}
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              required
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Description</label>
+            <textarea 
+              name="description" 
+              rows="3"
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >{product.description || ''}</textarea>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Base Price ($)</label>
+            <input 
+              type="number" 
+              name="atrocitee_base_price" 
+              value={product.atrocitee_base_price || ''}
+              step="0.01"
+              min="0"
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Donation Amount ($)</label>
+            <input 
+              type="number" 
+              name="atrocitee_donation_amount" 
+              value={product.atrocitee_donation_amount || ''}
+              step="0.01"
+              min="0"
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Charity</label>
+            <select 
+              name="atrocitee_charity_id"
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="">Select a charity</option>
+              {charities?.map((charity: Charity) => (
+                <option 
+                  value={charity.id} 
+                  selected={charity.id === product.atrocitee_charity_id}
+                >
+                  {charity.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Status</label>
+            <select 
+              name="atrocitee_active"
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="true" selected={product.atrocitee_active}>Published</option>
+              <option value="false" selected={!product.atrocitee_active}>Unpublished</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Featured</label>
+            <select 
+              name="atrocitee_featured"
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="true" selected={product.atrocitee_featured}>Yes - Show on homepage</option>
+              <option value="false" selected={!product.atrocitee_featured}>No - Regular listing only</option>
+            </select>
+            <p class="mt-1 text-sm text-gray-500">Featured products will be highlighted on the homepage</p>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Category</label>
+            <select 
+              name="category_id"
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="">Select a category</option>
+              {CORE_CATEGORIES.map((category) => (
+                <option 
+                  value={category.id} 
+                  selected={category.id === product.atrocitee_metadata?.category_id}
+                >
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Tags</label>
+            <div class="mt-2 space-y-2">
+              {tags?.map((tag: Tag) => (
+                <div class="flex items-center">
+                  <input 
+                    type="checkbox" 
+                    name="tags" 
+                    value={tag.id}
+                    id={`tag-${tag.id}`}
+                    checked={product.product_tags?.some((pt: ProductTag) => pt.tag_id === tag.id)}
+                    class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label for={`tag-${tag.id}`} class="ml-2 text-sm text-gray-700">
+                    {tag.name}
+                  </label>
+                </div>
+              ))}
+            </div>
+            <p class="mt-1 text-sm text-gray-500">Select one or more tags for this product</p>
+          </div>
+
+          <div class="flex justify-end">
+            <button 
+              type="submit"
+              class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+            >
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Product Variants -->
+      <div class="bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-xl font-bold mb-4">Product Variants</h2>
+        
+        {product.product_variants && product.product_variants.length > 0 ? (
+          <div class="space-y-4">
+            {product.product_variants.map((variant: ProductVariant) => (
+              <div class="border rounded-md p-4">
+                <div class="flex justify-between items-start">
+                  <div>
+                    <h3 class="font-medium">{variant.name}</h3>
+                    <p class="text-sm text-gray-500">SKU: {variant.sku}</p>
+                  </div>
+                  <div class="text-right">
+                    <p class="font-medium">${variant.retail_price}</p>
+                    <p class="text-sm text-gray-500">
+                      {variant.in_stock ? 'In Stock' : 'Out of Stock'}
+                    </p>
+                  </div>
+                </div>
+                
+                {variant.options && Object.keys(variant.options).length > 0 && (
+                  <div class="mt-2">
+                    <p class="text-sm text-gray-500">Options:</p>
+                    <ul class="text-sm">
+                      {Object.entries(variant.options).map(([key, value]) => (
+                        <li>{key}: {value}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p class="text-gray-500">No variants found for this product.</p>
+        )}
+      </div>
+    </div>
+
+    <!-- Printful Details -->
+    {printfulProduct && (
+      <div class="mt-6 bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-xl font-bold mb-4">Printful Details</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p class="text-sm text-gray-500">Printful ID</p>
+            <p class="font-medium">{printfulProduct.id}</p>
+          </div>
+          
+          <div>
+            <p class="text-sm text-gray-500">Last Synced</p>
+            <p class="font-medium">
+              {new Date(product.updated_at).toLocaleString()}
+            </p>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+</AdminLayout>
+
+<script>
+  // Handle form submission
+  const form = document.getElementById('productConfigForm');
+  const nameInput = form?.querySelector('input[name="name"]');
+  const slugInput = form?.querySelector('input[name="slug"]');
+
+  // Auto-generate slug from name
+  nameInput?.addEventListener('input', (e) => {
+    const name = (e.target as HTMLInputElement).value;
+    const slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+    if (slugInput) {
+      (slugInput as HTMLInputElement).value = slug;
+    }
+  });
+
+  // Initialize slug if empty
+  if (nameInput && slugInput && !(slugInput as HTMLInputElement).value) {
+    const name = (nameInput as HTMLInputElement).value;
+    const slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+    (slugInput as HTMLInputElement).value = slug;
+  }
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target as HTMLFormElement);
+    const productId = formData.get('productId');
+    
+    // Collect all selected tags
+    const selectedTags = Array.from(formData.getAll('tags')).map(tagId => tagId);
+    
+    try {
+      const response = await fetch(`/api/products/${productId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.get('name'),
+          slug: formData.get('slug'),
+          description: formData.get('description'),
+          atrocitee_base_price: parseFloat(formData.get('atrocitee_base_price') as string),
+          atrocitee_donation_amount: parseFloat(formData.get('atrocitee_donation_amount') as string),
+          atrocitee_charity_id: formData.get('atrocitee_charity_id'),
+          atrocitee_active: formData.get('atrocitee_active') === 'true',
+          atrocitee_featured: formData.get('atrocitee_featured') === 'true',
+          category_id: formData.get('category_id'),
+          tags: Array.from(selectedTags).map(tagId => ({ tag_id: tagId }))
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to update product');
+      }
+
+      // Show success message
+      const successAlert = document.createElement('div');
+      successAlert.className = 'bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4';
+      successAlert.role = 'alert';
+      successAlert.innerHTML = `
+        <strong class="font-bold">Success!</strong>
+        <span class="block sm:inline">${result.message || 'Product updated successfully'}</span>
+      `;
+      form.insertBefore(successAlert, form.firstChild);
+
+      // Remove success message after 5 seconds
+      setTimeout(() => {
+        successAlert.remove();
+      }, 5000);
+
+    } catch (error) {
+      console.error('Error updating product:', error);
+      
+      // Show error message
+      const errorAlert = document.createElement('div');
+      errorAlert.className = 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4';
+      errorAlert.role = 'alert';
+      errorAlert.innerHTML = `
+        <strong class="font-bold">Error!</strong>
+        <span class="block sm:inline">${error instanceof Error ? error.message : 'Failed to update product'}</span>
+      `;
+      form.insertBefore(errorAlert, form.firstChild);
+
+      // Remove error message after 5 seconds
+      setTimeout(() => {
+        errorAlert.remove();
+      }, 5000);
+    }
+  });
+</script> 

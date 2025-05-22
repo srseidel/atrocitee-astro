@@ -7,8 +7,17 @@
 
 import PrintfulClient from './api-client';
 import * as Sentry from '@sentry/astro';
-import type { PrintfulProductList, PrintfulCatalogProduct } from '../../types/printful';
+import type { 
+  PrintfulProduct,
+  PrintfulVariant,
+  PrintfulResponse,
+  PrintfulCatalogProduct,
+  PrintfulCatalogVariant,
+  PrintfulProductList
+} from '../../types/printful';
 import ENV from '../../config/env';
+import { createClient } from '@supabase/supabase-js';
+import type { Database } from '../../types/database';
 
 // Singleton instance
 let printfulServiceInstance: PrintfulService | null = null;
@@ -119,288 +128,123 @@ class MockPrintfulClient {
   async deleteSyncProduct(): Promise<void> { /* no return */ }
 }
 
-export default class PrintfulService {
-  private client: PrintfulClient | MockPrintfulClient;
-  private useMock: boolean;
+export class PrintfulService {
+  private static instance: PrintfulService;
+  private apiKey: string;
+  private storeId: string;
+  private baseUrl: string;
+  private supabase: ReturnType<typeof createClient<Database>>;
 
-  constructor(apiClient?: PrintfulClient, useMock = false) {
-    // Check if API key exists to determine if we should use mock
-    const hasApiKey = !!ENV.PRINTFUL_API_KEY;
-    this.useMock = !hasApiKey || useMock;
+  private constructor() {
+    // Use import.meta.env for Astro environment variables
+    this.apiKey = import.meta.env.PRINTFUL_API_KEY || '';
+    this.storeId = import.meta.env.PRINTFUL_STORE_ID || '';
+    this.baseUrl = import.meta.env.PRINTFUL_API_BASE_URL || 'https://api.printful.com';
     
-    if (this.useMock) {
-      console.log('[PrintfulService] Using mock client - No API key available');
-      this.client = new MockPrintfulClient();
-    } else {
-      console.log('[PrintfulService] Using real Printful API client');
-      // Allow dependency injection for testing or use real client
-      this.client = apiClient || new PrintfulClient();
+    // Use the correct environment variables for Astro
+    const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Missing Supabase URL or Anon Key');
     }
+    
+    if (!this.apiKey) {
+      throw new Error('Missing Printful API Key');
+    }
+
+    console.log('[DEBUG] PrintfulService initialized with:', {
+      baseUrl: this.baseUrl,
+      hasApiKey: !!this.apiKey,
+      hasStoreId: !!this.storeId
+    });
+    
+    this.supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
   }
 
-  /**
-   * Get singleton instance of the service
-   */
-  static getInstance(useMock = false): PrintfulService {
-    if (!printfulServiceInstance) {
-      printfulServiceInstance = new PrintfulService(undefined, useMock);
+  public static getInstance(): PrintfulService {
+    if (!PrintfulService.instance) {
+      PrintfulService.instance = new PrintfulService();
     }
-    return printfulServiceInstance;
+    return PrintfulService.instance;
   }
 
-  /**
-   * Get all products from the Printful store
-   */
-  async getAllProducts() {
+  private async fetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`;
+    const headers = {
+      'Authorization': `Bearer ${this.apiKey}`,
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+
+    console.log('[DEBUG] Making Printful API request:', {
+      url,
+      method: options.method || 'GET',
+      hasAuthHeader: !!headers.Authorization,
+      authHeaderLength: headers.Authorization.length
+    });
+
     try {
-      console.log('[PrintfulService] Attempting to get all products from Printful');
-      const result = await this.client.getSyncProducts();
+      const response = await fetch(url, { ...options, headers });
+      const responseText = await response.text();
       
-      // Handle empty results safely
-      if (!result || !Array.isArray(result)) {
-        console.warn('[PrintfulService] Printful API returned non-array result:', result);
-        return [];
+      console.log('[DEBUG] Printful API response:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: responseText
+      });
+
+      if (!response.ok) {
+        throw new Error(`Printful API error: ${response.statusText} - ${responseText}`);
       }
-      
-      console.log(`[PrintfulService] Successfully received ${result.length} products from Printful`);
-      
-      // Transform direct product format to expected structure if needed
-      const transformedProducts = result.map(product => {
-        // Check if the product is already in the expected format (has sync_product property)
-        if (product && product.sync_product) {
-          return product;
-        }
-        
-        // If it's a direct product object (like in API response), transform it
-        if (product && product.id) {
-          console.log(`[PrintfulService] Transforming product to expected format: ${product.id}`);
-          return {
-            sync_product: product,
-            sync_variants: [] // We'll fetch variants separately if needed
-          };
-        }
-        
-        // Invalid product
-        console.warn('[PrintfulService] Found invalid product in Printful response:', product);
-        return null;
-      }).filter(Boolean); // Remove any null items
-      
-      if (transformedProducts.length < result.length) {
-        console.warn(`[PrintfulService] Filtered out ${result.length - transformedProducts.length} invalid products`);
-      }
-      
-      return transformedProducts;
-    } catch (error) {
-      console.error('[PrintfulService] Failed to get products from Printful:', error);
-      console.error(error instanceof Error ? error.stack : 'No stack trace available');
-      Sentry.captureException(error, {
-        tags: { service: 'printful', operation: 'getAllProducts' }
-      });
-      // Return empty array instead of throwing to allow the sync process to complete
-      return [];
-    }
-  }
 
-  /**
-   * Get a specific product by ID
-   */
-  async getProduct(id: number) {
-    try {
-      return await this.client.getSyncProduct(id);
+      return JSON.parse(responseText);
     } catch (error) {
-      console.error(`Failed to get product ${id} from Printful:`, error);
-      Sentry.captureException(error, {
-        tags: { service: 'printful', operation: 'getProduct' },
-        extra: { productId: id }
+      console.error('[DEBUG] Printful API request failed:', {
+        error,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorStack: error instanceof Error ? error.stack : undefined
       });
       throw error;
     }
   }
 
+  // Get all products from Printful
+  async getProducts(): Promise<PrintfulProduct[]> {
+    const response = await this.fetch<{ result: PrintfulProduct[] }>('/sync/products');
+    return response.result;
+  }
+
+  // Get a specific product by ID
+  async getProduct(productId: number): Promise<PrintfulProduct> {
+    const response = await this.fetch<{ result: PrintfulProduct }>(`/sync/products/${productId}`);
+    return response.result;
+  }
+
+  // Get a specific variant by ID
+  async getVariant(variantId: number): Promise<PrintfulVariant> {
+    const response = await this.fetch<{ result: PrintfulVariant }>(`/sync/variants/${variantId}`);
+    return response.result;
+  }
+
   /**
-   * Get all available catalog products from Printful
-   * These are products that can be added to your store
+   * Get variants for a specific product
    */
-  async getCatalogProducts() {
+  async getProductVariants(productId: number): Promise<PrintfulVariant[]> {
     try {
-      return await this.client.getCatalogProducts();
+      // Use the sync product endpoint to get both product and variants
+      const response = await this.fetch<PrintfulProductList>(`/store/products/${productId}`);
+      return response.result.sync_variants;
     } catch (error) {
-      console.error('Failed to get catalog products from Printful:', error);
-      Sentry.captureException(error, {
-        tags: { service: 'printful', operation: 'getCatalogProducts' }
-      });
+      console.error('Error fetching product variants:', error);
       throw error;
     }
   }
 
-  /**
-   * Get all catalog categories from Printful
-   * These are the categories of products available in Printful
-   */
-  async getCatalogCategories() {
-    try {
-      console.log('[PrintfulService] Getting catalog categories');
-      console.log('[PrintfulService] Using mock client:', this.useMock);
-      console.log('[PrintfulService] API key available:', !!ENV.PRINTFUL_API_KEY);
-      
-      // If using mock client, return mock categories
-      if (this.useMock) {
-        console.log('[PrintfulService] Returning mock categories data');
-        const mockCategories = [
-          { id: 1, title: 'T-shirts', parent_id: null },
-          { id: 2, title: 'Hoodies', parent_id: null },
-          { id: 3, title: 'Accessories', parent_id: null },
-          { id: 11, title: 'Men\'s T-shirts', parent_id: 1 },
-          { id: 12, title: 'Women\'s T-shirts', parent_id: 1 }
-        ];
-        console.log('[PrintfulService] Mock categories:', mockCategories);
-        return mockCategories;
-      }
-      
-      console.log('[PrintfulService] Calling real Printful API for categories');
-      const response = await this.client.getCatalogCategories();
-      
-      // Make sure we get an array back
-      if (!response || !Array.isArray(response)) {
-        console.error('[PrintfulService] API did not return an array of categories:', response);
-        // Return empty array to prevent "not iterable" errors
-        return [];
-      }
-      
-      console.log('[PrintfulService] Received categories from API:', response.length);
-      
-      // Log first few categories for debugging
-      if (response.length > 0) {
-        console.log('[PrintfulService] Sample categories:', response.slice(0, 3));
-      }
-      
-      return response;
-    } catch (error) {
-      console.error('[PrintfulService] Failed to get catalog categories from Printful:', error);
-      console.error('[PrintfulService] Error details:', error instanceof Error ? error.message : String(error));
-      Sentry.captureException(error, {
-        tags: { service: 'printful', operation: 'getCatalogCategories' }
-      });
-      
-      // Return empty array instead of throwing to prevent "not iterable" errors
-      console.log('[PrintfulService] Returning empty array due to error');
-      return [];
-    }
-  }
-
-  /**
-   * Get all available variants for a catalog product
-   */
-  async getProductVariants(productId: number) {
-    try {
-      return await this.client.getCatalogVariants(productId);
-    } catch (error) {
-      console.error(`Failed to get variants for product ${productId}:`, error);
-      Sentry.captureException(error, {
-        tags: { service: 'printful', operation: 'getProductVariants' },
-        extra: { productId }
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Create a new product in the Printful store
-   */
-  async createProduct(productData: any) {
-    try {
-      return await this.client.createSyncProduct(productData);
-    } catch (error) {
-      console.error('Failed to create product in Printful:', error);
-      Sentry.captureException(error, {
-        tags: { service: 'printful', operation: 'createProduct' },
-        extra: { productData }
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Update an existing product in the Printful store
-   */
-  async updateProduct(id: number, productData: any) {
-    try {
-      return await this.client.updateSyncProduct(id, productData);
-    } catch (error) {
-      console.error(`Failed to update product ${id} in Printful:`, error);
-      Sentry.captureException(error, {
-        tags: { service: 'printful', operation: 'updateProduct' },
-        extra: { productId: id, productData }
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Delete a product from the Printful store
-   */
-  async deleteProduct(id: number) {
-    try {
-      await this.client.deleteSyncProduct(id);
-      return true;
-    } catch (error) {
-      console.error(`Failed to delete product ${id} from Printful:`, error);
-      Sentry.captureException(error, {
-        tags: { service: 'printful', operation: 'deleteProduct' },
-        extra: { productId: id }
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Retrieve only T-shirt products from the catalog
-   * Filters catalog products to include only t-shirts
-   */
-  async getTshirtProducts() {
-    try {
-      const allProducts = await this.client.getCatalogProducts();
-      // Filter for t-shirts based on type or category
-      return allProducts.filter(product => 
-        product.type?.toLowerCase().includes('t-shirt') || 
-        product.type?.toLowerCase().includes('tee')
-      );
-    } catch (error) {
-      console.error('Failed to get T-shirt products from Printful:', error);
-      Sentry.captureException(error, {
-        tags: { service: 'printful', operation: 'getTshirtProducts' }
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Synchronize a catalog product to the store
-   * This adds a product from the Printful catalog to your store
-   */
-  async syncCatalogProduct(catalogId: number, productData: any) {
-    try {
-      // Get the catalog product details first
-      const catalogProduct = await this.client.getCatalogProduct(catalogId) as PrintfulCatalogProduct;
-      
-      // Create a new sync product with the catalog product details
-      const syncProductData = {
-        sync_product: {
-          name: productData.name || catalogProduct.title,
-          thumbnail: catalogProduct.image,
-          external_id: productData.external_id || `catalog-${catalogId}`
-        },
-        sync_variants: productData.variants || []
-      };
-      
-      return await this.client.createSyncProduct(syncProductData);
-    } catch (error) {
-      console.error(`Failed to sync catalog product ${catalogId}:`, error);
-      Sentry.captureException(error, {
-        tags: { service: 'printful', operation: 'syncCatalogProduct' },
-        extra: { catalogId, productData }
-      });
-      throw error;
-    }
+  // Get catalog categories from Printful
+  async getCatalogCategories(): Promise<Array<{ id: number; title: string; parent_id: number | null }>> {
+    const response = await this.fetch<{ result: Array<{ id: number; title: string; parent_id: number | null }> }>('/store/categories');
+    return response.result;
   }
 } 

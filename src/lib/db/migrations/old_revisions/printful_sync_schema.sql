@@ -5,10 +5,10 @@
 -- ========== DROP EXISTING TABLES IF NEEDED ==========
 -- Use with caution - this will delete all data in these tables
 -- IMPORTANT: Tables are dropped to ensure clean creation with proper permissions
-DROP TABLE IF EXISTS printful_product_changes CASCADE;
 DROP TABLE IF EXISTS printful_sync_history CASCADE;
-DROP TABLE IF EXISTS product_variants CASCADE;
+DROP TABLE IF EXISTS printful_product_changes CASCADE;
 DROP TABLE IF EXISTS printful_category_mapping CASCADE;
+DROP TABLE IF EXISTS product_variants CASCADE;
 DROP TABLE IF EXISTS products CASCADE;
 DROP TABLE IF EXISTS categories CASCADE;
 
@@ -30,12 +30,12 @@ ALTER TABLE IF EXISTS product_tags DISABLE ROW LEVEL SECURITY;
 CREATE TABLE IF NOT EXISTS categories (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
-  slug TEXT NOT NULL UNIQUE,
+  slug TEXT UNIQUE NOT NULL,
   description TEXT,
-  active BOOLEAN DEFAULT true,
   parent_id UUID REFERENCES categories(id),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+  active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 COMMENT ON TABLE categories IS 'Product categories for organizing the store';
@@ -46,21 +46,18 @@ CREATE TABLE IF NOT EXISTS printful_category_mapping (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   
   -- Printful category information
-  printful_category_id INTEGER NOT NULL, -- Printful's category ID
-  printful_category_name TEXT NOT NULL, -- Printful's category name
+  printful_category_id INTEGER NOT NULL,
+  printful_category_name TEXT NOT NULL,
   
   -- Mapping to Atrocitee category
-  atrocitee_category_id UUID REFERENCES categories(id), -- Link to Atrocitee category
+  atrocitee_category_id UUID REFERENCES categories(id),
   
   -- Status flags
-  is_active BOOLEAN DEFAULT true, -- Whether this mapping is active
+  is_active BOOLEAN DEFAULT TRUE,
   
   -- Auditing
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  
-  -- Constraints
-  UNIQUE(printful_category_id)
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 COMMENT ON TABLE printful_category_mapping IS 'Maps Printful categories to Atrocitee categories for product synchronization';
@@ -71,29 +68,25 @@ CREATE TABLE IF NOT EXISTS products (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   
   -- Printful specific fields
-  printful_id INTEGER UNIQUE, -- The sync product ID from Printful
-  printful_external_id TEXT,  -- Store's external ID in Printful system
-  printful_synced BOOLEAN DEFAULT false, -- Whether product is synced with Printful
-  is_ignored BOOLEAN DEFAULT false, -- Whether product is ignored in Printful sync
-  
-  -- Product metadata
+  printful_id INTEGER UNIQUE,
+  printful_external_id TEXT,
+  printful_synced BOOLEAN DEFAULT FALSE,
   name TEXT NOT NULL,
   description TEXT,
-  slug TEXT UNIQUE, -- URL-friendly version of name
-  thumbnail_url TEXT, -- Main product image URL
+  slug TEXT UNIQUE,
+  thumbnail_url TEXT,
   
   -- Atrocitee specific fields
-  category_id UUID REFERENCES categories(id), -- Link to category
-  default_charity_id UUID, -- Reference to default charity (add foreign key if table exists)
-  tags JSONB, -- Store tags as JSON array
-  
-  -- Status and visibility
-  active BOOLEAN DEFAULT true, -- Whether product is visible on site
-  featured BOOLEAN DEFAULT false, -- Whether product is featured
+  atrocitee_active BOOLEAN DEFAULT TRUE,
+  atrocitee_featured BOOLEAN DEFAULT FALSE,
+  atrocitee_tags TEXT[] DEFAULT '{}',
+  atrocitee_metadata JSONB DEFAULT '{}',
+  atrocitee_base_price DECIMAL(10,2),
+  atrocitee_donation_amount DECIMAL(10,2),
   
   -- Auditing
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 COMMENT ON TABLE products IS 'Products synced from Printful with Atrocitee custom fields';
@@ -107,27 +100,28 @@ CREATE TABLE IF NOT EXISTS product_variants (
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   
   -- Printful specific fields
-  printful_id INTEGER UNIQUE, -- The sync variant ID from Printful
-  printful_external_id TEXT, -- Store's external variant ID in Printful system
-  printful_product_id INTEGER, -- Reference to parent Printful product
-  printful_synced BOOLEAN DEFAULT false, -- Whether variant is synced with Printful
+  printful_id INTEGER UNIQUE,
+  printful_external_id TEXT,
+  printful_product_id INTEGER REFERENCES products(printful_id),
+  printful_synced BOOLEAN DEFAULT FALSE,
   
   -- Variant metadata
-  name TEXT, -- Variant name (e.g., "Small / Black")
-  sku TEXT, -- Stock Keeping Unit
-  retail_price DECIMAL(10, 2), -- Price shown to customers
+  name TEXT NOT NULL,
+  sku TEXT,
+  retail_price DECIMAL(10,2),
+  currency TEXT DEFAULT 'USD',
   
   -- Variant details
-  options JSONB, -- Variant attributes (size, color, etc.) as JSON
-  files JSONB, -- Print files information as JSON
+  options JSONB DEFAULT '{}',
+  files JSONB DEFAULT '{}',
   
   -- Inventory
-  in_stock BOOLEAN DEFAULT true,
+  in_stock BOOLEAN DEFAULT TRUE,
   stock_level INTEGER,
   
   -- Auditing
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 COMMENT ON TABLE product_variants IS 'Product variants synced from Printful';
@@ -138,21 +132,17 @@ CREATE TABLE IF NOT EXISTS printful_sync_history (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   
   -- Sync metadata
-  sync_type TEXT NOT NULL, -- Type of sync (manual, scheduled, webhook, etc.)
-  status TEXT NOT NULL, -- Status of sync operation (success, partial, failed)
-  message TEXT, -- Informational or error message
+  sync_type TEXT NOT NULL,
+  status TEXT NOT NULL,
+  message TEXT,
   
   -- Sync statistics
-  products_synced INTEGER DEFAULT 0, -- Number of products successfully synced
-  products_failed INTEGER DEFAULT 0, -- Number of products that failed to sync
+  products_synced INTEGER DEFAULT 0,
+  products_failed INTEGER DEFAULT 0,
   
   -- Timing information
-  started_at TIMESTAMP WITH TIME ZONE,
-  completed_at TIMESTAMP WITH TIME ZONE,
-  
-  -- Auditing
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
 );
 
 COMMENT ON TABLE printful_sync_history IS 'Records of product synchronization operations with Printful';
@@ -163,29 +153,24 @@ CREATE TABLE IF NOT EXISTS printful_product_changes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   
   -- Relationships
-  product_id UUID REFERENCES products(id) ON DELETE SET NULL,
-  
-  -- Printful references
-  printful_product_id INTEGER,
+  product_id UUID REFERENCES products(id),
   
   -- Change details
-  change_type TEXT NOT NULL, -- Type of change (price, inventory, metadata, etc.)
-  change_severity TEXT NOT NULL, -- Importance of change (critical, standard, minor)
-  field_name TEXT NOT NULL, -- Name of the field that changed
-  old_value TEXT, -- Previous value
-  new_value TEXT, -- New value
+  change_type TEXT NOT NULL,
+  change_severity TEXT NOT NULL,
+  field_name TEXT NOT NULL,
+  old_value JSONB,
+  new_value JSONB,
   
   -- Change status
-  status TEXT NOT NULL, -- Status (pending_review, approved, rejected)
+  status TEXT DEFAULT 'pending_review',
   
   -- Review information
-  sync_history_id UUID REFERENCES printful_sync_history(id),
-  reviewed_by UUID, -- User who reviewed the change
-  reviewed_at TIMESTAMP WITH TIME ZONE,
+  reviewed_by UUID REFERENCES auth.users(id),
+  reviewed_at TIMESTAMPTZ,
   
   -- Auditing
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 COMMENT ON TABLE printful_product_changes IS 'Tracks changes to products detected during Printful synchronization';
@@ -193,27 +178,22 @@ COMMENT ON TABLE printful_product_changes IS 'Tracks changes to products detecte
 -- ========== INDEXES ==========
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_products_printful_id ON products(printful_id);
-CREATE INDEX IF NOT EXISTS idx_products_category_id ON products(category_id);
-CREATE INDEX IF NOT EXISTS idx_products_active ON products(active);
-
-CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON product_variants(product_id);
+CREATE INDEX IF NOT EXISTS idx_products_printful_external_id ON products(printful_external_id);
 CREATE INDEX IF NOT EXISTS idx_product_variants_printful_id ON product_variants(printful_id);
-
-CREATE INDEX IF NOT EXISTS idx_printful_product_changes_product_id ON printful_product_changes(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_variants_printful_product_id ON product_variants(printful_product_id);
+CREATE INDEX IF NOT EXISTS idx_printful_sync_history_sync_type ON printful_sync_history(sync_type);
+CREATE INDEX IF NOT EXISTS idx_printful_sync_history_status ON printful_sync_history(status);
 CREATE INDEX IF NOT EXISTS idx_printful_product_changes_status ON printful_product_changes(status);
-
-CREATE INDEX IF NOT EXISTS idx_printful_category_mapping_printful_id ON printful_category_mapping(printful_category_id);
-CREATE INDEX IF NOT EXISTS idx_printful_category_mapping_atrocitee_id ON printful_category_mapping(atrocitee_category_id);
-
+CREATE INDEX IF NOT EXISTS idx_printful_product_changes_product_id ON printful_product_changes(product_id);
 CREATE INDEX IF NOT EXISTS idx_categories_slug ON categories(slug);
-CREATE INDEX IF NOT EXISTS idx_categories_active ON categories(active);
+CREATE INDEX IF NOT EXISTS idx_printful_category_mapping_printful_id ON printful_category_mapping(printful_category_id);
 
 -- ========== FUNCTIONS ==========
 -- Function to update the updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.updated_at = now();
+    NEW.updated_at = NOW();
     RETURN NEW;
 END;
 $$ language 'plpgsql';
@@ -315,3 +295,71 @@ VALUES
   ('Stickers', 'stickers', 'Stickers and decals', true),
   ('Accessories', 'accessories', 'Various accessories and other items', true)
 ON CONFLICT (slug) DO NOTHING; 
+
+-- Enable Row Level Security
+ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE product_variants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE printful_category_mapping ENABLE ROW LEVEL SECURITY;
+ALTER TABLE printful_product_changes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE printful_sync_history ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for authenticated users
+CREATE POLICY "Allow authenticated users to manage categories"
+ON categories FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated users to manage products"
+ON products FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated users to manage product variants"
+ON product_variants FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated users to manage category mappings"
+ON printful_category_mapping FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated users to manage product changes"
+ON printful_product_changes FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow authenticated users to manage sync history"
+ON printful_sync_history FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- Create policies for service role
+CREATE POLICY "Allow service role to manage categories"
+ON categories FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow service role to manage products"
+ON products FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow service role to manage product variants"
+ON product_variants FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow service role to manage category mappings"
+ON printful_category_mapping FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow service role to manage product changes"
+ON printful_product_changes FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow service role to manage sync history"
+ON printful_sync_history FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+-- Enable RLS on products table
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for products table
+CREATE POLICY "Admins can read all products" ON products
+  FOR SELECT USING (auth.jwt() ->> 'role' = 'admin');
+
+CREATE POLICY "Admins can insert products" ON products
+  FOR INSERT WITH CHECK (auth.jwt() ->> 'role' = 'admin');
+
+CREATE POLICY "Admins can update products" ON products
+  FOR UPDATE USING (auth.jwt() ->> 'role' = 'admin');
+
+CREATE POLICY "Admins can delete products" ON products
+  FOR DELETE USING (auth.jwt() ->> 'role' = 'admin');
+
+-- Create trigger for updated_at
+CREATE TRIGGER update_products_updated_at
+  BEFORE UPDATE ON products
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column(); 

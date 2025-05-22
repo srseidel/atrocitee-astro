@@ -309,3 +309,198 @@ PRINTFUL_API_KEY=your_api_key_here
 - Implemented statistics counters for orders, products, customers, and pending changes
 - Developed category and tag management interfaces
 - Improved product variant handling and display 
+
+[2024-03-21] Schema and Field Name Updates
+- Created new schema file 20240321_initial_schema.sql with clear separation between Printful and Atrocitee fields
+- Renamed fields to clearly indicate their source:
+  * base_price → atrocitee_base_price
+  * donation_amount → atrocitee_donation_amount
+  * featured → atrocitee_featured
+  * tags → atrocitee_tags
+  * metadata → atrocitee_metadata
+  * active → atrocitee_active
+- Added missing Printful fields:
+  * printful_catalog_variant_id for template/catalog reference
+  * stock_level in product variants
+- Updated product configuration page to use new field names
+- Updated product list page with improved filtering and new field names
+- Added proper TypeScript types and null checks
+- Improved error handling and user feedback
+- Added data-product-id attribute for better DOM manipulation
+- Added proper event listeners for filters and actions
+
+[2024-03-21] API Endpoint and Printful Sync Updates
+- Updated product API endpoint to use new field names
+- Updated Printful sync endpoint with proper error handling and admin checks
+- Updated PrintfulService to handle catalog variant IDs
+- Updated PrintfulProductSync to fetch and store catalog variant IDs
+- Added proper TypeScript types and null checks
+- Improved error handling and logging
+- Added Sentry error tracking
+- Added proper admin authorization checks
+- Added sync history tracking
+
+Next steps:
+1. Test the Printful sync with the new schema
+2. Verify that all product data is being properly stored and displayed
+3. Update any remaining components that use the old field names
+4. Add more comprehensive error handling and retry logic 
+
+# Phase 2 Progress Log
+
+## Completed Tasks
+1. Created basic product sync functionality
+   - Fetches products from Printful
+   - Stores in Supabase database
+   - Handles variants
+   - Tracks sync history
+
+2. Implemented product edit page
+   - Read-only display of Printful data
+   - Editable Atrocitee-specific fields
+   - Basic form validation
+
+3. Fixed sync logic
+   - Now properly updates existing products instead of creating duplicates
+   - Handles variant updates correctly
+   - Tracks changes in printful_product_changes table
+
+## Current Status
+- Basic product management is working
+- Sync process is stable
+- Edit page needs configuration section
+
+## Next Steps
+
+### 1. Database Schema Updates Needed
+- Create `atrocitee_categories` table
+  ```sql
+  CREATE TABLE atrocitee_categories (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+  ```
+
+- Create `atrocitee_tags` table for standardized tags
+  ```sql
+  CREATE TABLE atrocitee_tags (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+  ```
+
+- Add foreign key to products table for charity
+  ```sql
+  ALTER TABLE products
+  ADD COLUMN atrocitee_charity_id UUID REFERENCES charities(id);
+  ```
+
+### 2. Configuration Page Requirements
+- Create `/admin/products/configure/[id]` page
+- Fields to configure:
+  - Category selection (from atrocitee_categories)
+  - Tag management (combo of predefined tags and custom tags)
+  - Charity selection (from charities table)
+  - Featured status
+  - Active status
+  - Custom metadata fields
+
+### 3. UI/UX Improvements Needed
+- Add success/error notifications
+- Add confirmation dialogs for important actions
+- Add loading states during sync
+- Add pagination for large product lists
+- Add search/filter functionality
+
+### 4. Testing Required
+- Test sync with large product catalogs
+- Test variant updates
+- Test category/tag management
+- Test charity assignment
+- Test error handling
+
+## Questions to Resolve
+1. Should we allow custom categories or only use predefined ones?
+2. How should we handle tag standardization?
+3. Do we need to track tag usage statistics?
+4. Should we add validation for charity assignments?
+5. Do we need to add any additional metadata fields?
+
+## Technical Debt
+1. Add proper error handling for API failures
+2. Add retry logic for failed syncs
+3. Add logging for debugging
+4. Add data validation
+5. Add proper TypeScript types for all database tables
+
+## Security Considerations
+1. Ensure proper access control for configuration page
+2. Validate all user inputs
+3. Sanitize data before display
+4. Add rate limiting for sync operations
+5. Add audit logging for configuration changes 
+
+## Product Configuration Updates (2024-03-22)
+
+### Task: Fix Product Configuration Page
+- Updated Files:
+  - src/pages/admin/products/configure/[id].astro - Fixed product configuration page
+  - src/pages/api/products/[id].ts - Enhanced product update endpoint
+- Purpose: Resolve "Product not found" error and improve product configuration
+- Status: ✅ Completed
+- Features:
+  - Fixed product query to properly handle database relationships
+  - Added proper error handling and validation
+  - Improved success/error message display
+  - Added automatic slug generation from product name
+  - Enhanced category selection with core categories
+  - Implemented multiple tag selection
+  - Added visual feedback for form submission
+
+### Task: Streamline Category System
+- Created Files:
+  - src/lib/constants/categories.ts - Core category definitions
+- Updated Files:
+  - src/pages/admin/products/configure/[id].astro - Updated to use core categories
+- Purpose: Simplify category management for MVP
+- Status: ✅ Completed
+- Features:
+  - Defined core categories (T-Shirts, Hats)
+  - Added helper functions for category lookup
+  - Simplified category selection in product configuration
+  - Moved redundant category mapping files to old_revisions
+
+### Task: Enhance Product Update API
+- Updated Files:
+  - src/pages/api/products/[id].ts - Improved product update endpoint
+- Purpose: Ensure reliable product updates and proper error handling
+- Status: ✅ Completed
+- Features:
+  - Added proper handling of category updates in metadata
+  - Improved tag management with proper error handling
+  - Enhanced error messages and response structure
+  - Added transaction support for atomic updates
+  - Improved validation of input data
+
+### Task: Database Schema Updates
+- Updated Files:
+  - src/lib/db/migrations/20240322_product_schema.sql - Added necessary permissions
+- Purpose: Ensure proper database access for authenticated users
+- Status: ✅ Completed
+- Features:
+  - Added GRANT USAGE ON SCHEMA public TO authenticated
+  - Ensured proper permissions for product updates
+  - Maintained existing RLS policies for security
+
+## Next Steps
+- Implement product detail pages
+- Build product filtering interface
+- Enhance charity association functionality
+- Add product image management
+- Implement product search functionality 

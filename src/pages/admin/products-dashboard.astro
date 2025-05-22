@@ -1,0 +1,301 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import { createServerSupabaseClient } from "../../lib/supabase";
+
+// Server-side rendering to ensure we can access cookies
+export const prerender = false;
+
+interface Product {
+  id: string;
+  name: string;
+  printful_id: string;
+  atrocitee_active: boolean;
+  atrocitee_base_price: number;
+  atrocitee_donation_amount: number;
+}
+
+interface ProductChange {
+  id: string;
+  product_id: string;
+  change_type: string;
+  field_name: string;
+  old_value: any;
+  new_value: any;
+}
+
+interface Tag {
+  id: string;
+  name: string;
+  slug: string;
+  active: boolean;
+}
+
+// Initialize Supabase client
+const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+
+// Get all products from Supabase
+const { data: products, error } = await supabase
+  .from('products')
+  .select('*')
+  .order('created_at', { ascending: false });
+
+// Log products query for debugging
+console.log('Products query:', {
+  products,
+  error,
+  count: products?.length || 0,
+  firstProduct: products?.[0]
+});
+
+// Get any pending product changes
+const { data: pendingChanges, error: changesError } = await supabase
+  .from('printful_product_changes')
+  .select('*')
+  .eq('status', 'pending_review')
+  .order('created_at', { ascending: false });
+
+// Log for debugging
+console.log('Products:', products?.length || 0);
+console.log('Pending Changes:', pendingChanges?.length || 0);
+
+// Get tags from Supabase
+const { data: tags, error: tagsError } = await supabase
+  .from('tags')
+  .select('*')
+  .order('created_at', { ascending: false });
+
+// Log tags query for debugging
+console.log('Tags query:', {
+  tags,
+  error: tagsError,
+  count: tags?.length || 0,
+  firstTag: tags?.[0]
+});
+---
+
+<AdminLayout title="Products Dashboard - Atrocitee Admin">
+  <div class="min-h-screen bg-gray-100">
+    <div class="py-10">
+      <header>
+        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <h1 class="text-3xl font-bold leading-tight tracking-tight text-gray-900">Products Dashboard</h1>
+        </div>
+      </header>
+      <main>
+        <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
+          <!-- Sync Section -->
+          <div class="px-4 py-5 sm:px-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <h2 class="text-lg font-medium leading-6 text-gray-900">Product Sync</h2>
+                <p class="mt-1 text-sm text-gray-500">
+                  Sync products from your Printful store to Atrocitee
+                </p>
+              </div>
+              <div class="flex space-x-4">
+                <a 
+                  href="/admin/products/tags" 
+                  class="inline-flex items-center rounded-md border border-transparent bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                >
+                  Manage Tags
+                </a>
+                <button
+                  type="button"
+                  class="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                  id="syncButton"
+                >
+                  Sync Products
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pending Changes Section -->
+          {pendingChanges && pendingChanges.length > 0 && (
+            <div class="mt-8">
+              <div class="px-4 sm:px-6">
+                <h2 class="text-lg font-medium leading-6 text-gray-900">Pending Changes</h2>
+                <p class="mt-1 text-sm text-gray-500">
+                  Review and approve changes to existing products
+                </p>
+              </div>
+              <div class="mt-4 overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+                <table class="min-w-full divide-y divide-gray-300">
+                  <thead class="bg-gray-50">
+                    <tr>
+                      <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Product</th>
+                      <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Change Type</th>
+                      <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Field</th>
+                      <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Old Value</th>
+                      <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">New Value</th>
+                      <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                        <span class="sr-only">Actions</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-200 bg-white">
+                    {pendingChanges.map((change: ProductChange) => (
+                      <tr>
+                        <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
+                          {change.product_id}
+                        </td>
+                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{change.change_type}</td>
+                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{change.field_name}</td>
+                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{JSON.stringify(change.old_value)}</td>
+                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{JSON.stringify(change.new_value)}</td>
+                        <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                          <button
+                            type="button"
+                            class="text-indigo-600 hover:text-indigo-900 mr-4"
+                            data-change-id={change.id}
+                            data-action="approve"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            class="text-red-600 hover:text-red-900"
+                            data-change-id={change.id}
+                            data-action="reject"
+                          >
+                            Reject
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <!-- Products List Section -->
+          <div class="mt-8">
+            <div class="px-4 sm:px-6">
+              <h2 class="text-lg font-medium leading-6 text-gray-900">Products</h2>
+              <p class="mt-1 text-sm text-gray-500">
+                A list of all products in your Atrocitee store
+              </p>
+            </div>
+            <div class="mt-4 overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+              <table class="min-w-full divide-y divide-gray-300">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Name</th>
+                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Printful ID</th>
+                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Status</th>
+                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Base Price</th>
+                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Donation</th>
+                    <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                      <span class="sr-only">Edit</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 bg-white">
+                  {products?.map((product: Product) => (
+                    <tr>
+                      <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
+                        {product.name}
+                      </td>
+                      <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{product.printful_id}</td>
+                      <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        <span class={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${
+                          product.atrocitee_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {product.atrocitee_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${product.atrocitee_base_price}</td>
+                      <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${product.atrocitee_donation_amount}</td>
+                      <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                        <a
+                          href={`/admin/products/configure/${product.id}`}
+                          class="text-indigo-600 hover:text-indigo-900"
+                        >
+                          Edit
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  // Handle sync button click
+  document.getElementById('syncButton')?.addEventListener('click', async () => {
+    const button = document.getElementById('syncButton') as HTMLButtonElement;
+    try {
+      // Disable button and show loading state
+      button.disabled = true;
+      button.textContent = 'Syncing...';
+      
+      const response = await fetch('/api/printful/sync', {
+        method: 'POST',
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Sync failed');
+      }
+      
+      // Show success message
+      alert(data.message || 'Products synced successfully');
+      
+      // Refresh the page to show updated data
+      window.location.reload();
+    } catch (error) {
+      console.error('Error syncing products:', error);
+      alert(error instanceof Error ? error.message : 'Failed to sync products. Please try again.');
+    } finally {
+      // Reset button state
+      button.disabled = false;
+      button.textContent = 'Sync Products';
+    }
+  });
+
+  // Handle change approval/rejection
+  document.querySelectorAll('[data-action]').forEach(button => {
+    button.addEventListener('click', async (e) => {
+      const target = e.target as HTMLButtonElement;
+      const action = target.dataset.action;
+      const changeId = target.dataset.changeId;
+      
+      try {
+        const response = await fetch(`/api/printful/changes/${changeId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ action }),
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to process change');
+        }
+        
+        // Refresh the page to show updated data
+        window.location.reload();
+      } catch (error) {
+        console.error('Error processing change:', error);
+        alert('Failed to process change. Please try again.');
+      }
+    });
+  });
+
+  // Handle product edit
+  document.querySelectorAll('[data-product-id]').forEach(button => {
+    button.addEventListener('click', (e) => {
+      const target = e.target as HTMLButtonElement;
+      const productId = target.dataset.productId;
+      window.location.href = `/admin/products/${productId}`;
+    });
+  });
+</script> 
