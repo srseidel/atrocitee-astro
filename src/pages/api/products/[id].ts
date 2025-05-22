@@ -1,110 +1,97 @@
 import type { APIRoute } from 'astro';
 import { createServerSupabaseClient } from '../../../lib/supabase';
-import { isAdmin } from '../../../utils/auth';
+import { isAdmin } from '../../../utils/auth-fixed';
 
 export const prerender = false;
 
-export const PUT: APIRoute = async ({ request, params, cookies }) => {
-  // Check if user is admin
-  const isAdminUser = await isAdmin({ cookies });
-  if (!isAdminUser) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  const { id } = params;
-  if (!id) {
-    return new Response(JSON.stringify({ error: 'Product ID is required' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
+export const PUT: APIRoute = async ({ params, request, cookies }) => {
   try {
+    // Check if user is admin
+    const isAdminUser = await isAdmin({ cookies });
+    if (!isAdminUser) {
+      return new Response(JSON.stringify({
+        error: 'Unauthorized',
+        message: 'Admin access required'
+      }), {
+        status: 403,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
     const supabase = createServerSupabaseClient({ cookies });
-    const data = await request.json();
-
-    // Start a transaction
-    const { data: existingProduct } = await supabase
+    const body = await request.json();
+    
+    console.log('Updating product:', {
+      id: params.id,
+      body: body
+    });
+    
+    // Prepare update data, handling empty values properly
+    const updateData = {
+      name: body.name,
+      description: body.description,
+      slug: body.slug,
+      thumbnail_url: body.thumbnail_url,
+      atrocitee_active: body.atrocitee_active,
+      atrocitee_featured: body.atrocitee_featured,
+      atrocitee_tags: body.atrocitee_tags || [],
+      atrocitee_metadata: body.atrocitee_metadata || {},
+      atrocitee_base_price: body.atrocitee_base_price,
+      atrocitee_donation_amount: body.atrocitee_donation_amount,
+      // Only include category_id if it's not empty
+      ...(body.atrocitee_category_id ? { atrocitee_category_id: body.atrocitee_category_id } : { atrocitee_category_id: null }),
+      // Only include charity_id if it's not empty
+      ...(body.atrocitee_charity_id ? { atrocitee_charity_id: body.atrocitee_charity_id } : { atrocitee_charity_id: null })
+    };
+    
+    console.log('Update data:', updateData);
+    
+    const { data, error } = await supabase
       .from('products')
-      .select('atrocitee_metadata')
-      .eq('id', id)
-      .single();
-
-    const { data: product, error: updateError } = await supabase
-      .from('products')
-      .update({
-        name: data.name,
-        slug: data.slug,
-        description: data.description,
-        atrocitee_base_price: data.atrocitee_base_price,
-        atrocitee_donation_amount: data.atrocitee_donation_amount,
-        atrocitee_charity_id: data.atrocitee_charity_id,
-        atrocitee_active: data.atrocitee_active,
-        atrocitee_featured: data.atrocitee_featured,
-        atrocitee_metadata: {
-          ...(existingProduct?.atrocitee_metadata || {}),
-          category_id: data.category_id
-        },
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id)
+      .update(updateData)
+      .eq('id', params.id)
       .select()
       .single();
-
-    if (updateError) {
-      console.error('Error updating product:', updateError);
-      throw new Error(updateError.message);
+    
+    if (error) {
+      console.error('Supabase error:', error);
+      throw error;
     }
-
-    // Update tags
-    if (data.tags) {
-      try {
-        // First, delete existing tags
-        const { error: deleteError } = await supabase
-          .from('product_tags')
-          .delete()
-          .eq('product_id', id);
-
-        if (deleteError) throw deleteError;
-
-        // Then, insert new tags
-        if (data.tags.length > 0) {
-          const { error: tagsError } = await supabase
-            .from('product_tags')
-            .insert(
-              data.tags.map((tag: { tag_id: string }) => ({
-                product_id: id,
-                tag_id: tag.tag_id
-              }))
-            );
-
-          if (tagsError) throw tagsError;
-        }
-      } catch (error) {
-        console.error('Error updating tags:', error);
-        throw new Error('Failed to update product tags');
-      }
-    }
-
-    return new Response(JSON.stringify({ 
-      success: true, 
-      product,
+    
+    console.log('Update successful:', data);
+    
+    return new Response(JSON.stringify({
+      product: data,
+      success: true,
       message: 'Product updated successfully'
     }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      headers: {
+        'Content-Type': 'application/json'
+      }
     });
   } catch (error) {
     console.error('Error updating product:', error);
-    return new Response(JSON.stringify({ 
+    
+    // Get detailed error message
+    let errorMessage = 'Unknown error';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'object' && error !== null) {
+      errorMessage = JSON.stringify(error);
+    }
+    
+    return new Response(JSON.stringify({
       error: 'Failed to update product',
-      message: error instanceof Error ? error.message : 'Unknown error occurred'
+      message: errorMessage,
+      success: false
     }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: {
+        'Content-Type': 'application/json'
+      }
     });
   }
 }; 

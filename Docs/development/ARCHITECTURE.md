@@ -30,6 +30,11 @@
 ├── printful.ts (Printful types)
 └── archive/ (old type definitions)
     └── old_types.ts (previous type definitions)
+
+/api/categories/
+  ├── index.ts        # Core category operations (current /api/categories.ts)
+  ├── mapping.ts      # Category mapping operations (current /api/printful/category-mapping.ts)
+  └── sync.ts         # Sync operations (current /api/printful/sync-categories.ts)
 ```
 
 ### Key Principles
@@ -208,7 +213,6 @@ If you're unsure about any changes:
 
 ### 3. Category System
 - [ ] Consolidate category management
-  - Choose between `printful_category_mapping` and `CORE_CATEGORIES`
   - Standardize category-related API endpoints
   - Create single source of truth for category data
 

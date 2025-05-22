@@ -12,13 +12,13 @@ export interface ProductCategory {
 
 export const CORE_CATEGORIES: ProductCategory[] = [
   {
-    id: 'tshirts',
+    id: '00000000-0000-0000-0000-000000000001',
     name: 'T-Shirts',
     slug: 't-shirts',
     description: 'Politically-charged t-shirts and tops'
   },
   {
-    id: 'hats',
+    id: '00000000-0000-0000-0000-000000000002',
     name: 'Hats',
     slug: 'hats',
     description: 'Caps and hats with political messages'

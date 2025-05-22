@@ -89,5 +89,31 @@ const authMiddleware: MiddlewareHandler = async ({ cookies, request, url }, next
   }
 };
 
-// Export the middleware
-export const onRequest = authMiddleware; 
+// Combined middleware for auth and CSP
+export const onRequest: MiddlewareHandler = async (context, next) => {
+  // First run auth middleware
+  const authResponse = await authMiddleware(context, next);
+  
+  // If auth middleware returned a response (redirect), return it
+  if (authResponse instanceof Response) {
+    return authResponse;
+  }
+  
+  // Otherwise, get the response from next()
+  const response = await next();
+  
+  // Add CSP headers
+  if (response instanceof Response) {
+    response.headers.set(
+      'Content-Security-Policy',
+      "default-src 'self'; " +
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+      "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://fonts.googleapis.com; " +
+      "font-src 'self' https://fonts.gstatic.com; " +
+      "img-src 'self' data: https:; " +
+      "connect-src 'self' https://*.supabase.co https://api.printful.com;"
+    );
+  }
+  
+  return response;
+}; 

@@ -618,3 +618,272 @@ Next steps:
 2. Confirm all migration files were moved correctly
 3. Check that original directories are still accessible
 4. Ensure no broken references to moved files
+
+[2024-03-22] Category System Standardization (Corrected)
+### Files Modified
+- `/src/pages/api/categories.ts`: Updated to handle core category operations
+- `/src/pages/api/printful/category-mapping.ts`: Updated to handle Printful category mappings
+- `/src/pages/api/printful/sync-categories.ts`: Updated to handle category synchronization
+
+### Changes Made
+1. Database Changes:
+   - Created `atrocitee_categories` table for core categories
+   - Updated `printful_category_mapping` to reference new table
+   - Added initial core categories (T-Shirts, Hats)
+   - Added proper RLS policies and triggers
+
+2. API Endpoints (Updated Existing):
+   - `/api/categories.ts` - Enhanced to handle core category operations
+   - `/api/printful/category-mapping.ts` - Enhanced to handle Printful mappings
+   - `/api/printful/sync-categories.ts` - Enhanced to handle category sync
+
+### Impact
+- Established single source of truth for category data
+- Improved separation between Atrocitee and Printful categories
+- Standardized category-related API endpoints
+- Maintained existing functionality while improving structure
+- Followed architecture rules by updating existing files instead of creating new ones
+
+### Testing Steps
+1. Verify atrocitee_categories table was created successfully
+2. Confirm initial core categories were inserted
+3. Test all updated API endpoints
+4. Verify category sync still works
+5. Check that existing category mappings were preserved
+
+### Architecture Compliance
+- Followed rule: "Use existing endpoints when possible"
+- Avoided duplication by updating existing files
+- Maintained clear API structure
+- Followed established patterns
+
+[2024-03-22] Database Schema Fixes
+### Files Modified
+- `/src/lib/db/product_schema.sql`: Fixed table creation order and UUID values
+
+### Changes Made
+1. Fixed Table Creation Order:
+   - Moved `atrocitee_categories` table creation to the beginning
+   - Placed `printful_category_mapping` table creation immediately after
+   - Ensured proper dependency order for foreign key constraints
+
+2. Fixed Initial Data Insertion:
+   - Updated category IDs to use proper UUID format
+   - Changed from string IDs ('tshirts', 'hats') to UUID format
+   - Used sequential UUIDs for better readability and consistency
+
+3. Schema Optimizations:
+   - Removed redundant trigger and policy creation statements
+   - Removed redundant ALTER TABLE statements
+   - Consolidated timestamp triggers
+   - Improved code organization and readability
+
+### Impact
+- Resolved "relation does not exist" error for atrocitee_categories
+- Fixed "invalid input syntax for type uuid" error
+- Improved schema reliability and maintainability
+- Maintained data integrity with proper foreign key relationships
+
+### Testing Steps
+1. Verified schema executes without errors in Supabase SQL editor
+2. Confirmed atrocitee_categories table is created successfully
+3. Verified initial categories are inserted with proper UUIDs
+4. Checked foreign key relationships are working correctly
+
+[2024-03-22] Product Update Endpoint Fixes
+### Files Modified
+- `/src/pages/api/products/[id].ts`: Fixed product update endpoint
+
+### Changes Made
+1. Fixed UUID Handling:
+   - Added proper handling of empty category and charity IDs
+   - Set empty UUIDs to null instead of empty strings
+   - Added conditional field inclusion based on value presence
+
+2. Improved Data Handling:
+   - Added default empty arrays for tags
+   - Added default empty object for metadata
+   - Properly handles all Atrocitee-specific fields
+
+3. Code Improvements:
+   - Simplified update process
+   - Removed redundant transactions
+   - Enhanced error handling
+   - Improved response format consistency
+
+### Impact
+- Resolved "invalid input syntax for type uuid" error
+- Improved reliability of product updates
+- Enhanced error handling and user feedback
+- Maintained data integrity with proper null handling
+
+### Testing Steps
+1. Verify product updates work with empty category/charity IDs
+2. Confirm all Atrocitee-specific fields are properly updated
+3. Test error handling with invalid data
+4. Verify response format consistency
+
+[2024-03-22] Product Configuration Form Fixes
+### Files Modified
+- `/src/pages/admin/products/configure/[id].astro`: Fixed form submission field names
+
+### Changes Made
+1. Fixed Field Name Mismatches:
+   - Changed `category_id` to `atrocitee_category_id`
+   - Changed `tags` to `atrocitee_tags`
+   - Simplified tags array structure
+
+2. Form Submission Improvements:
+   - Aligned client-side field names with API expectations
+   - Removed unnecessary tag object transformation
+   - Maintained consistent field naming convention
+
+### Impact
+- Resolved "Unknown error" during product updates
+- Improved form submission reliability
+- Maintained consistent field naming across the application
+- Enhanced error handling and user feedback
+
+### Testing Steps
+1. Verify product updates work with category selection
+2. Confirm tags are properly saved
+3. Test form submission with various combinations of fields
+4. Verify error messages are clear and helpful
+
+[2024-03-22] Schema Update: Add Category ID to Products
+### Files Modified
+- `/src/lib/db/product_schema.sql`: Added atrocitee_category_id column
+
+### Changes Made
+1. Schema Updates:
+   - Added atrocitee_category_id column to products table
+   - Added foreign key reference to atrocitee_categories table
+   - Maintained existing RLS policies
+
+2. Impact:
+   - Products can now be directly associated with categories
+   - Improved data integrity with proper foreign key constraints
+   - Maintained backward compatibility with existing metadata
+
+### Testing Steps
+1. Verify products table has new column
+2. Confirm foreign key constraint works
+3. Test product updates with category assignments
+4. Verify RLS policies are working
+
+[2024-03-22] Category ID Fixes
+### Files Modified
+- `/src/lib/constants/categories.ts`: Updated CORE_CATEGORIES to use correct UUIDs
+- `/src/pages/admin/products/configure/[id].astro`: Fixed category field handling
+
+### Changes Made
+1. Category Constants:
+   - Updated category IDs to match database UUIDs
+   - Changed 'tshirts' to '00000000-0000-0000-0000-000000000001'
+   - Changed 'hats' to '00000000-0000-0000-0000-000000000002'
+   - Maintained existing names, slugs, and descriptions
+
+2. Form Updates:
+   - Fixed category selection field name to `atrocitee_category_id`
+   - Updated category selection to check `product.atrocitee_category_id`
+   - Removed incorrect metadata category check
+
+### Impact
+- Resolved "invalid input syntax for type uuid" error
+- Ensured consistent category ID handling
+- Maintained data integrity with proper UUID references
+- Improved form submission reliability
+
+### Testing Steps
+1. Verify category selection works in product configuration
+2. Confirm category updates are saved correctly
+3. Test form submission with various category selections
+4. Verify error handling for invalid category IDs
+
+[2024-03-22] Category System Status Update
+### Current Status
+- ✅ Single source of truth established with atrocitee_categories table
+- ✅ Core categories defined with proper UUIDs
+- ✅ Product configuration using correct category IDs
+- ✅ Basic category API endpoints standardized
+- ✅ Old category endpoints already moved to archive
+- ✅ All category field names standardized to atrocitee_category_id
+
+### Remaining Tasks
+1. Verify category sync process:
+   - Test category synchronization with new endpoints
+   - Ensure Printful category mapping uses standardized endpoints
+   - Verify category updates in product sync process
+
+### Next Steps
+1. Test category sync process
+2. Update documentation with new category system
+
+[2024-03-22] Category Endpoint Consolidation
+### Files Modified
+- Created new directory structure:
+  - `/api/categories/index.ts` - Core category operations
+  - `/api/categories/mapping.ts` - Category mapping operations
+  - `/api/categories/sync.ts` - Sync operations
+
+### Files Archived
+- Moved to `/api/printful/archive/`:
+  - `category-mapping.ts`
+  - `sync-categories.ts`
+- Moved to `/api/archive/`:
+  - `categories.ts`
+
+### Impact
+- Consolidated all category-related endpoints under a single directory
+- Maintained clear separation between core and Printful operations
+- Improved code organization and maintainability
+- Reduced duplication in error handling and auth checks
+
+### Testing Steps
+1. Verify all endpoints are accessible:
+   - GET /api/categories - List all categories
+   - POST /api/categories - Create/update category
+   - GET /api/categories/mapping - List category mappings
+   - POST /api/categories/mapping - Create/update mapping
+   - DELETE /api/categories/mapping - Delete mapping
+   - POST /api/categories/sync - Sync Printful categories
+
+2. Test admin access:
+   - Verify all endpoints require admin access
+   - Test unauthorized access is blocked
+
+3. Test error handling:
+   - Verify proper error messages for invalid data
+   - Check error logging is working
+
+4. Test category sync:
+   - Verify Printful categories are synced correctly
+   - Check mapping functionality works
+   - Verify category updates in products
+
+[2024-03-22] Category Endpoint Location Correction
+### Files Moved
+- Moved category endpoints to correct admin location:
+  - `/api/admin/categories/index.ts` - Core category operations
+  - `/api/admin/categories/mapping.ts` - Category mapping operations
+  - `/api/admin/categories/sync.ts` - Sync operations
+
+### Impact
+- Aligns with architecture rules for admin-protected endpoints
+- Improves security by clearly indicating admin-only routes
+- Maintains consistency with other admin endpoints
+- Better organization of protected vs public endpoints
+
+### Testing Steps
+1. Verify all endpoints are accessible under new paths:
+   - GET /api/admin/categories - List all categories
+   - POST /api/admin/categories - Create/update category
+   - GET /api/admin/categories/mapping - List category mappings
+   - POST /api/admin/categories/mapping - Create/update mapping
+   - DELETE /api/admin/categories/mapping - Delete mapping
+   - POST /api/admin/categories/sync - Sync Printful categories
+
+2. Test admin access:
+   - Verify all endpoints require admin access
+   - Test unauthorized access is blocked
+   - Verify middleware properly protects new paths

@@ -14,6 +14,67 @@ DROP TABLE IF EXISTS products CASCADE;
 DROP TABLE IF EXISTS tags CASCADE;
 DROP TABLE IF EXISTS categories CASCADE;
 DROP TABLE IF EXISTS charities CASCADE;
+DROP TABLE IF EXISTS atrocitee_categories CASCADE;
+
+-- 1. Atrocitee Categories Table (Create this first as it's referenced by printful_category_mapping)
+CREATE TABLE atrocitee_categories (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  description TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- Add timestamps trigger for atrocitee_categories
+CREATE TRIGGER update_atrocitee_categories_timestamp
+BEFORE UPDATE ON atrocitee_categories
+FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
+
+-- Enable RLS for atrocitee_categories
+ALTER TABLE atrocitee_categories ENABLE ROW LEVEL SECURITY;
+
+-- Create RLS policy for atrocitee_categories
+CREATE POLICY "Admin full access to atrocitee categories" ON atrocitee_categories
+    FOR ALL
+    USING (is_admin());
+
+-- Insert initial core categories
+INSERT INTO atrocitee_categories (id, name, slug, description, is_active)
+VALUES 
+  ('00000000-0000-0000-0000-000000000001', 'T-Shirts', 't-shirts', 'Politically-charged t-shirts and tops', true),
+  ('00000000-0000-0000-0000-000000000002', 'Hats', 'hats', 'Caps and hats with political messages', true)
+ON CONFLICT (slug) DO UPDATE 
+SET 
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  is_active = EXCLUDED.is_active,
+  updated_at = now();
+
+-- 2. Printful Category Mapping Table (Now we can create this as atrocitee_categories exists)
+CREATE TABLE printful_category_mapping (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  printful_category_id INTEGER NOT NULL UNIQUE,
+  printful_category_name TEXT NOT NULL,
+  atrocitee_category_id UUID REFERENCES atrocitee_categories(id),
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- Add timestamps trigger for printful_category_mapping
+CREATE TRIGGER update_printful_category_mapping_timestamp
+BEFORE UPDATE ON printful_category_mapping
+FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
+
+-- Enable RLS for printful_category_mapping
+ALTER TABLE printful_category_mapping ENABLE ROW LEVEL SECURITY;
+
+-- Create RLS policy for printful_category_mapping
+CREATE POLICY "Admin full access to printful category mapping" ON printful_category_mapping
+    FOR ALL
+    USING (is_admin());
 
 -- 1. Categories Table
 CREATE TABLE categories (
@@ -75,6 +136,7 @@ CREATE TABLE products (
   atrocitee_base_price DECIMAL(10,2),
   atrocitee_donation_amount DECIMAL(10,2),
   atrocitee_charity_id UUID REFERENCES charities(id),
+  atrocitee_category_id UUID REFERENCES atrocitee_categories(id),
   
   -- Auditing
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -160,18 +222,7 @@ CREATE TABLE backup_status (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- 10. Printful Category Mapping Table
-CREATE TABLE printful_category_mapping (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  printful_category_id INTEGER NOT NULL UNIQUE,
-  printful_category_name TEXT NOT NULL,
-  atrocitee_category_id UUID REFERENCES categories(id),
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
--- 11. Printful Sync History Table
+-- 10. Printful Sync History Table
 CREATE TABLE printful_sync_history (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   sync_type TEXT NOT NULL,
@@ -185,7 +236,7 @@ CREATE TABLE printful_sync_history (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- 12. Printful Product Changes Table
+-- 11. Printful Product Changes Table
 CREATE TABLE printful_product_changes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   product_id UUID REFERENCES products(id) ON DELETE CASCADE,
@@ -203,7 +254,7 @@ CREATE TABLE printful_product_changes (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- Add timestamps triggers to all tables
+-- Add timestamps trigger for all tables
 CREATE TRIGGER update_categories_timestamp
 BEFORE UPDATE ON categories
 FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
@@ -238,10 +289,6 @@ FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 
 CREATE TRIGGER update_backup_status_timestamp
 BEFORE UPDATE ON backup_status
-FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
-
-CREATE TRIGGER update_printful_category_mapping_timestamp
-BEFORE UPDATE ON printful_category_mapping
 FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 
 CREATE TRIGGER update_printful_sync_history_timestamp
@@ -325,11 +372,6 @@ CREATE POLICY "Admin full access to order items" ON order_items
 
 -- Backup Status Policies
 CREATE POLICY "Admin full access to backup status" ON backup_status
-    FOR ALL
-    USING (is_admin());
-
--- Printful Category Mapping Policies
-CREATE POLICY "Admin full access to printful category mapping" ON printful_category_mapping
     FOR ALL
     USING (is_admin());
 

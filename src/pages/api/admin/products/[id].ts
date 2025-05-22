@@ -16,7 +16,7 @@ export const PUT: APIRoute = async ({ request, params, cookies }) => {
       .update({
         name: data.name,
         description: data.description,
-        category_id: data.category_id,
+        atrocitee_category_id: data.atrocitee_category_id,
         atrocitee_base_price: data.atrocitee_base_price,
         atrocitee_donation_amount: data.atrocitee_donation_amount,
         atrocitee_active: data.atrocitee_active,
