@@ -277,6 +277,141 @@ This document provides a comprehensive analysis of the current state of the atro
   - Dependencies: Sentry client
   - Features: Error logging, performance monitoring
 
+## Astro-Specific Recommendations
+
+### Directory Structure Improvements
+
+#### 1. Content Organization
+```
+src/content/
+├── about/
+│   └── index.md
+├── products/
+│   └── [slug].md
+└── config.ts
+```
+- Move static content to markdown files
+- Use content collections for better content management
+- Implement proper content type definitions
+
+#### 2. Components Structure
+```
+src/components/
+├── common/          # Reusable components
+│   ├── Button.astro
+│   ├── Card.astro
+│   └── Input.astro
+├── features/        # Feature-specific components
+│   ├── auth/
+│   ├── products/
+│   └── admin/
+└── layouts/         # Layout components
+    ├── Header.astro
+    └── Footer.astro
+```
+- Move standalone components to appropriate categories
+- Organize by feature and reusability
+- Follow Astro's component patterns
+
+#### 3. API Organization
+```
+src/pages/api/
+├── v1/             # Versioned API
+│   ├── admin/
+│   ├── products/
+│   └── tags/
+└── debug/          # Debug endpoints
+```
+- Implement API versioning
+- Group related endpoints
+- Move debug endpoints to tests
+
+#### 4. Layout Structure
+```
+src/layouts/
+├── BaseLayout.astro    # Base layout
+├── MainLayout.astro    # Main site layout
+└── AdminLayout.astro   # Admin layout
+```
+- Simplify layout hierarchy
+- Remove redundant layouts
+- Follow Astro's layout patterns
+
+#### 5. Utils and Lib Organization
+```
+src/
+├── utils/          # Pure utilities
+│   ├── auth.ts
+│   └── format.ts
+├── lib/            # Integrations
+│   ├── supabase/
+│   └── printful/
+└── config/         # Configuration
+    └── constants.ts
+```
+- Separate pure utilities from integrations
+- Better organization of third-party code
+- Clearer configuration management
+
+#### 6. Testing Structure
+```
+tests/
+├── e2e/           # End-to-end tests
+├── integration/   # Integration tests
+└── unit/          # Unit tests
+```
+- Proper test organization
+- Separate test types
+- Better test management
+
+#### 7. Public Assets
+```
+public/
+├── images/
+├── fonts/
+└── icons/
+```
+- Better asset organization
+- Clearer asset management
+- Improved asset loading
+
+#### 8. Types Organization
+```
+src/types/
+├── database.ts    # Database types
+├── api.ts         # API types
+└── common.ts      # Common types
+```
+- Consolidated type definitions
+- Better type organization
+- Clearer type management
+
+### Implementation Priority
+1. Content Organization
+   - Highest priority for content management
+   - Improves maintainability
+   - Better content type safety
+
+2. Components Structure
+   - Improves code organization
+   - Better component reusability
+   - Clearer component hierarchy
+
+3. API Organization
+   - Better API management
+   - Improved versioning
+   - Clearer endpoint organization
+
+4. Testing Structure
+   - Better test organization
+   - Improved test coverage
+   - Clearer test management
+
+Would you like me to:
+1. Create a detailed migration plan for these changes?
+2. Start with implementing any specific section?
+3. Generate the necessary commands for the reorganization?
+
 ## Recommendations
 
 ### Files to Move to Test Directory
