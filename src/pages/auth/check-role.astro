@@ -1,8 +1,8 @@
 ---
-import MainLayout from '../../layouts/MainLayout.astro';
-import Container from '../../components/ui/Container.astro';
-import { createServerSupabaseClient } from '../../lib/supabase';
-import { redirectIfNotAuthenticated } from '../../utils/auth';
+import MainLayout from '@layouts/MainLayout.astro';
+import Container from '@components/ui/Container.astro';
+import { createServerSupabaseClient } from '@lib/supabase/client';
+import { redirectIfNotAuthenticated } from '@lib/auth/middleware';
 
 // Ensure this page is server-rendered, not statically generated
 export const prerender = false;

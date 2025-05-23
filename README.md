@@ -92,6 +92,38 @@ We use GitHub Actions to run automated checks on every pull request:
 └── .github/         # GitHub Actions workflows
 ```
 
+## 🏷️ Category System
+
+Atrocitee uses a structured category system to organize products by cause:
+
+### Core Categories
+- **Political**: Political activism and awareness products
+- **Social Justice**: Social justice and equality products
+- **Environmental**: Environmental protection and sustainability products
+- **Human Rights**: Human rights advocacy products
+- **Animal Rights**: Animal rights and welfare products
+- **Education**: Educational and awareness products
+- **Healthcare**: Healthcare advocacy products
+- **Economic Justice**: Economic justice and equality products
+- **Other**: Other cause-related products
+
+### Category Management
+- Categories are stored in the `atrocitee_categories` table
+- Each category has a unique slug and display name
+- Categories can be mapped to Printful categories for product synchronization
+- Category types and constants are defined in `src/types/database/models.ts`
+
+### Using Categories
+```typescript
+import { CORE_CATEGORIES, CATEGORY_DISPLAY_NAMES } from '@types/database/models';
+
+// Get category slug
+const categorySlug = CORE_CATEGORIES.POLITICAL; // 'political'
+
+// Get display name
+const displayName = CATEGORY_DISPLAY_NAMES[CORE_CATEGORIES.POLITICAL]; // 'Political'
+```
+
 ## 🤝 Contributing
 
 1. Create a feature branch from `main`:

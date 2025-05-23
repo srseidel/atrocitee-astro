@@ -1,9 +1,16 @@
 ---
-import AdminLayout from "../../layouts/AdminLayout.astro";
-import { createServerSupabaseClient } from "../../lib/supabase";
+import AdminLayout from "@layouts/AdminLayout.astro";
+import { createServerSupabaseClient } from "@lib/supabase/client";
+import { redirectIfNotAdmin } from "@lib/auth/middleware";
 
 // Server-side rendering to ensure we can access cookies
 export const prerender = false;
+
+// Check admin access first
+const redirect = await redirectIfNotAdmin(Astro);
+if (redirect) {
+  return redirect;
+}
 
 interface Product {
   id: string;
@@ -30,14 +37,56 @@ interface Tag {
   active: boolean;
 }
 
-// Initialize Supabase client
-const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+// Initialize Supabase client with proper error handling
+let products: Product[] = [];
+let pendingChanges: ProductChange[] = [];
+let tags: Tag[] = [];
+let error: string | null = null;
 
-// Get all products from Supabase
-const { data: products, error } = await supabase
-  .from('products')
-  .select('*')
-  .order('created_at', { ascending: false });
+try {
+  const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+
+  // Get all products from Supabase
+  const { data: productsData, error: productsError } = await supabase
+    .from('products')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (productsError) {
+    throw new Error(`Failed to fetch products: ${productsError.message}`);
+  }
+
+  products = productsData || [];
+
+  // Get any pending product changes
+  const { data: changesData, error: changesError } = await supabase
+    .from('printful_product_changes')
+    .select('*')
+    .eq('status', 'pending_review')
+    .order('created_at', { ascending: false });
+
+  if (changesError) {
+    throw new Error(`Failed to fetch pending changes: ${changesError.message}`);
+  }
+
+  pendingChanges = changesData || [];
+
+  // Get tags from Supabase
+  const { data: tagsData, error: tagsError } = await supabase
+    .from('tags')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (tagsError) {
+    throw new Error(`Failed to fetch tags: ${tagsError.message}`);
+  }
+
+  tags = tagsData || [];
+
+} catch (e) {
+  console.error('Error in products dashboard:', e);
+  error = e instanceof Error ? e.message : 'An unknown error occurred';
+}
 
 // Log products query for debugging
 console.log('Products query:', {
@@ -47,27 +96,14 @@ console.log('Products query:', {
   firstProduct: products?.[0]
 });
 
-// Get any pending product changes
-const { data: pendingChanges, error: changesError } = await supabase
-  .from('printful_product_changes')
-  .select('*')
-  .eq('status', 'pending_review')
-  .order('created_at', { ascending: false });
-
 // Log for debugging
 console.log('Products:', products?.length || 0);
 console.log('Pending Changes:', pendingChanges?.length || 0);
 
-// Get tags from Supabase
-const { data: tags, error: tagsError } = await supabase
-  .from('tags')
-  .select('*')
-  .order('created_at', { ascending: false });
-
 // Log tags query for debugging
 console.log('Tags query:', {
   tags,
-  error: tagsError,
+  error: error,
   count: tags?.length || 0,
   firstTag: tags?.[0]
 });
@@ -262,9 +298,19 @@ console.log('Tags query:', {
       button.disabled = true;
       button.textContent = 'Syncing...';
       
-      const response = await fetch('/api/printful/sync', {
+      const response = await fetch('/api/v1/printful/sync', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
       });
+      
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Server returned non-JSON response');
+      }
       
       const data = await response.json();
       

@@ -1,0 +1,35 @@
+---
+import Logo from '@components/layouts/Logo.astro';
+---
+
+<main class="grid lg:grid-cols-2 place-items-center pt-2 pb-2 md:pt-4 md:pb-2">
+  <div class="w-full h-full items-center justify-center py-0 md:order-1 hidden md:flex">
+    <Logo size="large" />
+  </div>
+  <div>
+    <h1 class="text-5xl lg:text-6xl xl:text-7xl font-bold lg:tracking-tight xl:tracking-tighter">
+      Threads of Change
+    </h1>
+    <p class="text-lg mt-3 text-neutral-600 max-w-xl">
+      Atrocitee offers high-quality political t-shirts with a portion of every purchase going directly to important causes and charities. Express your beliefs while supporting change.
+    </p>
+    <div class="mt-4 flex flex-col sm:flex-row gap-3">
+      <a href="/shop" class="btn btn-primary btn-lg flex gap-1 items-center justify-center">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <path d="M16 10a4 4 0 0 1-8 0"></path>
+        </svg>
+        Shop Collection
+      </a>
+      <a href="/about" class="btn btn-secondary btn-lg flex gap-1 items-center justify-center">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        Learn More
+      </a>
+    </div>
+  </div>
+</main> 

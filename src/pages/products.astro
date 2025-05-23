@@ -1,64 +1,14 @@
 ---
-import MainLayout from '../layouts/MainLayout.astro';
-import ProductCard from '../components/ProductCard.astro';
+import MainLayout from '@layouts/MainLayout.astro';
+import ProductCard from '@components/features/products/ProductCard.astro';
+import { getCollection } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
 
 // Pre-render this page at build time
 export const prerender = true;
 
-// Sample products data
-const products = [
-  {
-    productId: '1',
-    name: 'Equal Rights Tee',
-    price: 29.99,
-    imageUrl: 'https://placehold.co/600x800/e0f2fe/0369a1?text=Equal+Rights+Tee&font=open-sans',
-    description: 'Stand up for equality with this comfortable cotton t-shirt. Part of proceeds go to civil rights organizations.',
-    category: 'T-Shirts',
-    badge: 'featured' as const
-  },
-  {
-    productId: '2',
-    name: 'Climate Action Hoodie',
-    price: 49.99,
-    imageUrl: 'https://placehold.co/600x800/dcfce7/166534?text=Climate+Action+Hoodie&font=open-sans',
-    description: 'Stay warm while promoting climate awareness. Made from recycled materials.',
-    category: 'Hoodies',
-    badge: 'new' as const
-  },
-  {
-    productId: '3',
-    name: 'Vote Matters Tee',
-    price: 24.99,
-    imageUrl: 'https://placehold.co/600x800/f5f3ff/5b21b6?text=Vote+Matters+Tee&font=open-sans',
-    description: 'Encourage civic participation with this stylish t-shirt. Donations support voter registration drives.',
-    category: 'T-Shirts',
-  },
-  {
-    productId: '4',
-    name: 'Freedom of Press Tee',
-    price: 27.99,
-    imageUrl: 'https://placehold.co/600x800/fff7ed/c2410c?text=Freedom+of+Press&font=open-sans',
-    description: 'Support the important work of journalists with this comfortable t-shirt. Proceeds benefit press freedom initiatives.',
-    category: 'T-Shirts',
-    badge: 'sale' as const
-  },
-  {
-    productId: '5',
-    name: 'Healthcare for All Tee',
-    price: 28.99,
-    imageUrl: 'https://placehold.co/600x800/f0f9ff/0284c7?text=Healthcare+For+All&font=open-sans',
-    description: 'Show your support for universal healthcare with this soft cotton blend shirt. Donations go to healthcare advocacy groups.',
-    category: 'T-Shirts',
-  },
-  {
-    productId: '6',
-    name: 'Racial Justice Hoodie',
-    price: 54.99,
-    imageUrl: 'https://placehold.co/600x800/fef2f2/b91c1c?text=Racial+Justice+Hoodie&font=open-sans',
-    description: 'A comfortable hoodie with a powerful message against racial inequality. Proceeds support racial justice organizations.',
-    category: 'Hoodies',
-  }
-];
+// Get products from content collection
+const products = await getCollection('products');
 ---
 
 <MainLayout title="Products">
@@ -100,8 +50,16 @@ const products = [
       
       <!-- Products grid -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {products.map(product => (
-          <ProductCard {...product} />
+        {products.map((product: CollectionEntry<'products'>) => (
+          <ProductCard
+            productId={product.slug}
+            name={product.data.title}
+            price={product.data.price}
+            imageUrl={`/images/products/${product.slug}.jpg`}
+            description={product.data.description}
+            category={product.data.category}
+            badge={product.data.featured ? 'featured' : undefined}
+          />
         ))}
       </div>
     </div>

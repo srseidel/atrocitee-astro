@@ -3,7 +3,7 @@
 export const prerender = false;
 
 import MainLayout from "./MainLayout.astro";
-import { redirectIfNotAdmin } from "../utils/auth";
+import { redirectIfNotAdmin } from "@lib/auth/middleware";
 
 // Check if user is admin and redirect if not
 const redirectResponse = await redirectIfNotAdmin(Astro);

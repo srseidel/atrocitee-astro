@@ -1,14 +1,33 @@
 {
-  "extends": "astro/tsconfigs/strict",
+  "extends": [
+    "astro/tsconfigs/strict",
+    "./tsconfig.paths.json"
+  ],
   "include": [
     ".astro/types.d.ts",
-    "**/*"
+    "src/**/*",
+    "scripts/**/*"
   ],
   "exclude": [
-    "dist"
+    "dist",
+    "node_modules",
+    "ai-logs"
   ],
   "compilerOptions": {
     "jsx": "react-jsx",
-    "jsxImportSource": "react"
+    "jsxImportSource": "react",
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "allowJs": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "types": ["astro/client", "node"]
   }
 }

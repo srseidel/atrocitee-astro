@@ -1,16 +1,24 @@
 ---
 // MainLayout.astro - Base layout for all pages
 import '../styles/base.css';
-import Logo from '../components/layout/Logo.astro';
-import NavLinks from '../components/layout/NavLinks.astro';
-import { createServerSupabaseClient } from '../lib/supabase';
+import Logo from '@components/layouts/Logo.astro';
+import NavLinks from '@components/layouts/NavLinks.astro';
+import { createServerSupabaseClient } from '@lib/supabase/client';
+import { mainNavLinks, authNavLinks, footerNavLinks } from '../config/navigation';
 
 export interface Props {
   title?: string;
   description?: string;
+  image?: string;
+  type?: string;
 }
 
-const { title = 'Atrocitee', description = 'Political t-shirts that donate profits to causes that matter.' } = Astro.props;
+const { 
+  title = 'Atrocitee', 
+  description = 'Political t-shirts that donate profits to causes that matter.',
+  image = '/images/og-image.jpg',
+  type = 'website'
+} = Astro.props;
 
 // Get current path for active link detection
 const currentPath = Astro.url.pathname;
@@ -28,20 +36,14 @@ try {
     
     // If authenticated, check if user is admin
     if (isAuthenticated && user) {
-      // Check user app metadata for admin role
       isAdmin = user.app_metadata?.role === 'admin' || 
-                user.app_metadata?.is_admin === true;
-                
-      // If not found in app_metadata, try to check in the profiles table
-      if (!isAdmin) {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single();
-          
-        isAdmin = profileData?.role === 'admin';
-      }
+                user.app_metadata?.is_admin === true ||
+                (await supabase
+                  .from('profiles')
+                  .select('role')
+                  .eq('id', user.id)
+                  .single()
+                )?.data?.role === 'admin';
     }
   }
 } catch (error) {
@@ -49,6 +51,15 @@ try {
   isAuthenticated = false;
   isAdmin = false;
 }
+
+// Get all navigation links based on auth state
+const navLinks = [
+  ...mainNavLinks,
+  ...authNavLinks.filter(link => 
+    (!link.requiresAuth || isAuthenticated) && 
+    (!link.requiresAdmin || isAdmin)
+  )
+];
 ---
 
 <!DOCTYPE html>
@@ -59,7 +70,19 @@ try {
     <meta name="description" content={description} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="generator" content={Astro.generator} />
+    
+    <!-- SEO Meta Tags -->
     <title>{title} | Atrocitee</title>
+    <meta property="og:title" content={`${title} | Atrocitee`} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content={type} />
+    <meta property="og:image" content={image} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={`${title} | Atrocitee`} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={image} />
+    
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Work+Sans:wght@400;500;600;700&family=Fira+Mono&display=swap" rel="stylesheet">
@@ -77,7 +100,7 @@ try {
           </div>
 
           <!-- Main navigation - desktop -->
-          <nav class="hidden md:flex space-x-8">
+          <nav class="hidden md:flex space-x-8" aria-label="Main navigation">
             <NavLinks isAuthenticated={isAuthenticated} isAdmin={isAdmin} currentPath={currentPath} />
           </nav>
 
@@ -105,6 +128,8 @@ try {
             <button 
               class="md:hidden flex items-center justify-center w-10 h-10 rounded-md hover:bg-neutral-100" 
               aria-label="Toggle mobile menu"
+              aria-expanded="false"
+              aria-controls="mobile-menu"
               id="mobile-menu-button"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -117,20 +142,9 @@ try {
         </div>
         
         <!-- Mobile navigation menu (hidden by default) -->
-        <div class="md:hidden hidden" id="mobile-menu">
+        <div class="md:hidden hidden" id="mobile-menu" role="navigation" aria-label="Mobile navigation">
           <div class="py-2 space-y-1 border-t border-docs-border">
-            <!-- Mobile nav links with auth awareness -->
-            {[
-              { href: "/", label: "Home" },
-              { href: "/shop", label: "Shop" },
-              { href: "/about", label: "About" },
-              { href: "/about#impact", label: "Impact" },
-              ...(isAuthenticated ? [
-                { href: "/account", label: "My Account" },
-                { href: "/account/orders", label: "My Orders" },
-                ...(isAdmin ? [{ href: "/admin/dashboard", label: "Admin" }] : [])
-              ] : [])
-            ].map((link) => (
+            {navLinks.map((link) => (
               <a 
                 href={link.href} 
                 class={`block px-4 py-2 text-base font-medium ${currentPath === link.href 
@@ -196,9 +210,13 @@ try {
           <div>
             <h3 class="small-caps font-medium text-sm uppercase tracking-wider text-neutral-900 mb-4">Shop</h3>
             <ul class="space-y-2">
-              <li><a href="/shop" class="text-neutral-600 hover:text-primary text-sm">All Products</a></li>
-              <li><a href="/shop/new" class="text-neutral-600 hover:text-primary text-sm">New Arrivals</a></li>
-              <li><a href="/shop/bestsellers" class="text-neutral-600 hover:text-primary text-sm">Bestsellers</a></li>
+              {footerNavLinks.shop.map(link => (
+                <li>
+                  <a href={link.href} class="text-neutral-600 hover:text-primary text-sm">
+                    {link.label}
+                  </a>
+                </li>
+              ))}
             </ul>
           </div>
           
@@ -206,12 +224,19 @@ try {
           <div>
             <h3 class="small-caps font-medium text-sm uppercase tracking-wider text-neutral-900 mb-4">Company</h3>
             <ul class="space-y-2">
-              <li><a href="/about" class="text-neutral-600 hover:text-primary text-sm">About Us</a></li>
-              <li><a href="/about#impact" class="text-neutral-600 hover:text-primary text-sm">Our Impact</a></li>
-              <li><a href="/privacy-policy" class="text-neutral-600 hover:text-primary text-sm">Privacy Policy</a></li>
-              <li><a href="/terms-of-service" class="text-neutral-600 hover:text-primary text-sm">Terms of Service</a></li>
+              {footerNavLinks.company.map(link => (
+                <li>
+                  <a href={link.href} class="text-neutral-600 hover:text-primary text-sm">
+                    {link.label}
+                  </a>
+                </li>
+              ))}
               {isAuthenticated && (
-                <li><a href="/account" class="text-neutral-600 hover:text-primary text-sm">My Account</a></li>
+                <li>
+                  <a href="/account" class="text-neutral-600 hover:text-primary text-sm">
+                    My Account
+                  </a>
+                </li>
               )}
             </ul>
           </div>
@@ -225,18 +250,6 @@ try {
     </footer>
 
     <!-- Mobile menu JavaScript -->
-    <script>
-      // Simple toggle for mobile menu
-      document.addEventListener('DOMContentLoaded', () => {
-        const menuButton = document.getElementById('mobile-menu-button');
-        const mobileMenu = document.getElementById('mobile-menu');
-        
-        if (menuButton && mobileMenu) {
-          menuButton.addEventListener('click', () => {
-            mobileMenu.classList.toggle('hidden');
-          });
-        }
-      });
-    </script>
+    <script src="/src/scripts/mobile-menu.ts"></script>
   </body>
 </html> 

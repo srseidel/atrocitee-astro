@@ -2,12 +2,12 @@
 // Server-side rendering for auth
 export const prerender = false;
 
-import AdminLayout from "../../../../layouts/AdminLayout.astro";
-import { createServerSupabaseClient } from "../../../../lib/supabase";
-import { PrintfulService } from "../../../../lib/printful/service";
-import type { PrintfulProductList, PrintfulProduct } from "../../../../types/printful";
-import { redirectIfNotAdmin } from "../../../../utils/auth";
-import { CORE_CATEGORIES } from "../../../../lib/constants/categories";
+import AdminLayout from "@layouts/AdminLayout.astro";
+import { createServerSupabaseClient } from "@lib/supabase/client";
+import { PrintfulService } from "@lib/printful/service";
+import type { PrintfulProductList, PrintfulProduct } from "src/types/printful";
+import { redirectIfNotAdmin } from "@lib/auth/middleware";
+import { CORE_CATEGORIES, CATEGORY_DISPLAY_NAMES } from "src/types/database/models";
 
 interface ProductVariant {
   id: string;
@@ -124,65 +124,77 @@ const { data: tags } = await supabase
           <input type="hidden" name="productId" value={product.id} />
           
           <div>
-            <label class="block text-sm font-medium text-gray-700">Name</label>
+            <label for="product-name" class="block text-sm font-medium text-gray-700">Product Name</label>
             <input 
+              id="product-name"
               type="text" 
               name="name" 
               value={product.name}
               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               required
+              aria-required="true"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700">Slug</label>
+            <label for="product-slug" class="block text-sm font-medium text-gray-700">Product Slug</label>
             <input 
+              id="product-slug"
               type="text" 
               name="slug" 
               value={product.slug}
               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               required
+              aria-required="true"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700">Description</label>
+            <label for="product-description" class="block text-sm font-medium text-gray-700">Product Description</label>
             <textarea 
+              id="product-description"
               name="description" 
               rows="3"
               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              aria-label="Product description"
             >{product.description || ''}</textarea>
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700">Base Price ($)</label>
+            <label for="product-base-price" class="block text-sm font-medium text-gray-700">Base Price (USD)</label>
             <input 
+              id="product-base-price"
               type="number" 
               name="atrocitee_base_price" 
               value={product.atrocitee_base_price || ''}
               step="0.01"
               min="0"
               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              aria-label="Product base price in USD"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700">Donation Amount ($)</label>
+            <label for="product-donation" class="block text-sm font-medium text-gray-700">Donation Amount (USD)</label>
             <input 
+              id="product-donation"
               type="number" 
               name="atrocitee_donation_amount" 
               value={product.atrocitee_donation_amount || ''}
               step="0.01"
               min="0"
               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              aria-label="Donation amount in USD"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700">Charity</label>
+            <label for="product-charity" class="block text-sm font-medium text-gray-700">Associated Charity</label>
             <select 
+              id="product-charity"
               name="atrocitee_charity_id"
               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              aria-label="Select a charity"
             >
               <option value="">Select a charity</option>
               {charities?.map((charity: Charity) => (
@@ -197,10 +209,12 @@ const { data: tags } = await supabase
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700">Status</label>
+            <label for="product-status" class="block text-sm font-medium text-gray-700">Product Status</label>
             <select 
+              id="product-status"
               name="atrocitee_active"
               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              aria-label="Select product status"
             >
               <option value="true" selected={product.atrocitee_active}>Published</option>
               <option value="false" selected={!product.atrocitee_active}>Unpublished</option>
@@ -208,10 +222,12 @@ const { data: tags } = await supabase
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700">Featured</label>
+            <label for="product-featured" class="block text-sm font-medium text-gray-700">Featured Status</label>
             <select 
+              id="product-featured"
               name="atrocitee_featured"
               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              aria-label="Select featured status"
             >
               <option value="true" selected={product.atrocitee_featured}>Yes - Show on homepage</option>
               <option value="false" selected={!product.atrocitee_featured}>No - Regular listing only</option>
@@ -220,43 +236,48 @@ const { data: tags } = await supabase
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700">Category</label>
+            <label for="product-category" class="block text-sm font-medium text-gray-700">Product Category</label>
             <select 
+              id="product-category"
               name="atrocitee_category_id"
               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              aria-label="Select product category"
             >
               <option value="">Select a category</option>
-              {CORE_CATEGORIES.map((category) => (
+              {Object.entries(CORE_CATEGORIES).map(([key, slug]) => (
                 <option 
-                  value={category.id} 
-                  selected={category.id === product.atrocitee_category_id}
+                  value={slug} 
+                  selected={slug === product.atrocitee_category_id}
                 >
-                  {category.name}
+                  {CATEGORY_DISPLAY_NAMES[slug]}
                 </option>
               ))}
             </select>
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700">Tags</label>
-            <div class="mt-2 space-y-2">
-              {tags?.map((tag: Tag) => (
-                <div class="flex items-center">
-                  <input 
-                    type="checkbox" 
-                    name="tags" 
-                    value={tag.id}
-                    id={`tag-${tag.id}`}
-                    checked={product.product_tags?.some((pt: ProductTag) => pt.tag_id === tag.id)}
-                    class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label for={`tag-${tag.id}`} class="ml-2 text-sm text-gray-700">
-                    {tag.name}
-                  </label>
-                </div>
-              ))}
-            </div>
-            <p class="mt-1 text-sm text-gray-500">Select one or more tags for this product</p>
+            <fieldset>
+              <legend class="block text-sm font-medium text-gray-700">Product Tags</legend>
+              <div class="mt-2 space-y-2">
+                {tags?.map((tag: Tag) => (
+                  <div class="flex items-center">
+                    <input 
+                      type="checkbox" 
+                      name="tags" 
+                      value={tag.id}
+                      id={`tag-${tag.id}`}
+                      checked={product.product_tags?.some((pt: ProductTag) => pt.tag_id === tag.id)}
+                      class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      aria-label={`Select ${tag.name} tag`}
+                    />
+                    <label for={`tag-${tag.id}`} class="ml-2 text-sm text-gray-700">
+                      {tag.name}
+                    </label>
+                  </div>
+                ))}
+              </div>
+              <p class="mt-1 text-sm text-gray-500">Select one or more tags for this product</p>
+            </fieldset>
           </div>
 
           <div class="flex justify-end">
@@ -418,40 +439,30 @@ const { data: tags } = await supabase
     e.preventDefault();
     
     const formData = new FormData(e.target as HTMLFormElement);
+    const data = Object.fromEntries(formData.entries()) as Record<string, string>;
     
-    // Validate form data
-    const validationError = validateForm(formData);
-    if (validationError) {
-      showAlert(validationError, 'error');
-      return;
-    }
-
-    const productId = formData.get('productId');
-    
-    // Collect all selected tags
-    const selectedTags = Array.from(formData.getAll('tags')).map(tagId => tagId);
+    // Convert boolean strings to actual booleans
+    const processedData = {
+      ...data,
+      atrocitee_active: data.atrocitee_active === 'true',
+      atrocitee_featured: data.atrocitee_featured === 'true'
+    };
     
     try {
-      setLoading(true);
-
-      const response = await fetch(`/api/products/${productId}`, {
+      const response = await fetch(`/api/v1/admin/products/${data.productId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
-        body: JSON.stringify({
-          name: formData.get('name'),
-          slug: formData.get('slug'),
-          description: formData.get('description'),
-          atrocitee_base_price: parseFloat(formData.get('atrocitee_base_price') as string) || null,
-          atrocitee_donation_amount: parseFloat(formData.get('atrocitee_donation_amount') as string) || null,
-          atrocitee_charity_id: formData.get('atrocitee_charity_id') || null,
-          atrocitee_active: formData.get('atrocitee_active') === 'true',
-          atrocitee_featured: formData.get('atrocitee_featured') === 'true',
-          atrocitee_category_id: formData.get('atrocitee_category_id') || null,
-          atrocitee_tags: Array.from(selectedTags)
-        })
+        body: JSON.stringify(processedData)
       });
+
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Server returned non-JSON response');
+      }
 
       const result = await response.json();
 
@@ -459,20 +470,14 @@ const { data: tags } = await supabase
         throw new Error(result.message || 'Failed to update product');
       }
 
+      // Show success message
       showAlert(result.message || 'Product updated successfully', 'success');
-
+      
+      // Reload the page to show updated data
+      window.location.reload();
     } catch (error) {
       console.error('Error updating product:', error);
-      
-      if (error instanceof Error) {
-        showAlert(error.message, 'error');
-      } else if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        showAlert('Network error. Please check your connection and try again.', 'error');
-      } else {
-        showAlert('An unexpected error occurred. Please try again.', 'error');
-      }
-    } finally {
-      setLoading(false);
+      showAlert(error instanceof Error ? error.message : 'Failed to update product', 'error');
     }
   });
 </script> 

@@ -1,8 +1,8 @@
 ---
-import MainLayout from '../../layouts/MainLayout.astro';
-import Container from '../../components/ui/Container.astro';
-import LoginForm from '../../components/auth/LoginForm';
-import { createServerSupabaseClient } from '../../lib/supabase';
+import MainLayout from '@layouts/MainLayout.astro';
+import Container from '@components/common/Container.astro';
+import LoginForm from '@components/auth/LoginForm';
+import { createServerSupabaseClient } from '@lib/supabase/client';
 
 // Server-side rendering to ensure we can access cookies
 export const prerender = false;

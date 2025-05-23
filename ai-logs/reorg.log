@@ -1,0 +1,354 @@
+# Reorganization Log
+
+## Overview
+This log tracks changes made during the reorganization phase of the Atrocitee project. The goal is to fix issues created during the initial reorganization and ensure all files are in their correct locations according to our architecture.
+
+## Changes Log
+
+### 2024-03-22
+- Created development-rules.md for consistent development guidelines
+- Created reorg.log to track reorganization changes
+- Verified current file structure against architecture.md
+- Confirmed proper location of key files:
+  - ✅ src/lib/auth/middleware.ts
+  - ✅ src/lib/supabase/client.ts
+  - ✅ src/types/env.d.ts
+  - ✅ scripts/ directory for utility scripts
+
+### 2024-03-22 - TypeScript Path Configuration
+Created standardized TypeScript path configuration:
+
+1. Created `tsconfig.paths.json`:
+   - Added comprehensive path aliases for all directories
+   - Standardized import paths across the project
+   - Added specific aliases for type imports
+   - Ensured consistent path resolution
+
+2. Updated development rules:
+   - Added TypeScript Configuration section
+   - Documented all path aliases
+   - Added rules for import path usage
+   - Emphasized use of path aliases over relative paths
+
+3. Path Alias Structure:
+   - `@/*` -> `src/*`
+   - `@components/*` -> `src/components/*`
+   - `@layouts/*` -> `src/layouts/*`
+   - `@lib/*` -> `src/lib/*`
+   - `@types/*` -> `src/types/*`
+   - `@utils/*` -> `src/utils/*`
+   - `@content/*` -> `src/content/*`
+   - `@config/*` -> `src/config/*`
+   - `@scripts/*` -> `scripts/*`
+   - `@types/printful/*` -> `src/types/printful/*`
+   - `@types/database/*` -> `src/types/database/*`
+   - `@types/api/*` -> `src/types/api/*`
+   - `@types/common/*` -> `src/types/common/*`
+
+4. Next Steps:
+   - Update all files to use path aliases
+   - Remove relative path imports
+   - Fix any remaining import issues
+   - Update build configuration to support path aliases
+
+### 2024-03-22 - Import Path Issues
+Found several categories of import path issues that need to be fixed:
+
+1. Relative Path Issues:
+   - Many files using relative paths (../) instead of path aliases
+   - Common in pages, components, and API routes
+   - Example: `import MainLayout from '../layouts/MainLayout.astro'`
+
+2. Inconsistent Auth Imports:
+   - Some files using `utils/auth`
+   - Others using `utils/auth-fixed`
+   - Need to standardize on `@lib/auth`
+
+3. Supabase Client Imports:
+   - Inconsistent paths: `lib/supabase` vs `lib/supabase/client`
+   - Should standardize on `@lib/supabase/client`
+
+4. Type Imports:
+   - Some using relative paths for types
+   - Should use `@types` alias instead
+
+### 2024-03-22 - Import Path Analysis
+Detailed analysis of import paths that need to be updated:
+
+1. Layout Imports:
+   - Current: `../../layouts/MainLayout.astro`
+   - Should be: `@layouts/MainLayout.astro`
+   - Affected files:
+     - src/pages/account/index.astro
+     - src/pages/admin/backups.astro
+     - src/pages/admin/dashboard.astro
+     - src/pages/admin/products/*.astro
+     - src/pages/auth/*.astro
+
+2. Component Imports:
+   - Current: `../../components/ui/Container.astro`
+   - Should be: `@components/ui/Container.astro`
+   - Affected files:
+     - src/pages/account/*.astro
+     - src/pages/admin/*.astro
+     - src/pages/auth/*.astro
+     - src/pages/contact.astro
+
+3. Supabase Client Imports:
+   - Current: `../../lib/supabase`
+   - Should be: `@lib/supabase/client`
+   - Affected files:
+     - src/pages/admin/*.astro
+     - src/pages/api/v1/*.ts
+     - src/pages/auth/*.astro
+     - src/lib/printful/scheduled-sync.ts
+
+4. Auth Imports:
+   - Current: `../../../utils/auth` or `../../../utils/auth-fixed`
+   - Should be: `@lib/auth/middleware`
+   - Affected files:
+     - src/pages/api/v1/admin/*.ts
+     - src/pages/api/v1/printful/*.ts
+     - src/pages/api/v1/products/*.ts
+
+5. Printful Service Imports:
+   - Current: `../../../lib/printful/service`
+   - Should be: `@lib/printful/service`
+   - Affected files:
+     - src/pages/api/v1/printful/*.ts
+     - src/pages/admin/products/configure/*.astro
+
+6. Type Imports:
+   - Current: `../../../types/database`
+   - Should be: `@types/database`
+   - Affected files:
+     - src/pages/admin/products/*.astro
+     - src/pages/api/v1/*.ts
+
+### 2024-03-22 - Component Location Discovery
+Found that layout components are in `src/components/layouts` instead of `src/components/layout`:
+- Logo.astro and NavLinks.astro are in the correct location
+- Need to update all imports to use `@components/layouts` instead of `@components/layout`
+
+### 2024-03-22 - Linter Issues
+Encountered linter errors while updating imports:
+1. Module resolution errors:
+   - Cannot find module '../lib/supabase'
+   - Cannot find module '../components/layout/NavLinks.astro'
+   - Cannot find module '../components/layout/Logo.astro'
+
+2. Type errors in MainLayout.astro:
+   - Type 'unknown' not assignable to 'string | URL | null | undefined'
+   - Import declaration conflicts with local declaration of 'Props'
+
+### 2024-03-22 - Fixed MainLayout.astro
+Successfully fixed type issues in MainLayout.astro:
+1. Removed conflicting Props import from astro
+2. Renamed Props interface to LayoutProps
+3. Added type assertion for Astro.props
+4. Updated component imports to use correct paths
+
+### 2024-03-22 - Admin Page Authentication Issues
+Found several issues with admin page authentication:
+
+1. Inconsistent Import Paths:
+   - All admin pages using relative paths for Supabase client
+   - Need to update to use `@lib/supabase/client`
+
+2. Authentication Handling:
+   - Comment mentions middleware but no actual middleware import
+   - Need to add proper middleware import from `@lib/auth/middleware`
+   - Need to ensure all admin pages are server-side rendered
+
+3. Required Changes:
+   - Add `export const prerender = false` to all admin pages
+   - Import and use auth middleware
+   - Update Supabase client imports
+   - Add proper type checking for admin status
+
+### 2024-03-22 - Auth Utils Creation
+Created new auth utilities file to handle common auth functions:
+
+1. Created `src/lib/auth/middleware.ts`:
+   - Added `isAdmin` function for admin role checking
+   - Added proper type definitions
+   - Added support for server-side auth with cookies
+   - Consolidated auth functions in one place
+
+2. Issues Found:
+   - Type mismatch in `createServerSupabaseClient` calls
+   - Need to update function signatures to handle cookies properly
+   - Need to ensure consistent auth checking across all admin pages
+
+### 2024-03-22 - Auth Consolidation
+Consolidated all auth-related functionality:
+
+1. Moved `isAdmin` function to `src/lib/auth/middleware.ts`:
+   - Added proper type definitions
+   - Added support for server-side auth with cookies
+   - Added database check for admin status
+   - Added proper error handling
+
+2. Updated import paths:
+   - Changed all `utils/auth` imports to `@lib/auth/middleware`
+   - Changed all `utils/auth-fixed` imports to `@lib/auth/middleware`
+   - Updated Supabase client imports to use `@lib/supabase/client`
+
+3. Next Steps:
+   - Update all files using old auth imports
+   - Remove duplicate auth files
+   - Ensure consistent auth checking across all admin pages
+
+Action Items:
+- [ ] Update all admin page imports to use path aliases
+- [ ] Add proper middleware imports
+- [ ] Ensure server-side rendering
+- [ ] Add type checking for admin status
+- [ ] Standardize Supabase client usage
+- [ ] Fix auth utility function signatures
+- [ ] Update all admin pages to use new auth utils
+- [ ] Remove duplicate auth files
+- [ ] Update all files using old auth imports
+- [ ] Update layout imports to use `@layouts/*`
+- [ ] Update component imports to use `@components/*`
+- [ ] Update Printful service imports to use `@lib/printful/*`
+- [ ] Update type imports to use `@types/*`
+
+### 2024-03-22 - Sync Endpoint Refactoring
+Refactored sync endpoint to handle sync process directly:
+
+1. Issues identified:
+   - `product-sync.ts` was causing import issues
+   - Sync logic was split between multiple files
+   - Complex class structure was unnecessary
+
+2. Changes made:
+   - Removed dependency on `product-sync.ts`
+   - Moved sync logic directly into sync endpoint
+   - Simplified product sync process
+   - Maintained error handling and logging
+   - Kept existing API response format
+
+3. Benefits:
+   - Simpler code structure
+   - Fewer dependencies
+   - Easier to maintain
+   - Better error handling
+   - Clearer sync process flow
+
+4. Next Steps:
+   - Monitor sync performance
+   - Add more detailed error messages
+   - Consider adding progress tracking
+   - Add retry mechanism for failed products
+   - Consider adding batch processing
+
+### 2024-03-22 - Build Configuration Update
+Updated build configuration to fix server-side rendering issues:
+
+1. Changed output mode:
+   - Previously: Static output in development, server output in production
+   - Now: Server output in both development and production
+   - Reason: Static output was causing issues with server-side rendering of admin pages
+
+2. Changes made:
+   - Updated `astro.config.mjs` to use server output mode
+   - Maintained Cloudflare adapter configuration
+   - Kept existing integrations and optimizations
+
+3. Next Steps:
+   - Monitor server-side rendering performance
+   - Test admin pages in development mode
+   - Consider adding development-specific optimizations
+   - Document server-side rendering requirements
+
+### 2024-03-22 - Import Path Fix
+Fixed import path in product sync service:
+
+1. Issue identified:
+   - `src/lib/printful/product-sync.ts` was using relative import path `../supabase`
+   - This violated development rules requiring path aliases
+   - Caused SSR module loading error
+
+2. Changes made:
+   - Updated import to use `@lib/supabase/client` path alias
+   - Follows development rules for import paths
+   - Maintains consistent import pattern across codebase
+
+3. Next Steps:
+   - Monitor for any remaining import path issues
+   - Consider adding import path linting rules
+   - Document path alias usage in development guide
+   - Review other files for similar issues
+
+### 2024-03-22 - Type Checking Issue
+Identified incorrect type checking in product sync service:
+
+1. Issue identified:
+   - Linter reported missing properties on `PrintfulVariant` type
+   - Properties `variant_id`, `sync_product_id`, and `synced` were flagged
+   - These properties are actually defined in the type definition
+
+2. Analysis:
+   - Checked `src/types/printful/api.ts` for type definitions
+   - Confirmed properties exist in `PrintfulVariant` interface
+   - Type definitions are correct and match Printful API
+
+3. Next Steps:
+   - Consider updating TypeScript configuration
+   - Review linter rules for type checking
+   - Add type checking documentation
+   - Consider adding type tests
+
+### 2024-03-22 - CommonJS Module Import Issue
+Identified module import compatibility issue:
+
+1. Issue identified:
+   - Error: Named export 'SupabaseClient' not found from '@supabase/supabase-js'
+   - Module is CommonJS but being imported as ESM
+   - Affects server-side rendering functionality
+
+2. Required changes:
+   - Update import to use CommonJS compatible syntax:
+     ```typescript
+     import pkg from '@supabase/supabase-js';
+     const { createClient } = pkg;
+     ```
+   - This follows Node.js best practices for CommonJS/ESM interop
+   - Maintains type safety while fixing runtime issues
+
+3. Next Steps:
+   - Update all Supabase client imports to use CommonJS compatible syntax
+   - Add module interop documentation
+   - Consider adding build-time checks for module compatibility
+   - Review other potential CommonJS/ESM issues
+
+### 2024-03-22 - Removed Duplicate Sync Endpoint
+Removed duplicate sync endpoint file:
+
+1. Action taken:
+   - Removed `src/pages/api/v1/printful/sync-products.ts`
+   - Confirmed `src/pages/api/v1/printful/sync.ts` is the correct endpoint
+   - Verified products dashboard already uses correct endpoint
+
+2. Verification:
+   - Checked `src/pages/admin/products-dashboard.astro`
+   - Confirmed sync button uses `/api/v1/printful/sync`
+   - No client code changes needed
+
+3. Next Steps:
+   - Monitor sync functionality
+   - Document API endpoint structure
+   - Add endpoint validation to prevent duplicates
+   - Consider adding API documentation
+
+### 2024-03-22 - PrintfulService Environment Variables
+Fixed environment variable handling in PrintfulService:
+
+1. Issues identified:
+   - PrintfulService was using `import.meta.env` instead of `ENV` from `@config/env`
+   - Incorrect environment variable names for Supabase client
+   - Missing type imports for Printful and Database types
+
+2. Changes made:
+   - Updated to use `ENV` from `

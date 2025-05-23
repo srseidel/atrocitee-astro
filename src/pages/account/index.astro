@@ -1,7 +1,7 @@
 ---
-import MainLayout from '../../layouts/MainLayout.astro';
-import Container from '../../components/ui/Container.astro';
-import { redirectIfNotAuthenticated, getUser } from '../../utils/auth';
+import MainLayout from '@layouts/MainLayout.astro';
+import Container from '@components/ui/Container.astro';
+import { redirectIfNotAuthenticated, getUser } from "@lib/auth/middleware";
 
 // Ensure this page is server-rendered, not statically generated
 export const prerender = false;
@@ -57,7 +57,7 @@ const user = await getUser(Astro);
 </MainLayout>
 
 <script>
-  import { createBrowserSupabaseClient } from '../../lib/supabase';
+  import { createBrowserSupabaseClient } from '@lib/supabase/client';
   
   // Handle sign out button
   document.getElementById('sign-out-btn')?.addEventListener('click', async () => {

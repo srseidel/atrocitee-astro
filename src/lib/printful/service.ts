@@ -14,10 +14,11 @@ import type {
   PrintfulCatalogProduct,
   PrintfulCatalogVariant,
   PrintfulProductList
-} from '../../types/printful';
-import ENV from '../../config/env';
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from '../../types/database';
+} from '@types/printful/api';
+import ENV from '@config/env';
+import pkg from '@supabase/supabase-js';
+const { createClient } = pkg;
+import type { Database } from '@types/database/supabase';
 
 // Singleton instance
 let printfulServiceInstance: PrintfulService | null = null;
@@ -131,19 +132,15 @@ class MockPrintfulClient {
 export class PrintfulService {
   private static instance: PrintfulService;
   private apiKey: string;
-  private storeId: string;
   private baseUrl: string;
   private supabase: ReturnType<typeof createClient<Database>>;
 
   private constructor() {
-    // Use import.meta.env for Astro environment variables
-    this.apiKey = import.meta.env.PRINTFUL_API_KEY || '';
-    this.storeId = import.meta.env.PRINTFUL_STORE_ID || '';
-    this.baseUrl = import.meta.env.PRINTFUL_API_BASE_URL || 'https://api.printful.com';
+    this.apiKey = ENV.PRINTFUL_API_KEY || '';
+    this.baseUrl = 'https://api.printful.com';
     
-    // Use the correct environment variables for Astro
-    const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseUrl = ENV.PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = ENV.PUBLIC_SUPABASE_ANON_KEY;
     
     if (!supabaseUrl || !supabaseAnonKey) {
       throw new Error('Missing Supabase URL or Anon Key');
@@ -155,8 +152,7 @@ export class PrintfulService {
 
     console.log('[DEBUG] PrintfulService initialized with:', {
       baseUrl: this.baseUrl,
-      hasApiKey: !!this.apiKey,
-      hasStoreId: !!this.storeId
+      hasApiKey: !!this.apiKey
     });
     
     this.supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);

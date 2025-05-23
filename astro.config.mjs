@@ -24,30 +24,32 @@ export default defineConfig({
     // Add Sentry integration without direct configuration
     // Configuration is handled in sentry.client.config.js and sentry.server.config.js
     !isDev || process.env.ENABLE_SENTRY_IN_DEV ? sentry() : null,
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'masked-icon.svg'],
-      manifest: {
-        name: 'Atrocitee',
-        short_name: 'Atrocitee',
-        description: 'Atrocitee - Shop for a Cause',
-        theme_color: '#ffffff',
-        icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-        ],
-      },
-    }),
   ].filter(Boolean), // Filter out null values
   vite: {
+    plugins: [
+      VitePWA({
+        registerType: 'autoUpdate',
+        includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'masked-icon.svg'],
+        manifest: {
+          name: 'Atrocitee',
+          short_name: 'Atrocitee',
+          description: 'Atrocitee - Shop for a Cause',
+          theme_color: '#ffffff',
+          icons: [
+            {
+              src: 'pwa-192x192.png',
+              sizes: '192x192',
+              type: 'image/png',
+            },
+            {
+              src: 'pwa-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+            },
+          ],
+        },
+      }),
+    ],
     // CLOUDFLARE COMPATIBILITY FIX:
     // For Cloudflare deployment: Use React DOM's edge-compatible server module
     // to fix "MessageChannel is not defined" errors in Cloudflare's edge environment.
@@ -57,7 +59,15 @@ export default defineConfig({
       resolve: {
         alias: {
           // Only apply this in production builds
-          'react-dom/server': 'react-dom/server.edge'
+          'react-dom/server': 'react-dom/server.edge',
+          // Add new import aliases
+          '@components': '/src/components',
+          '@layouts': '/src/layouts',
+          '@lib': '/src/lib',
+          '@utils': '/src/utils',
+          '@types': '/src/types',
+          '@content': '/src/content',
+          '@config': '/src/config'
         }
       }
     }),
@@ -86,7 +96,7 @@ export default defineConfig({
         style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com;
         img-src 'self' data: https: blob:;
         font-src 'self' data:;
-        connect-src 'self' https://*.supabase.co https://api.printful.com;
+        connect-src 'self' ${isDev ? 'ws://localhost:* ws://127.0.0.1:* ' : ''}https://*.supabase.co https://api.printful.com;
         frame-src 'self';
         object-src 'none';
         base-uri 'self';

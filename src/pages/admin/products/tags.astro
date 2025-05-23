@@ -1,6 +1,6 @@
 ---
-import AdminLayout from "../../../layouts/AdminLayout.astro";
-import { createServerSupabaseClient } from "../../../lib/supabase";
+import AdminLayout from "@layouts/AdminLayout.astro";
+import { createServerSupabaseClient } from "@lib/supabase/client";
 
 // Server-side rendering to ensure we can access cookies
 export const prerender = false;
@@ -99,7 +99,7 @@ interface Tag {
   </div>
   
   <!-- Tag Form Modal (hidden by default) -->
-  <div id="tag-modal" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center hidden">
+  <div id="tag-modal" class="fixed inset-0 bg-gray-500 bg-opacity-75 items-center justify-center hidden">
     <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-auto">
       <h2 id="modal-title" class="text-xl font-semibold mb-4">Add New Tag</h2>
       
@@ -191,24 +191,32 @@ interface Tag {
       // If we have an ID, it's an update operation
       const isUpdate = !!tagIdInput!.value;
       const endpoint = isUpdate 
-        ? `/api/tags/${tagIdInput!.value}` 
-        : '/api/tags';
+        ? `/api/v1/tags/${tagIdInput!.value}` 
+        : '/api/v1/tags';
       
       const response = await fetch(endpoint, {
         method: isUpdate ? 'PUT' : 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify(formData)
       });
-      
-      if (response.ok) {
-        // Reload the page to show updated data
-        window.location.reload();
-      } else {
-        const data = await response.json();
-        alert(data.message || 'Error saving tag');
+
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Server returned non-JSON response');
       }
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Error saving tag');
+      }
+
+      // Reload the page to show updated data
+      window.location.reload();
     } catch (error) {
       console.error('Error saving tag:', error);
       alert('An error occurred while saving the tag');
@@ -221,23 +229,28 @@ interface Tag {
       const tagId = button.getAttribute('data-id');
       
       try {
-        const response = await fetch(`/api/tags/${tagId}`);
-        if (response.ok) {
-          const tag = await response.json();
-          
-          // Fill the form
-          tagIdInput!.value = tag.id;
-          nameInput!.value = tag.name;
-          slugInput!.value = tag.slug;
-          descriptionInput!.value = tag.description || '';
-          activeInput!.checked = tag.active;
-          
-          // Show the modal
-          modalTitle!.textContent = 'Edit Tag';
-          tagModal?.classList.remove('hidden');
-        } else {
-          alert('Error loading tag details');
+        const response = await fetch(`/api/v1/tags/${tagId}`);
+        if (!response.ok) {
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Server returned non-JSON response');
+          }
+          const result = await response.json();
+          throw new Error(result.message || 'Error loading tag details');
         }
+        
+        const tag = await response.json();
+        
+        // Fill the form
+        tagIdInput!.value = tag.id;
+        nameInput!.value = tag.name;
+        slugInput!.value = tag.slug;
+        descriptionInput!.value = tag.description || '';
+        activeInput!.checked = tag.active;
+        
+        // Show the modal
+        modalTitle!.textContent = 'Edit Tag';
+        tagModal?.classList.remove('hidden');
       } catch (error) {
         console.error('Error loading tag:', error);
         alert('An error occurred while loading the tag');
@@ -252,17 +265,24 @@ interface Tag {
         const tagId = button.getAttribute('data-id');
         
         try {
-          const response = await fetch(`/api/tags?id=${tagId}`, {
-            method: 'DELETE'
+          const response = await fetch(`/api/v1/tags?id=${tagId}`, {
+            method: 'DELETE',
+            headers: {
+              'Accept': 'application/json'
+            }
           });
           
-          if (response.ok) {
-            // Reload the page to show updated data
-            window.location.reload();
-          } else {
-            const data = await response.json();
-            alert(data.message || 'Error deleting tag');
+          if (!response.ok) {
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+              throw new Error('Server returned non-JSON response');
+            }
+            const result = await response.json();
+            throw new Error(result.message || 'Error deleting tag');
           }
+
+          // Reload the page to show updated data
+          window.location.reload();
         } catch (error) {
           console.error('Error deleting tag:', error);
           alert('An error occurred while deleting the tag');

@@ -1,6 +1,6 @@
 ---
-import AdminLayout from "../../layouts/AdminLayout.astro";
-import { createServerSupabaseClient } from "../../lib/supabase";
+import AdminLayout from "@layouts/AdminLayout.astro";
+import { createServerSupabaseClient } from "@lib/supabase/client";
 
 // Server-side rendering to ensure we can access cookies
 export const prerender = false;
