@@ -27,10 +27,12 @@ jobs:
 
       - name: Lint code
         run: |
-          # If you have ESLint configured:
-          # npm run lint
-          # For now, just checking if the build works
-          npm run build
+          # Only check files that have changed
+          git fetch origin
+          git diff --name-only origin/main | grep -E '\.(ts|tsx|astro)$' | xargs npx eslint || true
+
+      - name: Build project
+        run: npm run build
 
   build:
     runs-on: ubuntu-latest

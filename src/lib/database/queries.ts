@@ -1,4 +1,4 @@
-import { createServerSupabaseClient } from '../supabase/client';
+import { createServerSupabaseClient } from '@lib/supabase/client';
 
 // Type for database query options
 export interface QueryOptions {

@@ -5,9 +5,18 @@
  * error handling, and type safety.
  */
 
-import ENV from '../../config/env';
 import * as Sentry from '@sentry/astro';
-import type { PrintfulResponse, PrintfulProductList, PrintfulCatalogProduct, PrintfulCatalogVariant } from '../../types/printful';
+
+import ENV from '@config/env';
+
+import type { 
+  PrintfulResponse, 
+  PrintfulProductList, 
+  PrintfulCatalogProduct, 
+  PrintfulCatalogVariant,
+  PrintfulCategory,
+  PrintfulProductData
+} from '@local-types/printful/index';
 
 // Configuration
 const API_BASE_URL = 'https://api.printful.com';
@@ -51,6 +60,7 @@ export default class PrintfulClient {
 
   constructor(apiKey = ENV.PRINTFUL_API_KEY, baseUrl = API_BASE_URL) {
     // Add debug logging for environment variables
+    // eslint-disable-next-line no-console
     console.log('[Printful] Environment check:', {
       apiKeyExists: !!apiKey,
       apiKeyLength: apiKey ? apiKey.length : 0,
@@ -58,6 +68,7 @@ export default class PrintfulClient {
     });
 
     if (!apiKey) {
+      // eslint-disable-next-line no-console
       console.error('[Printful] ERROR: API key is missing or empty');
     }
 
@@ -68,6 +79,9 @@ export default class PrintfulClient {
       'Content-Type': 'application/json',
       'X-PF-API-Location': 'us-east',
     };
+
+    // eslint-disable-next-line no-console
+    console.log("Printful API client initialized");
   }
 
   /**
@@ -87,6 +101,7 @@ export default class PrintfulClient {
         401,
         'missing_api_key'
       );
+      // eslint-disable-next-line no-console
       console.error('[Printful] Authentication error:', error);
       throw error;
     }
@@ -98,6 +113,7 @@ export default class PrintfulClient {
       },
     };
 
+    // eslint-disable-next-line no-console
     console.log(`[Printful] Making request to: ${endpoint}`);
 
     try {
@@ -105,7 +121,9 @@ export default class PrintfulClient {
       const responseText = await response.text();
       
       // Debug HTTP status and response
+      // eslint-disable-next-line no-console
       console.log(`[Printful] Response status: ${response.status}`);
+      // eslint-disable-next-line no-console
       console.log(`[Printful] Raw response: ${responseText}`);
       
       // Parse the response as JSON
@@ -113,6 +131,7 @@ export default class PrintfulClient {
       try {
         data = JSON.parse(responseText);
       } catch (parseError) {
+        // eslint-disable-next-line no-console
         console.error('[Printful] Error parsing JSON response:', parseError);
         throw new PrintfulApiError(
           `Failed to parse Printful API response: ${parseError instanceof Error ? parseError.message : 'Unknown parsing error'}`,
@@ -152,6 +171,7 @@ export default class PrintfulClient {
       if (retries > 0 && this.shouldRetry(error)) {
         const delayMs = RETRY_DELAY_MS * Math.pow(RETRY_BACKOFF_FACTOR, MAX_RETRIES - retries);
         
+        // eslint-disable-next-line no-console
         console.warn(`[Printful] Request failed, retrying in ${delayMs}ms...`, { endpoint, error });
         
         // Wait before retrying
@@ -241,22 +261,28 @@ export default class PrintfulClient {
   /**
    * Create a new sync product
    */
-  async createSyncProduct(productData: any): Promise<PrintfulProductList> {
-    const response = await this.request<PrintfulProductList>('/sync/products', {
-      method: 'POST',
-      body: JSON.stringify(productData),
-    });
+  async createSyncProduct(productData: PrintfulProductData): Promise<PrintfulProductList> {
+    const response = await this.request<PrintfulProductList>(
+      '/store/products',
+      {
+        method: 'POST',
+        body: JSON.stringify(productData)
+      }
+    );
     return response.result;
   }
 
   /**
    * Update an existing sync product
    */
-  async updateSyncProduct(id: number, productData: any): Promise<PrintfulProductList> {
-    const response = await this.request<PrintfulProductList>(`/sync/products/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(productData),
-    });
+  async updateSyncProduct(id: number, productData: PrintfulProductData): Promise<PrintfulProductList> {
+    const response = await this.request<PrintfulProductList>(
+      `/store/products/${id}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(productData)
+      }
+    );
     return response.result;
   }
 
@@ -264,16 +290,19 @@ export default class PrintfulClient {
    * Delete a sync product
    */
   async deleteSyncProduct(id: number): Promise<void> {
-    await this.request<void>(`/sync/products/${id}`, {
-      method: 'DELETE',
-    });
+    await this.request<void>(
+      `/store/products/${id}`,
+      { method: 'DELETE' }
+    );
   }
 
   /**
    * Get catalog categories
    */
-  async getCatalogCategories(): Promise<any[]> {
-    const response = await this.request<any[]>('/catalog/categories');
+  async getCatalogCategories(): Promise<PrintfulCategory[]> {
+    const response = await this.request<PrintfulCategory[]>(
+      '/store/categories'
+    );
     return response.result;
   }
 } 

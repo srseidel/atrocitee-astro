@@ -1,34 +1,41 @@
 // Sentry configuration and utility functions
 import * as Sentry from '@sentry/astro';
-import { Scope } from '@sentry/browser';
 
-// Initialize Sentry - this will be called by the Sentry integration in astro.config.mjs
-export function initSentry() {
-  const dsn = import.meta.env.PUBLIC_SENTRY_DSN;
-  const environment = import.meta.env.PUBLIC_SENTRY_ENVIRONMENT || 'development';
-  
-  Sentry.init({
-    dsn: dsn,
-    environment: environment,
-    // Set tracesSampleRate to 1.0 to capture 100% of transactions for performance monitoring
-    // In production, you'll want to adjust this to a lower value
-    tracesSampleRate: environment === 'production' ? 0.2 : 1.0,
-    // Session replay is available in @sentry/browser but we're skipping it for now
-    // as it's not part of the basic MVP requirements
-  });
+import { env } from '../env';
+
+// Initialize Sentry
+export function initSentry(): void {
+  if (env.sentry.dsn) {
+    Sentry.init({
+      dsn: env.sentry.dsn,
+      debug: env.sentry.debug,
+      environment: env.sentry.environment,
+      beforeSend(event: Record<string, unknown>): Record<string, unknown> | null {
+        // Don't send events in development
+        if (env.sentry.environment === 'development') {
+          return null;
+        }
+        return event;
+      },
+    });
+  }
+  // eslint-disable-next-line no-console
+  console.log("Sentry initialized");
 }
 
 // Custom error tracking for specific scenarios
-export function captureError(error: Error, context?: Record<string, any>) {
+export function captureError(error: Error, context?: Record<string, unknown>): void {
   Sentry.captureException(error, { 
     contexts: { 
       custom: context 
     } 
   });
+  // eslint-disable-next-line no-console
+  console.log("Sentry error:", error);
 }
 
 // Set user information when a user logs in
-export function setUserContext(userId: string, email?: string, role?: string) {
+export function setUserContext(userId: string, email?: string, role?: string): void {
   Sentry.setUser({
     id: userId,
     email: email,
@@ -37,12 +44,12 @@ export function setUserContext(userId: string, email?: string, role?: string) {
 }
 
 // Clear user information on logout
-export function clearUserContext() {
+export function clearUserContext(): void {
   Sentry.setUser(null);
 }
 
 // Add breadcrumb for important user actions (navigation, feature usage, etc.)
-export function addBreadcrumb(message: string, category: string, level: 'info' | 'warning' | 'error' = 'info') {
+export function addBreadcrumb(message: string, category: string, level: 'info' | 'warning' | 'error' = 'info'): void {
   Sentry.addBreadcrumb({
     message,
     category,
@@ -52,7 +59,7 @@ export function addBreadcrumb(message: string, category: string, level: 'info' |
 
 // Basic performance monitoring can be implemented in the future
 // For the MVP, we'll focus on error tracking
-export function trackPerformance(name: string, operation: () => Promise<any>) {
+export function trackPerformance<T>(name: string, operation: () => Promise<T>): Promise<T> {
   // Simple timing implementation without Sentry transaction API
   console.time(name);
   
@@ -68,6 +75,8 @@ export function trackPerformance(name: string, operation: () => Promise<any>) {
           operation: { name }
         } 
       });
+      // eslint-disable-next-line no-console
+      console.log("Sentry error:", error);
       throw error;
     });
 } 

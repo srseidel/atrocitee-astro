@@ -1,7 +1,10 @@
-import type { APIContext } from 'astro';
+import * as Sentry from '@sentry/astro';
+
 import { isAdmin } from '@lib/auth/middleware';
 import PrintfulProductSync from '@lib/printful/product-sync';
-import * as Sentry from '@sentry/astro';
+
+import type { APIContext } from 'astro';
+
 
 // Do not pre-render this endpoint at build time
 export const prerender = false;

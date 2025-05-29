@@ -4,6 +4,7 @@ export const env = {
   supabase: {
     url: import.meta.env.PUBLIC_SUPABASE_URL || 'https://placeholder-url.supabase.co',
     anonKey: import.meta.env.PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key',
+    serviceKey: import.meta.env.SUPABASE_SERVICE_KEY
   },
   
   // Printful

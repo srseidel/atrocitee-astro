@@ -1,8 +1,11 @@
 ---
-import MainLayout from '@layouts/MainLayout.astro';
-import Container from '@components/common/Container.astro';
-import LoginForm from '@components/auth/LoginForm';
 import { createServerSupabaseClient } from '@lib/supabase/client';
+
+import Container from '@components/common/Container.astro';
+import LoginForm from '@components/features/auth/LoginForm';
+
+import MainLayout from '@layouts/MainLayout.astro';
+
 
 // Server-side rendering to ensure we can access cookies
 export const prerender = false;
@@ -11,9 +14,10 @@ export const prerender = false;
 const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
 const { data: { user }, error } = await supabase.auth.getUser();
 
-// If user is already logged in, redirect to admin dashboard
+// If user is already logged in, redirect to admin dashboard or the requested page
 if (user) {
-  return Astro.redirect('/admin/dashboard');
+  const redirectTo = Astro.url.searchParams.get('redirect') || '/admin/dashboard';
+  return Astro.redirect(redirectTo);
 }
 ---
 

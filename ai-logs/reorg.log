@@ -351,4 +351,69 @@ Fixed environment variable handling in PrintfulService:
    - Missing type imports for Printful and Database types
 
 2. Changes made:
-   - Updated to use `ENV` from `
+   - Updated to use `ENV` from `@config/env`
+
+### 2024-03-22 - Reorganization Status Update
+Current state of reorganization:
+
+1. Progress:
+   - Core reorganization is complete
+   - Development environment is functional
+   - Basic sync functionality is working
+   - Environment variables are properly configured
+   - Import paths are standardized
+
+2. Remaining Issues:
+   - Duplicate functionality between:
+     - `src/lib/printful/*`
+     - `src/pages/api/v1/printful/*`
+   - Need to consolidate Printful-related code
+   - Some type import paths need fixing
+   - Potential CommonJS/ESM interop issues
+
+3. Next Session Goals:
+   - Review and consolidate Printful code
+   - Fix remaining type import issues
+   - Complete CommonJS/ESM compatibility fixes
+   - Add comprehensive error handling
+   - Improve sync process reliability
+
+4. Stopping Point:
+   - Basic functionality is working
+   - Development environment is stable
+   - Core reorganization is complete
+   - Remaining issues documented for next session
+
+### 2024-03-22 - Path Alias Inconsistency Issue
+Identified inconsistency in path alias usage:
+
+1. Current Setup:
+   - We have a dedicated `tsconfig.paths.json` file
+   - Path aliases are defined according to development rules
+   - Some files are using relative paths instead of aliases
+   - Inconsistent usage across the codebase
+
+2. Issues Found:
+   - Some imports use relative paths (e.g., `../../lib/printful/service`)
+   - Others use aliases (e.g., `@lib/printful/service`)
+   - This inconsistency can cause:
+     - Import resolution issues
+     - Build-time errors
+     - Confusion in code maintenance
+     - Potential module loading problems
+
+3. Required Changes:
+   - Standardize all imports to use path aliases
+   - Update all relative path imports to use `@/*` format
+   - Ensure consistent usage of:
+     - `@lib/*` for library code
+     - `@types/*` for type definitions
+     - `@config/*` for configuration
+     - Other defined aliases
+
+4. Next Session Priority:
+   - Review and update all import statements
+   - Ensure consistent path alias usage
+   - Update build configuration if needed
+   - Add linting rules for path alias enforcement
+   - Document path alias usage guidelines

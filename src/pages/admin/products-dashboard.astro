@@ -1,7 +1,10 @@
 ---
-import AdminLayout from "@layouts/AdminLayout.astro";
-import { createServerSupabaseClient } from "@lib/supabase/client";
+import { SupabaseClient } from "@supabase/supabase-js";
+
 import { redirectIfNotAdmin } from "@lib/auth/middleware";
+import { createServerSupabaseClient } from "@lib/supabase/client";
+
+import AdminLayout from "@layouts/AdminLayout.astro";
 
 // Server-side rendering to ensure we can access cookies
 export const prerender = false;
@@ -26,8 +29,8 @@ interface ProductChange {
   product_id: string;
   change_type: string;
   field_name: string;
-  old_value: any;
-  new_value: any;
+  old_value: string | number | boolean | null;
+  new_value: string | number | boolean | null;
 }
 
 interface Tag {
@@ -44,7 +47,7 @@ let tags: Tag[] = [];
 let error: string | null = null;
 
 try {
-  const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+  const supabase = createServerSupabaseClient({ cookies: Astro.cookies }) as SupabaseClient;
 
   // Get all products from Supabase
   const { data: productsData, error: productsError } = await supabase
@@ -83,7 +86,7 @@ try {
 
   tags = tagsData || [];
 
-} catch (e) {
+} catch (e: unknown) {
   console.error('Error in products dashboard:', e);
   error = e instanceof Error ? e.message : 'An unknown error occurred';
 }
@@ -107,6 +110,9 @@ console.log('Tags query:', {
   count: tags?.length || 0,
   firstTag: tags?.[0]
 });
+
+// eslint-disable-next-line no-console
+console.log("Products dashboard error:", error);
 ---
 
 <AdminLayout title="Products Dashboard - Atrocitee Admin">
@@ -136,10 +142,10 @@ console.log('Tags query:', {
                   Manage Tags
                 </a>
                 <a 
-                  href="/admin/products/all" 
+                  href="/admin/products" 
                   class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
-                  View All Products
+                  Manage Products
                 </a>
               </div>
             </div>
@@ -271,10 +277,10 @@ console.log('Tags query:', {
                       <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${product.atrocitee_donation_amount}</td>
                       <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                         <a
-                          href={`/admin/products/configure/${product.id}`}
-                          class="text-indigo-600 hover:text-indigo-900"
+                          href={`/admin/products/${product.id}`}
+                          class="text-blue-600 hover:text-blue-800"
                         >
-                          Edit
+                          Configure
                         </a>
                       </td>
                     </tr>

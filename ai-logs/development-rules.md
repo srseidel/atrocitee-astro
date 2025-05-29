@@ -44,9 +44,10 @@ Atrocitee is an e-commerce platform focused on charitable donations and SEO. The
 
 ### TypeScript Configuration
 - Use path aliases for all imports
-- Path aliases are defined in `tsconfig.paths.json`
+- Path aliases are defined in `tsconfig.json`
 - Never use relative paths for imports
-- Use `@types/*` for type imports
+- Use `@types/*` for external type definitions (from DefinitelyTyped)
+- Use `@local-types/*` for our own type definitions
 - Use `@lib/*` for library imports
 - Use `@components/*` for component imports
 - Use `@layouts/*` for layout imports
@@ -60,6 +61,10 @@ Atrocitee is an e-commerce platform focused on charitable donations and SEO. The
 - Maintain proper category mapping
 - Track all product changes
 - Implement proper error handling for sync operations
+- Use product_tags table for tag relationships (no direct tag storage in products table)
+- Follow database normalization principles
+- Implement proper RLS policies for product-related tables
+- Use appropriate indexes for performance optimization
 
 ### Code Organization
 - Keep components small and focused
@@ -136,8 +141,9 @@ atrocitee-astro/
 │   │   │   └── middleware.ts
 │   │   ├── config/      # Configuration
 │   │   │   └── env.ts
-│   │   ├── database/    # Database utilities
-│   │   │   └── queries.ts
+│   │   ├── database/    # Database utilities and schemas
+│   │   │   ├── queries.ts
+│   │   │   └── product_schema.sql
 │   │   ├── monitoring/  # Monitoring and logging
 │   │   │   ├── sentry.client.config.js
 │   │   │   └── sentry.server.config.js
@@ -185,22 +191,53 @@ atrocitee-astro/
 - `@components/*` -> `src/components/*`
 - `@layouts/*` -> `src/layouts/*`
 - `@lib/*` -> `src/lib/*`
-- `@types/*` -> `src/types/*`
+- `@types/*` -> `node_modules/@types/*` (for external type definitions)
+- `@local-types/*` -> `src/types/*` (for our own type definitions)
 - `@utils/*` -> `src/utils/*`
 - `@content/*` -> `src/content/*`
 - `@config/*` -> `src/config/*`
 - `@scripts/*` -> `scripts/*`
-- `@types/printful/*` -> `src/types/printful/*`
-- `@types/database/*` -> `src/types/database/*`
-- `@types/api/*` -> `src/types/api/*`
-- `@types/common/*` -> `src/types/common/*`
+- `@local-types/printful/*` -> `src/types/printful/*`
+- `@local-types/database/*` -> `src/types/database/*`
+- `@local-types/api/*` -> `src/types/api/*`
+- `@local-types/common/*` -> `src/types/common/*`
 
-## Remember
-- Always check existing files before creating new ones
-- Follow the established patterns
-- Keep code organized and maintainable
-- Document changes
-- Test thoroughly
-- Use proper error handling
-- Follow security best practices
-- Use path aliases for all imports 
+### Path Alias Usage and Enforcement
+- **IMPORTANT**: Never use relative paths for imports
+  - ❌ `import { something } from '../../lib/printful/service'`
+  - ✅ `import { something } from '@lib/printful/service'`
+
+- **Path Alias Rules**:
+  1. Always use path aliases for imports
+  2. Use the most specific alias available
+  3. Group related imports by alias type
+  4. Order imports by alias type (e.g., types first, then lib, then components)
+
+- **Import Order**:
+  ```typescript
+  // 1. External dependencies
+  import type { APIRoute } from 'astro';
+  import * as Sentry from '@sentry/astro';
+
+  // 2. Type imports
+  import type { Database } from '@local-types/database/supabase';
+  import type { PrintfulProduct } from '@local-types/printful/api';
+
+  // 3. Configuration
+  import ENV from '@config/env';
+
+  // 4. Library imports
+  import { createServerSupabaseClient } from '@lib/supabase/client';
+  import { PrintfulService } from '@lib/printful/service';
+
+  // 5. Component imports
+  import MainLayout from '@layouts/MainLayout.astro';
+  import { Button } from '@components/ui/Button';
+
+  // 6. Utility imports
+  import { formatPrice } from '@utils/format';
+  ```
+
+- **Linting Rules**:
+  - ESLint rule: `import/no-relative-parent-imports`
+  - ESLint rule: `import/no-relative-packages`

@@ -1,6 +1,5 @@
-import { Component } from 'react';
-import type { ErrorInfo, ReactNode } from 'react';
 import * as Sentry from '@sentry/astro';
+import React, { Component, type ErrorInfo, type ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
@@ -9,19 +8,20 @@ interface Props {
 
 interface State {
   hasError: boolean;
-  error?: Error;
+  error: Error | null;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   public state: State = {
-    hasError: false
+    hasError: false,
+    error: null
   };
 
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error("Uncaught error:", error, errorInfo);
     
     // Send to Sentry
@@ -34,7 +34,7 @@ export class ErrorBoundary extends Component<Props, State> {
     });
   }
 
-  public render() {
+  public render(): ReactNode {
     if (this.state.hasError) {
       return this.props.fallback || (
         <div className="p-4 border border-red-300 bg-red-50 rounded-md">

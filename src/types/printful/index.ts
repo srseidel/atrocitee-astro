@@ -6,6 +6,7 @@
 export interface PrintfulResponse<T> {
   code: number;
   result: T;
+  error?: PrintfulError;
 }
 
 // Product types
@@ -59,7 +60,69 @@ export interface PrintfulWebhookPayload {
   store: number;
   resource: string;
   resource_id: number;
-  data: any;
+  data: PrintfulWebhookData;
+}
+
+export interface PrintfulWebhookData {
+  sync_product?: PrintfulProduct;
+  sync_variant?: PrintfulVariant;
+  order?: PrintfulOrder;
+  status?: string;
+  [key: string]: unknown;
+}
+
+export interface PrintfulOrder {
+  id: number;
+  external_id: string;
+  status: string;
+  shipping: string;
+  tracking_number?: string;
+  tracking_url?: string;
+  shipping_provider?: string;
+  created: number;
+  updated: number;
+  recipient: PrintfulRecipient;
+  items: PrintfulOrderItem[];
+  costs: PrintfulOrderCosts;
+}
+
+export interface PrintfulRecipient {
+  name: string;
+  company?: string;
+  address1: string;
+  address2?: string;
+  city: string;
+  state_code: string;
+  state_name: string;
+  country_code: string;
+  country_name: string;
+  zip: string;
+  phone?: string;
+  email?: string;
+}
+
+export interface PrintfulOrderItem {
+  id: number;
+  external_id: string;
+  variant_id: number;
+  sync_variant_id: number;
+  external_variant_id: string;
+  warehouse_product_variant_id: number;
+  quantity: number;
+  sku: string;
+  retail_price: string;
+  name: string;
+  product: PrintfulProduct;
+  files: PrintfulFile[];
+  options: PrintfulOption[];
+}
+
+export interface PrintfulOrderCosts {
+  subtotal: string;
+  discount: string;
+  shipping: string;
+  tax: string;
+  total: string;
 }
 
 // Error types
@@ -102,11 +165,15 @@ export interface PrintfulProductOption {
   id: string;
   title: string;
   type: string;
-  values: {
-    id: string;
-    title: string;
-    [key: string]: any;
-  }[];
+  values: PrintfulProductOptionValue[];
+}
+
+export interface PrintfulProductOptionValue {
+  id: string;
+  title: string;
+  colors?: string[];
+  sizes?: string[];
+  [key: string]: unknown;
 }
 
 // Product variant types
@@ -122,6 +189,46 @@ export interface PrintfulCatalogVariant {
   price: string;
   in_stock: boolean;
   availability_status: string;
+}
+
+// Category types
+export interface PrintfulCategory {
+  id: number;
+  parent_id: number | null;
+  title: string;
+  type: string;
+  size?: string;
+  color?: string;
+  color_code?: string;
+  color_code2?: string | null;
+  image?: string;
+  price?: string;
+  in_stock?: boolean;
+  availability_status?: string;
+}
+
+// Product data types
+export interface PrintfulProductData {
+  sync_product: {
+    name: string;
+    external_id: string;
+    thumbnail?: string;
+  };
+  sync_variants: Array<{
+    external_id: string;
+    name: string;
+    retail_price: string;
+    sku: string;
+    files: Array<{
+      url: string;
+      type: string;
+      position: string;
+    }>;
+    options: Array<{
+      id: string;
+      value: string;
+    }>;
+  }>;
 }
 
 // Shipping types

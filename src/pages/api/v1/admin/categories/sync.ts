@@ -1,8 +1,9 @@
-import type { APIRoute } from 'astro';
 import { isAdmin } from '@lib/auth/middleware';
 import PrintfulProductSync from '@lib/printful/product-sync';
-import { createServerSupabaseClient } from '@lib/supabase/client';
 import { PrintfulService } from '@lib/printful/service';
+import { createServerSupabaseClient } from '@lib/supabase/client';
+
+import type { APIRoute } from 'astro';
 
 // Ensure this endpoint is server-rendered
 export const prerender = false;

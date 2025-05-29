@@ -1,7 +1,9 @@
-import type { APIRoute } from 'astro';
-import { createServerSupabaseClient } from '@lib/supabase/client';
 import { isAdmin } from '@lib/auth/middleware';
+import { createServerSupabaseClient } from '@lib/supabase/client';
+
 import { CORE_CATEGORIES } from 'src/types/database/models';
+
+import type { APIRoute } from 'astro';
 
 // Server-side rendering for API endpoint
 export const prerender = false;
@@ -41,97 +43,65 @@ export const PUT: APIRoute = async ({ request, params, cookies }) => {
       });
     }
 
-    // If category is provided as a slug, get the corresponding UUID
-    let categoryId = data.atrocitee_category_id;
-    if (data.atrocitee_category_id && typeof data.atrocitee_category_id === 'string') {
-      // First check if it's a valid core category
-      if (Object.values(CORE_CATEGORIES).includes(data.atrocitee_category_id)) {
-        const { data: category, error: categoryError } = await supabase
-          .from('atrocitee_categories')
-          .select('id')
-          .eq('slug', data.atrocitee_category_id)
-          .single();
+    try {
+      // Update product
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({
+          name: data.name,
+          description: data.description,
+          slug: data.slug,
+          atrocitee_category_id: data.atrocitee_category_id || null,
+          atrocitee_base_price: data.atrocitee_base_price,
+          atrocitee_donation_amount: data.atrocitee_donation_amount,
+          atrocitee_active: data.atrocitee_active,
+          atrocitee_featured: data.atrocitee_featured,
+          atrocitee_metadata: data.atrocitee_metadata,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
 
-        if (categoryError) {
-          console.error('Category lookup error:', categoryError);
-          return new Response(JSON.stringify({
-            error: 'Category Error',
-            message: 'Failed to look up category',
-            details: `Error looking up category "${data.atrocitee_category_id}": ${categoryError.message}`,
-            categorySlug: data.atrocitee_category_id
-          }), {
-            status: 500,
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          });
+      if (updateError) throw updateError;
+
+      // Handle tags
+      if (Array.isArray(data.atrocitee_tags)) {
+        // First, delete existing tags
+        const { error: deleteError } = await supabase
+          .from('product_tags')
+          .delete()
+          .eq('product_id', id);
+
+        if (deleteError) throw deleteError;
+
+        // Then insert new tags
+        if (data.atrocitee_tags.length > 0) {
+          const tagInserts = data.atrocitee_tags.map((tagId: string) => ({
+            product_id: id,
+            tag_id: tagId
+          }));
+
+          const { error: insertError } = await supabase
+            .from('product_tags')
+            .insert(tagInserts);
+
+          if (insertError) throw insertError;
         }
-
-        if (!category) {
-          return new Response(JSON.stringify({
-            error: 'Category Error',
-            message: 'Category not found',
-            details: `The category "${data.atrocitee_category_id}" does not exist in the database`,
-            categorySlug: data.atrocitee_category_id
-          }), {
-            status: 404,
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          });
-        }
-
-        categoryId = category.id;
-      } else {
-        // If not a core category, assume it's a UUID
-        categoryId = data.atrocitee_category_id;
       }
-    }
 
-    // Update product
-    const { error: updateError } = await supabase
-      .from('products')
-      .update({
-        name: data.name,
-        description: data.description,
-        slug: data.slug,
-        atrocitee_category_id: categoryId,
-        atrocitee_base_price: data.atrocitee_base_price,
-        atrocitee_donation_amount: data.atrocitee_donation_amount,
-        atrocitee_active: data.atrocitee_active,
-        atrocitee_featured: data.atrocitee_featured,
-        atrocitee_tags: data.atrocitee_tags,
-        atrocitee_metadata: data.atrocitee_metadata,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id);
-
-    if (updateError) {
-      console.error('Update error:', updateError);
-      return new Response(JSON.stringify({
-        error: 'Update Error',
-        message: 'Failed to update product',
-        details: `Error updating product: ${updateError.message}`,
+      return new Response(JSON.stringify({ 
+        success: true,
+        message: 'Product updated successfully',
+        details: `Product "${data.name}" has been updated successfully`,
         productId: id
       }), {
-        status: 500,
+        status: 200,
         headers: {
           'Content-Type': 'application/json'
         }
       });
+    } catch (error) {
+      throw error;
     }
-
-    return new Response(JSON.stringify({ 
-      success: true,
-      message: 'Product updated successfully',
-      details: `Product "${data.name}" has been updated successfully`,
-      productId: id
-    }), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
   } catch (error) {
     console.error('Error updating product:', error);
     return new Response(

@@ -1,0 +1,133 @@
+{
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:astro/recommended",
+    "plugin:import/recommended",
+    "plugin:import/typescript",
+    "plugin:import/errors",
+    "plugin:import/warnings"
+  ],
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint", "import"],
+  "rules": {
+    // Path alias rules
+    "import/no-relative-parent-imports": "off",
+    "import/no-relative-packages": "error",
+    
+    // Import order rules
+    "import/order": [
+      "error",
+      {
+        "groups": [
+          "builtin",
+          "external",
+          "internal",
+          "parent",
+          "sibling",
+          "index",
+          "object",
+          "type"
+        ],
+        "pathGroups": [
+          {
+            "pattern": "@local-types/**",
+            "group": "type",
+            "position": "before"
+          },
+          {
+            "pattern": "@config/**",
+            "group": "internal",
+            "position": "before"
+          },
+          {
+            "pattern": "@lib/**",
+            "group": "internal",
+            "position": "before"
+          },
+          {
+            "pattern": "@components/**",
+            "group": "internal",
+            "position": "before"
+          },
+          {
+            "pattern": "@layouts/**",
+            "group": "internal",
+            "position": "before"
+          },
+          {
+            "pattern": "@utils/**",
+            "group": "internal",
+            "position": "before"
+          }
+        ],
+        "pathGroupsExcludedImportTypes": ["builtin"],
+        "alphabetize": {
+          "order": "asc",
+          "caseInsensitive": true
+        },
+        "newlines-between": "always"
+      }
+    ],
+
+    // TypeScript rules
+    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+    "@typescript-eslint/no-explicit-any": "error",
+    "@typescript-eslint/explicit-function-return-type": ["error", {
+      "allowExpressions": true,
+      "allowTypedFunctionExpressions": true,
+      "allowHigherOrderFunctions": true,
+      "allowDirectConstAssertionInArrowFunctions": true,
+      "allowConciseArrowFunctionExpressionsStartingWithVoid": true
+    }],
+    "@typescript-eslint/explicit-module-boundary-types": ["error", {
+      "allowArgumentsExplicitlyTypedAsAny": true,
+      "allowDirectConstAssertionInArrowFunctions": true,
+      "allowHigherOrderFunctions": true,
+      "allowTypedFunctionExpressions": true
+    }],
+
+    // General rules
+    "no-console": ["warn", { "allow": ["warn", "error"] }],
+    "no-debugger": "error",
+    "no-duplicate-imports": "error",
+    "no-unused-expressions": "error",
+    "no-unused-vars": "off", // Using TypeScript version instead
+    "prefer-const": "error"
+  },
+  "settings": {
+    "import/resolver": {
+      "typescript": {
+        "alwaysTryTypes": true,
+        "project": ["./tsconfig.json"]
+      },
+      "alias": {
+        "map": [
+          ["@", "./src"],
+          ["@components", "./src/components"],
+          ["@layouts", "./src/layouts"],
+          ["@lib", "./src/lib"],
+          ["@utils", "./src/utils"],
+          ["@types", "./node_modules/@types"],
+          ["@local-types", "./src/types"],
+          ["@content", "./src/content"],
+          ["@config", "./src/config"],
+          ["@scripts", "./src/scripts"],
+          ["@styles", "./src/styles"],
+          ["@assets", "./src/assets"]
+        ],
+        "extensions": [".ts", ".tsx", ".js", ".jsx", ".json", ".astro"]
+      }
+    }
+  },
+  "overrides": [
+    {
+      "files": ["*.astro"],
+      "parser": "astro-eslint-parser",
+      "parserOptions": {
+        "parser": "@typescript-eslint/parser",
+        "extraFileExtensions": [".astro"]
+      }
+    }
+  ]
+} 

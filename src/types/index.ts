@@ -5,11 +5,11 @@
  */
 
 // Database types
-export * from './database/schema';
-export * from './database/models';
+export * from '@local-types/database/schema';
+export * from '@local-types/database/models';
 
 // Printful types
-export * from './printful/api';
+export * from '@local-types/printful/api';
 
 // Common types
-export * from './common'; 
+export * from '@local-types/common'; 

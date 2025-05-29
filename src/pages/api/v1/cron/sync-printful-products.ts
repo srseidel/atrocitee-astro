@@ -1,6 +1,8 @@
-import type { APIContext } from 'astro';
-import { runScheduledSync, shouldRunSync } from '@lib/printful/scheduled-sync';
 import * as Sentry from '@sentry/astro';
+
+import { runScheduledSync, shouldRunSync } from '@lib/printful/scheduled-sync';
+
+import type { APIContext } from 'astro';
 
 // Do not pre-render this endpoint at build time
 export const prerender = false;

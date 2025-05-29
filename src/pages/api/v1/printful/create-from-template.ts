@@ -1,9 +1,11 @@
-import type { APIContext } from 'astro';
+import * as Sentry from '@sentry/astro';
+import slugify from 'slugify';
+
 import { isAdmin } from '@lib/auth/middleware';
 import { PrintfulService } from '@lib/printful/service';
 import { createServerSupabaseClient } from '@lib/supabase/client';
-import * as Sentry from '@sentry/astro';
-import slugify from 'slugify';
+
+import type { APIContext } from 'astro';
 import type { PrintfulProduct, PrintfulVariant } from 'printful';
 
 // Do not pre-render this endpoint at build time

@@ -115,7 +115,7 @@ Atrocitee uses a structured category system to organize products by cause:
 
 ### Using Categories
 ```typescript
-import { CORE_CATEGORIES, CATEGORY_DISPLAY_NAMES } from '@types/database/models';
+import { CORE_CATEGORIES, CATEGORY_DISPLAY_NAMES } from '@local-types/database/models';
 
 // Get category slug
 const categorySlug = CORE_CATEGORIES.POLITICAL; // 'political'

@@ -5,8 +5,8 @@
  * Provides business logic and abstractions on top of the raw API client.
  */
 
-import PrintfulClient from './api-client';
 import * as Sentry from '@sentry/astro';
+
 import type { 
   PrintfulProduct,
   PrintfulVariant,
@@ -14,47 +14,66 @@ import type {
   PrintfulCatalogProduct,
   PrintfulCatalogVariant,
   PrintfulProductList
-} from '@types/printful/api';
-import ENV from '@config/env';
-import pkg from '@supabase/supabase-js';
-const { createClient } = pkg;
-import type { Database } from '@types/database/supabase';
+} from '../../types/printful/api';
 
-// Singleton instance
-let printfulServiceInstance: PrintfulService | null = null;
+import pkg from '@supabase/supabase-js';
+
+import ENV from '@config/env';
+
+import PrintfulClient from '@lib/printful/api-client';
+
+const { createClient } = pkg;
+import type { Database } from '../../types/database/schema';
 
 /**
  * Mock client for testing without an API key
  */
 class MockPrintfulClient {
-  async getSyncProducts(): Promise<any[]> {
+  async getSyncProducts(): Promise<PrintfulProductList[]> {
     // Return mock products in the format that the real API returns
     return [
       { 
-        id: 1, 
-        external_id: 'mock-product-1',
-        name: 'Mock T-shirt',
-        variants: 2,
-        synced: 2,
-        thumbnail_url: 'https://example.com/thumbnail.jpg',
-        is_ignored: false
+        result: {
+          sync_product: {
+            id: 1, 
+            external_id: 'mock-product-1',
+            name: 'Mock T-shirt',
+            variants_count: 2,
+            synced: 2,
+            thumbnail_url: 'https://example.com/thumbnail.jpg',
+            is_ignored: false
+          },
+          sync_variants: []
+        }
       }
     ];
   }
   
-  async getCatalogProducts(): Promise<any[]> {
+  async getCatalogProducts(): Promise<PrintfulCatalogProduct[]> {
     return [{ 
       id: 1, 
       title: 'Mock T-shirt', 
-      type: 'T-shirt', 
-      image: 'https://example.com/mock-tshirt.jpg' 
+      type: 'T-shirt',
+      type_name: 'T-Shirt',
+      brand: 'Mock Brand',
+      model: 'Mock Model',
+      image: 'https://example.com/mock-tshirt.jpg',
+      description: 'A mock t-shirt for testing',
+      main_category_id: 1,
+      variant_count: 1,
+      currency: 'USD',
+      files: [],
+      options: [],
+      dimensions: {
+        front: { width: 100, height: 100 }
+      }
     }];
   }
   
   /**
    * Mock method for getting catalog categories
    */
-  async getCatalogCategories(): Promise<any[]> {
+  async getCatalogCategories(): Promise<Array<{ id: number; title: string; parent_id: number | null }>> {
     return [
       { id: 1, title: 'T-shirts', parent_id: null },
       { id: 2, title: 'Hoodies', parent_id: null },
@@ -64,41 +83,44 @@ class MockPrintfulClient {
     ];
   }
   
-  async getSyncProduct(id: number): Promise<any> { 
+  async getSyncProduct(id: number): Promise<PrintfulProductList> { 
     return {
-      sync_product: { 
-        id: id, 
-        external_id: `mock-product-${id}`,
-        name: 'Mock Product',
-        variants: 2,
-        synced: 2,
-        thumbnail_url: 'https://example.com/thumbnail.jpg',
-        is_ignored: false
-      }, 
-      sync_variants: [
-        { 
-          id: 1,
-          external_id: 'mock-variant-1',
-          sync_product_id: id,
-          name: 'Mock Product - S / Black',
-          synced: true,
-          variant_id: 101,
-          main_category_id: 12,
-          warehouse_product_variant_id: 1001,
-          retail_price: '24.99',
-          sku: 'MOCK-TS-S-BLK',
-          currency: 'USD',
-          product: {
-            variant_id: 101,
-            product_id: id,
-            image: 'https://example.com/mock-product.jpg',
-            name: 'Black T-shirt S'
-          },
-          files: [],
-          options: [{id: 'size', value: 'S'}, {id: 'color', value: 'Black'}],
+      result: {
+        sync_product: { 
+          id: id, 
+          external_id: `mock-product-${id}`,
+          name: 'Mock Product',
+          variants_count: 2,
+          synced: 2,
+          thumbnail_url: 'https://example.com/thumbnail.jpg',
           is_ignored: false
-        }
-      ] 
+        }, 
+        sync_variants: [
+          { 
+            id: 1,
+            external_id: 'mock-variant-1',
+            sync_product_id: id,
+            name: 'Mock Product - S / Black',
+            synced: true,
+            variant_id: 101,
+            main_category_id: 12,
+            warehouse_product_variant_id: 1001,
+            retail_price: '24.99',
+            sku: 'MOCK-TS-S-BLK',
+            currency: 'USD',
+            in_stock: true,
+            product: {
+              variant_id: 101,
+              product_id: id,
+              image: 'https://example.com/mock-product.jpg',
+              name: 'Black T-shirt S'
+            },
+            files: [],
+            options: [{id: 'size', value: 'S'}, {id: 'color', value: 'Black'}],
+            is_ignored: false
+          }
+        ] 
+      }
     };
   }
   
@@ -123,9 +145,9 @@ class MockPrintfulClient {
     }; 
   }
   
-  async getCatalogVariants(): Promise<any[]> { return []; }
-  async createSyncProduct(): Promise<any> { return {}; }
-  async updateSyncProduct(): Promise<any> { return {}; }
+  async getCatalogVariants(): Promise<PrintfulCatalogVariant[]> { return []; }
+  async createSyncProduct(): Promise<PrintfulProductList> { return { result: { sync_product: {} as PrintfulProduct, sync_variants: [] } }; }
+  async updateSyncProduct(): Promise<PrintfulProductList> { return { result: { sync_product: {} as PrintfulProduct, sync_variants: [] } }; }
   async deleteSyncProduct(): Promise<void> { /* no return */ }
 }
 
@@ -150,10 +172,8 @@ export class PrintfulService {
       throw new Error('Missing Printful API Key');
     }
 
-    console.log('[DEBUG] PrintfulService initialized with:', {
-      baseUrl: this.baseUrl,
-      hasApiKey: !!this.apiKey
-    });
+    // eslint-disable-next-line no-console
+    console.log("Printful service initialized");
     
     this.supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
   }
@@ -173,6 +193,7 @@ export class PrintfulService {
       ...options.headers,
     };
 
+    // eslint-disable-next-line no-console
     console.log('[DEBUG] Making Printful API request:', {
       url,
       method: options.method || 'GET',
@@ -184,6 +205,7 @@ export class PrintfulService {
       const response = await fetch(url, { ...options, headers });
       const responseText = await response.text();
       
+      // eslint-disable-next-line no-console
       console.log('[DEBUG] Printful API response:', {
         status: response.status,
         statusText: response.statusText,
@@ -197,7 +219,8 @@ export class PrintfulService {
 
       return JSON.parse(responseText);
     } catch (error) {
-      console.error('[DEBUG] Printful API request failed:', {
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] Printful API request failed:', {
         error,
         errorMessage: error instanceof Error ? error.message : 'Unknown error',
         errorStack: error instanceof Error ? error.stack : undefined
@@ -233,6 +256,7 @@ export class PrintfulService {
       const response = await this.fetch<PrintfulProductList>(`/store/products/${productId}`);
       return response.result.sync_variants;
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Error fetching product variants:', error);
       throw error;
     }

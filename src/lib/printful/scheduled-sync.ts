@@ -5,9 +5,10 @@
  * It can be called from a cron job or a webhook to keep products in sync automatically.
  */
 
-import PrintfulProductSync from './product-sync';
-import { createServerSupabaseClient } from '../supabase';
 import * as Sentry from '@sentry/astro';
+
+import PrintfulProductSync from '@lib/printful/product-sync';
+import { createServerSupabaseClient } from '@lib/supabase';
 
 /**
  * Run a scheduled product synchronization
@@ -15,6 +16,7 @@ import * as Sentry from '@sentry/astro';
  */
 export async function runScheduledSync() {
   try {
+    // eslint-disable-next-line no-console
     console.log('[Scheduled Sync] Starting scheduled product synchronization');
     
     // Create a server-side Supabase client with empty cookies
@@ -27,6 +29,7 @@ export async function runScheduledSync() {
     // Run the sync process
     const { success, failed, syncId } = await productSync.syncAllProducts('scheduled');
     
+    // eslint-disable-next-line no-console
     console.log(`[Scheduled Sync] Completed with ${success} successes and ${failed} failures`);
     
     // Log the sync event
@@ -39,6 +42,7 @@ export async function runScheduledSync() {
     
     return { success, failed, syncId };
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error('[Scheduled Sync] Error:', error);
     
     // Log error to Sentry
@@ -69,12 +73,14 @@ export async function shouldRunSync(minHoursBetweenSyncs = 12): Promise<boolean>
     
     if (error) {
       // If no records found or other error, we should run a sync
+      // eslint-disable-next-line no-console
       console.log('[Scheduled Sync] No previous sync found, should run sync');
       return true;
     }
     
     if (!data.completed_at) {
       // If the last sync didn't complete, we should run a new one
+      // eslint-disable-next-line no-console
       console.log('[Scheduled Sync] Last sync did not complete, should run sync');
       return true;
     }
@@ -84,11 +90,13 @@ export async function shouldRunSync(minHoursBetweenSyncs = 12): Promise<boolean>
     const currentTime = new Date().getTime();
     const hoursSinceLastSync = (currentTime - lastSyncTime) / (1000 * 60 * 60);
     
+    // eslint-disable-next-line no-console
     console.log(`[Scheduled Sync] Hours since last sync: ${hoursSinceLastSync.toFixed(2)}`);
     
     // Run sync if enough time has passed
     return hoursSinceLastSync >= minHoursBetweenSyncs;
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error('[Scheduled Sync] Error checking sync status:', error);
     
     // Log error to Sentry

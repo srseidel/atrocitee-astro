@@ -129,8 +129,29 @@ export interface PrintfulSyncHistory {
   completed_at: string | null;
   products_synced: number;
   products_failed: number;
-  details: Record<string, any> | null; // JSON field for additional details
+  details: PrintfulSyncDetails | null; // JSON field for additional details
   created_at: string;
+}
+
+// Printful sync details type
+export interface PrintfulSyncDetails {
+  products: Array<{
+    id: string;
+    name: string;
+    status: 'success' | 'failed';
+    error?: string;
+    changes?: Array<{
+      field: string;
+      old_value: unknown;
+      new_value: unknown;
+    }>;
+  }>;
+  errors?: Array<{
+    code: string;
+    message: string;
+    product_id?: string;
+  }>;
+  metadata?: Record<string, unknown>;
 }
 
 // Printful product change log - for tracking changes between sync operations
@@ -141,8 +162,8 @@ export interface PrintfulProductChange {
   change_type: 'price' | 'inventory' | 'metadata' | 'image' | 'variant' | 'other';
   change_severity: 'critical' | 'standard' | 'minor';
   field_name: string;
-  old_value: string | null;
-  new_value: string | null;
+  old_value: unknown;
+  new_value: unknown;
   sync_history_id: string | null; // UUID reference to sync history
   status: 'pending_review' | 'approved' | 'rejected' | 'applied';
   reviewed_by: string | null; // UUID reference to profiles

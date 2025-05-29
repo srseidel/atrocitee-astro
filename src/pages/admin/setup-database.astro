@@ -1,6 +1,7 @@
 ---
-import AdminLayout from "@layouts/AdminLayout.astro";
 import { createServerSupabaseClient } from "@lib/supabase/client";
+
+import AdminLayout from "@layouts/AdminLayout.astro";
 
 // Server-side rendering to ensure we can access cookies
 export const prerender = false;
@@ -21,12 +22,16 @@ const tableStatuses: Record<string, boolean> = {};
 // Check each table
 for (const table of tables) {
   try {
-    const { error } = await supabase
-      .from(table)
-      .select('id')
-      .limit(1);
-    
-    tableStatuses[table] = !error;
+    if ('from' in supabase) {
+      const { error } = await supabase
+        .from(table)
+        .select('id')
+        .limit(1);
+      
+      tableStatuses[table] = !error;
+    } else {
+      tableStatuses[table] = false;
+    }
   } catch (e) {
     tableStatuses[table] = false;
   }

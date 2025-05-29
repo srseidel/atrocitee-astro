@@ -42,7 +42,14 @@ export interface PrintfulVariant {
     image: string;
     name: string;
   };
-  files: any[];
+  files: Array<{
+    id: number;
+    type: string;
+    title: string;
+    url: string;
+    preview_url: string;
+    visible: boolean;
+  }>;
   options: Array<{
     id: string;
     value: string;
@@ -72,8 +79,18 @@ export interface PrintfulCatalogProduct {
   main_category_id: number;
   variant_count: number;
   currency: string;
-  files: any[];
-  options: any[];
+  files: Array<{
+    id: number;
+    type: string;
+    title: string;
+    url: string;
+    preview_url: string;
+    visible: boolean;
+  }>;
+  options: Array<{
+    id: string;
+    value: string;
+  }>;
   dimensions: {
     front: {
       width: number;
@@ -94,8 +111,18 @@ export interface PrintfulCatalogVariant {
   main_category_id: number;
   variant_count: number;
   currency: string;
-  files: any[];
-  options: any[];
+  files: Array<{
+    id: number;
+    type: string;
+    title: string;
+    url: string;
+    preview_url: string;
+    visible: boolean;
+  }>;
+  options: Array<{
+    id: string;
+    value: string;
+  }>;
   dimensions: {
     front: {
       width: number;

@@ -1,12 +1,17 @@
 {
   "extends": [
-    "astro/tsconfigs/strict",
-    "./tsconfig.paths.json"
+    "astro/tsconfigs/strict"
   ],
   "include": [
     ".astro/types.d.ts",
     "src/**/*",
-    "scripts/**/*"
+    "scripts/**/*",
+    "re-org/api/printful/old_revisions/create-tables.ts",
+    "re-org/api/printful/old_revisions/db-tables-check.ts",
+    "re-org/api/printful/old_revisions/debug-api.ts",
+    "re-org/api/printful/old_revisions/test-config.ts",
+    "re-org/api/printful/old_revisions/test-db.ts",
+    "re-org/api/printful/old_revisions/test.ts"
   ],
   "exclude": [
     "dist",
@@ -28,6 +33,25 @@
     "allowJs": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "types": ["astro/client", "node"]
+    "types": ["astro/client", "node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@components/*": ["src/components/*"],
+      "@layouts/*": ["src/layouts/*"],
+      "@lib/*": ["src/lib/*"],
+      "@utils/*": ["src/utils/*"],
+      "@types/*": ["node_modules/@types/*"],
+      "@local-types/*": ["src/types/*"],
+      "@content/*": ["src/content/*"],
+      "@config/*": ["src/config/*"],
+      "@scripts/*": ["src/scripts/*"],
+      "@styles/*": ["src/styles/*"],
+      "@assets/*": ["src/assets/*"],
+      "@local-types/printful/*": ["src/types/printful/*"],
+      "@local-types/database/*": ["src/types/database/*"],
+      "@local-types/api/*": ["src/types/api/*"],
+      "@local-types/common/*": ["src/types/common/*"]
+    }
   }
 }

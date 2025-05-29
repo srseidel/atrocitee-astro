@@ -1,5 +1,7 @@
-import type { APIRoute } from 'astro';
 import { PrintfulService } from '@lib/printful/service';
+
+import type { PrintfulProduct, PrintfulVariant } from '../../../../types/printful/api';
+import type { APIRoute } from 'astro';
 
 // Ensure this endpoint is server-rendered
 export const prerender = false;
@@ -27,7 +29,7 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Process products in batches
 async function processBatch(
-  products: any[],
+  products: PrintfulProduct[],
   startIndex: number,
   batchSize: number,
   printfulService: PrintfulService
@@ -38,35 +40,41 @@ async function processBatch(
   const transformedBatch = await Promise.all(batch.map(async (product) => {
     const baseProduct: TransformedProduct = {
       id: product.id,
-      name: product.title,
-      type: product.type,
-      description: product.description,
-      thumbnail_url: product.image,
+      name: product.name,
+      type: 'T-shirt', // Default type since PrintfulProduct doesn't have type
+      description: product.description || '',
+      thumbnail_url: product.thumbnail_url,
       variants: []
     };
 
     try {
-      console.log(`Fetching variants for product ${product.id} (${product.title})`);
+      console.log(`Fetching variants for product ${product.id} (${product.name})`);
       const variants = await printfulService.getProductVariants(product.id);
       
       if (variants && Array.isArray(variants)) {
         console.log(`Found ${variants.length} variants for product ${product.id}`);
-        baseProduct.variants = variants.map(variant => ({
-          id: variant.id,
-          name: variant.name,
-          size: variant.size || '',
-          color: variant.color || '',
-          price: variant.price || '0.00',
-          in_stock: variant.in_stock || false
-        }));
+        baseProduct.variants = variants.map(variant => {
+          // Extract size and color from options
+          const size = variant.options.find(opt => opt.id === 'size')?.value || '';
+          const color = variant.options.find(opt => opt.id === 'color')?.value || '';
+          
+          return {
+            id: variant.id,
+            name: variant.name,
+            size,
+            color,
+            price: variant.retail_price || '0.00',
+            in_stock: variant.in_stock || false
+          };
+        });
       } else {
         console.log(`No variants found for product ${product.id}`);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn(`Could not fetch variants for product ${product.id}:`, {
         error: error instanceof Error ? error.message : 'Unknown error',
         productId: product.id,
-        productName: product.title
+        productName: product.name
       });
     }
 

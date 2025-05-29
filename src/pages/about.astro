@@ -1,8 +1,11 @@
 ---
-import MainLayout from '@layouts/MainLayout.astro';
+import { getCollection } from 'astro:content';
+
 import Container from '@components/common/Container.astro';
 import SectionHead from '@components/common/SectionHead.astro';
-import { getCollection } from 'astro:content';
+
+import MainLayout from '@layouts/MainLayout.astro';
+
 
 // Get the about content
 const aboutContent = await getCollection('about');

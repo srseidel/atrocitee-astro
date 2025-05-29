@@ -1,6 +1,7 @@
 ---
-import AdminLayout from "@layouts/AdminLayout.astro";
 import { createServerSupabaseClient } from "@lib/supabase/client";
+
+import AdminLayout from "@layouts/AdminLayout.astro";
 
 // Server-side rendering to ensure we can access cookies
 export const prerender = false;
@@ -11,24 +12,24 @@ export const prerender = false;
 const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
 
 // Get order stats
-const { data: orderStats, error: orderError } = await supabase
+const { count: orderCount, error: orderError } = await supabase
   .from('orders')
-  .select('count', { count: 'exact', head: true });
+  .select('*', { count: 'exact', head: true });
 
 // Get product stats
-const { data: productStats, error: productError } = await supabase
+const { count: productCount, error: productError } = await supabase
   .from('products')
-  .select('count', { count: 'exact', head: true });
+  .select('*', { count: 'exact', head: true });
 
 // Get customer stats
-const { data: customerStats, error: customerError } = await supabase
+const { count: customerCount, error: customerError } = await supabase
   .from('profiles')
-  .select('count', { count: 'exact', head: true });
+  .select('*', { count: 'exact', head: true });
 
 // Get pending changes count
-const { data: pendingChanges, error: pendingChangesError } = await supabase
+const { count: pendingChangesCount, error: pendingChangesError } = await supabase
   .from('printful_product_changes')
-  .select('count', { count: 'exact', head: true })
+  .select('*', { count: 'exact', head: true })
   .eq('status', 'pending_review');
 
 // Get recent orders
@@ -37,7 +38,9 @@ interface Order {
   created_at: string;
   total_amount: number;
   status: string;
-  customer?: { email?: string };
+  customer: {
+    email: string;
+  }[];
 }
 
 const { data: recentOrders, error: recentOrdersError } = await supabase
@@ -63,7 +66,7 @@ const { data: recentOrders, error: recentOrdersError } = await supabase
           </div>
           <div>
             <p class="text-gray-500 text-sm">Total Orders</p>
-            <p class="text-2xl font-bold">{orderStats?.count || 0}</p>
+            <p class="text-2xl font-bold">{orderCount || 0}</p>
           </div>
         </div>
       </div>
@@ -78,7 +81,7 @@ const { data: recentOrders, error: recentOrdersError } = await supabase
           </div>
           <div>
             <p class="text-gray-500 text-sm">Total Products</p>
-            <p class="text-2xl font-bold">{productStats?.count || 0}</p>
+            <p class="text-2xl font-bold">{productCount || 0}</p>
           </div>
         </div>
       </div>
@@ -93,7 +96,7 @@ const { data: recentOrders, error: recentOrdersError } = await supabase
           </div>
           <div>
             <p class="text-gray-500 text-sm">Total Customers</p>
-            <p class="text-2xl font-bold">{customerStats?.count || 0}</p>
+            <p class="text-2xl font-bold">{customerCount || 0}</p>
           </div>
         </div>
       </div>
@@ -108,7 +111,7 @@ const { data: recentOrders, error: recentOrdersError } = await supabase
           </div>
           <div>
             <p class="text-gray-500 text-sm">Pending Changes</p>
-            <p class="text-2xl font-bold">{pendingChanges?.count || 0}</p>
+            <p class="text-2xl font-bold">{pendingChangesCount || 0}</p>
           </div>
         </div>
       </div>
@@ -135,11 +138,11 @@ const { data: recentOrders, error: recentOrdersError } = await supabase
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200">
-              {recentOrders.map((order: Order) => (
+              {recentOrders.map((order) => (
                 <tr>
                   <td class="py-3 px-4 whitespace-nowrap text-sm">{order.id.substring(0, 8)}...</td>
                   <td class="py-3 px-4 whitespace-nowrap text-sm">{new Date(order.created_at).toLocaleDateString()}</td>
-                  <td class="py-3 px-4 whitespace-nowrap text-sm">{order.customer?.email || 'Guest'}</td>
+                  <td class="py-3 px-4 whitespace-nowrap text-sm">{order.customer?.[0]?.email || 'Guest'}</td>
                   <td class="py-3 px-4 whitespace-nowrap text-sm">${order.total_amount.toFixed(2)}</td>
                   <td class="py-3 px-4 whitespace-nowrap text-sm">
                     <span class={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 

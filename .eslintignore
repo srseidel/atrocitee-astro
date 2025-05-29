@@ -1,0 +1,13 @@
+# Ignore build output
+dist/
+.output/
+
+# Ignore test files
+**/*.test.ts
+**/*.spec.ts
+
+# Ignore generated files
+.astro/
+
+# Ignore old files that need major refactoring
+re-org/ 

@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
-import { createBrowserSupabaseClient } from '../../lib/supabase';
+
+import { createBrowserSupabaseClient } from '@lib/supabase/client';
+
+interface AuthError {
+  message: string;
+}
 
 export default function ResetPasswordForm() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [linkValid, setLinkValid] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -30,7 +34,7 @@ export default function ResetPasswordForm() {
     }
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -50,12 +54,10 @@ export default function ResetPasswordForm() {
 
     try {
       const supabase = createBrowserSupabaseClient();
-      const { error } = await supabase.auth.updateUser({ password });
+      const { error: updateError } = await supabase.auth.updateUser({ password });
       
-      if (error) {
-        setError(error.message);
-      } else {
-        setSuccess(true);
+      if (updateError) {
+        setError((updateError as AuthError).message);
       }
     } catch (err) {
       setError('An unexpected error occurred');
@@ -77,18 +79,6 @@ export default function ResetPasswordForm() {
         </p>
         <a href="/auth/forgot-password" className="btn btn-primary">
           Request New Reset Link
-        </a>
-      </div>
-    );
-  }
-
-  if (success) {
-    return (
-      <div className="alert-brand-success p-6 rounded-lg text-center">
-        <h3 className="text-xl font-bold mb-2">Password Reset Successful</h3>
-        <p className="mb-4">Your password has been successfully reset.</p>
-        <a href="/auth/login" className="btn btn-primary">
-          Sign In
         </a>
       </div>
     );

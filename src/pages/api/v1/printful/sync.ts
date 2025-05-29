@@ -1,9 +1,12 @@
-import type { APIRoute } from 'astro';
-import { createServerSupabaseClient } from '@lib/supabase/client';
-import { PrintfulService } from '@lib/printful/service';
-import { isAdmin } from '@lib/auth/middleware';
 import * as Sentry from '@sentry/astro';
+
 import ENV from '@config/env';
+
+import { isAdmin } from '@lib/auth/middleware';
+import { PrintfulService } from '@lib/printful/service';
+import { createServerSupabaseClient } from '@lib/supabase/client';
+
+import type { APIRoute } from 'astro';
 
 // Do not pre-render this endpoint at build time
 export const prerender = false;
@@ -164,6 +167,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     // Extract useful error information
     const errorMessage = error instanceof Error ? error.message : 'Unknown error during sync';
     const errorStack = error instanceof Error ? error.stack : null;
+    
+    // eslint-disable-next-line no-console
+    console.log("Printful sync error:", error);
     
     return new Response(
       JSON.stringify({

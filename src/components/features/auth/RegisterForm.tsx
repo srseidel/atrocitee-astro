@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { signUp } from '../../lib/supabase';
+
+import { signUp } from '@lib/supabase/client';
+
+interface AuthError {
+  message: string;
+}
 
 export default function RegisterForm() {
   const [email, setEmail] = useState('');
@@ -7,9 +12,8 @@ export default function RegisterForm() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -28,12 +32,10 @@ export default function RegisterForm() {
     }
 
     try {
-      const { error } = await signUp(email, password);
+      const { error: signUpError } = await signUp(email, password);
       
-      if (error) {
-        setError(error.message);
-      } else {
-        setSuccess(true);
+      if (signUpError) {
+        setError((signUpError as AuthError).message);
       }
     } catch (err) {
       setError('An unexpected error occurred');
@@ -42,18 +44,6 @@ export default function RegisterForm() {
       setLoading(false);
     }
   };
-
-  if (success) {
-    return (
-      <div className="alert-brand-success p-6 rounded-lg text-center">
-        <h3 className="text-xl font-bold mb-2">Registration Successful!</h3>
-        <p className="mb-4">Please check your email to confirm your account.</p>
-        <a href="/auth/login" className="btn btn-primary">
-          Go to Login
-        </a>
-      </div>
-    );
-  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">

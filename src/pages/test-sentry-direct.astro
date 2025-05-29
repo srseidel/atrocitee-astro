@@ -19,9 +19,43 @@
     // Define window.Sentry for TypeScript
     declare global {
       interface Window {
-        Sentry: any;
+        Sentry: {
+          init: (options: {
+            dsn: string;
+            debug?: boolean;
+            environment?: string;
+            beforeSend?: (event: Record<string, unknown>) => Record<string, unknown> | null;
+          }) => void;
+          captureMessage: (message: string, options?: { level?: 'info' | 'warning' | 'error' }) => void;
+        };
       }
     }
+
+    // Initialize Sentry
+    window.Sentry.init({
+      dsn: import.meta.env.PUBLIC_SENTRY_DSN,
+      debug: true,
+      environment: import.meta.env.PUBLIC_SENTRY_ENVIRONMENT || 'development',
+      beforeSend(event: Record<string, unknown>): Record<string, unknown> | null {
+        // Don't send events in development
+        if (import.meta.env.PUBLIC_SENTRY_ENVIRONMENT === 'development') {
+          return null;
+        }
+        return event;
+      },
+    });
+
+    // Test error tracking
+    function testError(): void {
+      try {
+        throw new Error('Test error from direct Sentry integration');
+      } catch (error) {
+        window.Sentry.captureMessage('Test error message', { level: 'error' });
+      }
+    }
+
+    // Test on page load
+    testError();
   </script>
 </head>
 <body>
@@ -65,7 +99,7 @@
               dsn: DSN,
               debug: true, // Enable debug mode to see verbose logs
               environment: "test",
-              beforeSend(event: any) {
+              beforeSend(event: Record<string, unknown>) {
                 console.log("Sending event to Sentry:", event);
                 return event;
               }

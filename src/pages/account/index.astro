@@ -1,7 +1,9 @@
 ---
-import MainLayout from '@layouts/MainLayout.astro';
-import Container from '@components/ui/Container.astro';
 import { redirectIfNotAuthenticated, getUser } from "@lib/auth/middleware";
+
+import Container from '@components/ui/Container.astro';
+
+import MainLayout from '@layouts/MainLayout.astro';
 
 // Ensure this page is server-rendered, not statically generated
 export const prerender = false;

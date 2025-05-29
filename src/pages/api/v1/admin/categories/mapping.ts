@@ -1,6 +1,7 @@
-import type { APIRoute } from 'astro';
-import { createServerSupabaseClient } from '@lib/supabase/client';
 import { isAdmin } from '@lib/auth/middleware';
+import { createServerSupabaseClient } from '@lib/supabase/client';
+
+import type { APIRoute } from 'astro';
 
 // Ensure this endpoint is server-rendered
 export const prerender = false;

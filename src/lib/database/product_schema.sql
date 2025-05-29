@@ -41,23 +41,34 @@ CREATE POLICY "Admin full access to atrocitee categories" ON atrocitee_categorie
     USING (is_admin());
 
 -- Insert initial core categories
-INSERT INTO atrocitee_categories (id, name, slug, description, is_active)
+INSERT INTO atrocitee_categories (slug, name, description, is_active)
 VALUES 
-  ('00000000-0000-0000-0000-000000000001', 'Political', 'political', 'Political activism and awareness products', true),
-  ('00000000-0000-0000-0000-000000000002', 'Social Justice', 'social', 'Social justice and equality products', true),
-  ('00000000-0000-0000-0000-000000000003', 'Environmental', 'environmental', 'Environmental protection and sustainability products', true),
-  ('00000000-0000-0000-0000-000000000004', 'Human Rights', 'human-rights', 'Human rights advocacy products', true),
-  ('00000000-0000-0000-0000-000000000005', 'Animal Rights', 'animal-rights', 'Animal rights and welfare products', true),
-  ('00000000-0000-0000-0000-000000000006', 'Education', 'education', 'Educational and awareness products', true),
-  ('00000000-0000-0000-0000-000000000007', 'Healthcare', 'healthcare', 'Healthcare advocacy products', true),
-  ('00000000-0000-0000-0000-000000000008', 'Economic Justice', 'economic', 'Economic justice and equality products', true),
-  ('00000000-0000-0000-0000-000000000009', 'Other', 'other', 'Other cause-related products', true)
+    ('clothing', 'Clothing', 'Apparel and clothing items', true),
+    ('accessories', 'Accessories', 'Fashion accessories and add-ons', true),
+    ('home-decor', 'Home Decor', 'Home decoration and interior items', true),
+    ('stationery', 'Stationery', 'Office and school supplies', true),
+    ('art', 'Art', 'Art prints and wall decorations', true),
+    ('tech', 'Tech', 'Technology accessories and gadgets', true),
+    ('pet', 'Pet', 'Pet-related products and accessories', true),
+    ('sports', 'Sports', 'Sports equipment and accessories', true),
+    ('outdoor', 'Outdoor', 'Outdoor gear and equipment', true),
+    ('beauty', 'Beauty', 'Beauty and personal care products', true),
+    ('wellness', 'Wellness', 'Health and wellness products', true),
+    ('food', 'Food', 'Food and beverage related items', true),
+    ('drinkware', 'Drinkware', 'Cups, mugs, and drink containers', true),
+    ('bags', 'Bags', 'Bags, backpacks, and carrying accessories', true),
+    ('jewelry', 'Jewelry', 'Jewelry and personal adornments', true),
+    ('kids', 'Kids', 'Children''s products and toys', true),
+    ('baby', 'Baby', 'Baby products and accessories', true),
+    ('holiday', 'Holiday', 'Holiday and seasonal items', true),
+    ('gifts', 'Gifts', 'Gift items and special occasions', true),
+    ('limited-edition', 'Limited Edition', 'Special and limited edition products', true)
 ON CONFLICT (slug) DO UPDATE 
 SET 
-  name = EXCLUDED.name,
-  description = EXCLUDED.description,
-  is_active = EXCLUDED.is_active,
-  updated_at = now();
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    is_active = EXCLUDED.is_active,
+    updated_at = now();
 
 -- 2. Printful Category Mapping Table (Now we can create this as atrocitee_categories exists)
 CREATE TABLE printful_category_mapping (
@@ -138,7 +149,6 @@ CREATE TABLE products (
   -- Atrocitee specific fields
   atrocitee_active BOOLEAN DEFAULT TRUE,
   atrocitee_featured BOOLEAN DEFAULT FALSE,
-  atrocitee_tags TEXT[] DEFAULT '{}',
   atrocitee_metadata JSONB DEFAULT '{}',
   atrocitee_base_price DECIMAL(10,2),
   atrocitee_donation_amount DECIMAL(10,2),
@@ -395,4 +405,77 @@ CREATE POLICY "Admin full access to printful product changes" ON printful_produc
 -- Grant necessary permissions
 GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated;
-GRANT USAGE ON SCHEMA public TO authenticated; 
+GRANT USAGE ON SCHEMA public TO authenticated;
+
+-- Migration: Remove redundant atrocitee_tags field (2024-03-23)
+-- Description: Removes the redundant atrocitee_tags field from the products table
+-- as we're using the product_tags table for the many-to-many relationship
+
+-- First, ensure we have a backup of any data in the field
+CREATE TABLE IF NOT EXISTS backup_product_tags AS
+SELECT id, atrocitee_tags
+FROM products
+WHERE atrocitee_tags IS NOT NULL;
+
+-- Remove the field from the products table
+ALTER TABLE products DROP COLUMN IF EXISTS atrocitee_tags;
+
+-- Add comment to track the change
+COMMENT ON TABLE products IS 'Updated 2024-03-23: Removed redundant atrocitee_tags field, using product_tags table instead';
+
+-- Verify the product_tags table has proper constraints
+ALTER TABLE product_tags
+  ADD CONSTRAINT fk_product_tags_product
+  FOREIGN KEY (product_id)
+  REFERENCES products(id)
+  ON DELETE CASCADE;
+
+ALTER TABLE product_tags
+  ADD CONSTRAINT fk_product_tags_tag
+  FOREIGN KEY (tag_id)
+  REFERENCES tags(id)
+  ON DELETE CASCADE;
+
+-- Add indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_product_tags_product_id ON product_tags(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_tags_tag_id ON product_tags(tag_id);
+
+-- Add RLS policies for product_tags table
+ALTER TABLE product_tags ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Enable read access for all users" ON product_tags
+  FOR SELECT
+  USING (true);
+
+CREATE POLICY "Enable insert for authenticated users" ON product_tags
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (true);
+
+CREATE POLICY "Enable update for authenticated users" ON product_tags
+  FOR UPDATE
+  TO authenticated
+  USING (true)
+  WITH CHECK (true);
+
+CREATE POLICY "Enable delete for authenticated users" ON product_tags
+  FOR DELETE
+  TO authenticated
+  USING (true);
+
+-- Add trigger to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_product_tags_updated_at
+  BEFORE UPDATE ON product_tags
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- Add comment to track the changes
+COMMENT ON TABLE product_tags IS 'Updated 2024-03-23: Enhanced with proper constraints, indexes, and RLS policies'; 

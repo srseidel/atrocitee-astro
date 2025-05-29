@@ -1,27 +1,39 @@
+import { createBrowserClient } from '@supabase/ssr';
 import { useState } from 'react';
-import { signIn } from '../../lib/supabase';
+
+interface AuthError {
+  message: string;
+}
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
-      const { error } = await signIn(email, password);
+      const supabase = createBrowserClient(
+        import.meta.env.PUBLIC_SUPABASE_URL,
+        import.meta.env.PUBLIC_SUPABASE_ANON_KEY
+      );
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
       
-      if (error) {
-        setError(error.message);
+      if (signInError) {
+        setError((signInError as AuthError).message);
       } else {
-        setSuccess(true);
-        // Redirect or update UI as needed
-        window.location.href = '/account';
+        // Get the redirect URL from the query parameters or default to /admin/dashboard
+        const url = new URL(window.location.href);
+        const redirectTo = url.searchParams.get('redirect') || '/admin/dashboard';
+        window.location.href = redirectTo;
       }
     } catch (err) {
       setError('An unexpected error occurred');

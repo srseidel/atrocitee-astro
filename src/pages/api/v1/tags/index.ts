@@ -1,6 +1,7 @@
-import type { APIContext } from 'astro';
-import { createServerSupabaseClient } from '@lib/supabase/client';
 import { isAdmin } from '@lib/auth/middleware';
+import { createServerSupabaseClient } from '@lib/supabase/client';
+
+import type { APIContext } from 'astro';
 
 // Do not pre-render this endpoint at build time
 export const prerender = false;

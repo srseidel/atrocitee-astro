@@ -1,10 +1,13 @@
 ---
 // MainLayout.astro - Base layout for all pages
 import '../styles/base.css';
+import { mainNavLinks, authNavLinks, footerNavLinks } from '@config/navigation';
+
+import { createServerSupabaseClient } from '@lib/supabase/client';
+
 import Logo from '@components/layouts/Logo.astro';
 import NavLinks from '@components/layouts/NavLinks.astro';
-import { createServerSupabaseClient } from '@lib/supabase/client';
-import { mainNavLinks, authNavLinks, footerNavLinks } from '../config/navigation';
+
 
 export interface Props {
   title?: string;
