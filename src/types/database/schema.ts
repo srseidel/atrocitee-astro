@@ -261,6 +261,38 @@ export interface Database {
           updated_at?: string
         }
       }
+      charities: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          website_url: string | null
+          logo_url: string | null
+          active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          website_url?: string | null
+          logo_url?: string | null
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          website_url?: string | null
+          logo_url?: string | null
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never

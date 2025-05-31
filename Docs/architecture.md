@@ -4,115 +4,246 @@
 
 ```
 atrocitee-astro/
-├── public/                  # Static assets
-│   ├── images/             # Image assets
-│   ├── fonts/              # Font files
-│   └── icons/              # Icon assets
+├── .astro/                 # Astro build files
+│   ├── collections/        # Content collections
+│   └── integrations/       # Astro integrations
+│       └── _astrojs_cloudflare/
 │
-├── scripts/                # Utility scripts
-│   ├── check-db.js        # Database check utility
-│   ├── check-env.js       # Environment check utility
-│   ├── setup-printful-env.sh  # Printful environment setup
-│   └── deploy.sh          # Deployment script
+├── .github/                # GitHub configuration
+│   └── workflows/          # GitHub Actions workflows
+│
+├── Docs/                   # Project documentation
+│   ├── api/               # API documentation
+│   ├── backup-scripts/    # Backup utilities
+│   ├── development/       # Development guides
+│   └── mvp-planning/      # MVP planning docs
+│
+├── public/                 # Static assets
+│   ├── images/            # Image assets
+│   ├── fonts/             # Font files
+│   └── icons/             # Icon assets
+│
+├── scripts/               # Utility scripts
 │
 ├── src/
-│   ├── components/        # React components
+│   ├── assets/           # Source assets
+│   │
+│   ├── components/       # Components
 │   │   ├── common/       # Shared UI components
-│   │   │   ├── Button.tsx
-│   │   │   ├── Card.tsx
-│   │   │   ├── Input.tsx
-│   │   │   └── ...
 │   │   ├── features/     # Feature-specific components
 │   │   │   ├── auth/     # Authentication components
-│   │   │   ├── products/ # Product-related components
-│   │   │   └── admin/    # Admin components
+│   │   │   └── products/ # Product-related components
 │   │   └── layouts/      # Layout components
 │   │
-│   ├── content/          # Static content
-│   │   ├── about/        # About page content
-│   │   └── products/     # Product content
+│   ├── config/          # Configuration files
 │   │
-│   ├── layouts/          # Astro layouts
-│   │   ├── MainLayout.astro
-│   │   └── AdminLayout.astro
+│   ├── content/         # Content collections
+│   │   ├── about/       # About page content
+│   │   ├── products/    # Product content
+│   │   └── rules/       # Business rules
 │   │
-│   ├── lib/             # Core libraries and utilities
-│   │   ├── auth/        # Authentication
-│   │   │   └── middleware.ts
-│   │   ├── config/      # Configuration
-│   │   │   └── env.ts
-│   │   ├── database/    # Database utilities
-│   │   │   └── queries.ts
-│   │   ├── monitoring/  # Monitoring and logging
-│   │   │   ├── sentry.client.config.js
-│   │   │   └── sentry.server.config.js
-│   │   └── supabase/    # Supabase client
-│   │       └── client.ts
+│   ├── layouts/         # Astro layouts
 │   │
-│   ├── pages/           # Astro pages
-│   │   ├── api/         # API endpoints
-│   │   │   └── v1/      # Versioned API
-│   │   │       ├── admin/    # Admin endpoints
-│   │   │       ├── products/ # Product endpoints
-│   │   │       └── tags/     # Tag endpoints
-│   │   ├── admin/       # Admin pages
-│   │   │   └── products/     # Product management
-│   │   └── account/     # User account pages
+│   ├── lib/            # Core libraries
+│   │   ├── auth/       # Authentication
+│   │   ├── config/     # Configuration
+│   │   ├── constants/  # Constants
+│   │   ├── database/   # Database utilities
+│   │   │   └── migrations/ # Database migrations
+│   │   ├── monitoring/ # Monitoring utilities
+│   │   ├── printful/   # Printful integration
+│   │   └── supabase/   # Supabase utilities
 │   │
-│   ├── types/           # TypeScript type definitions
-│   │   ├── database/    # Database types
-│   │   │   ├── schema.ts
-│   │   │   └── models.ts
-│   │   ├── printful/    # Printful API types
-│   │   │   └── api.ts
-│   │   ├── common/      # Shared types
-│   │   │   └── index.ts
-│   │   ├── env.d.ts     # Environment type definitions
-│   │   └── index.ts     # Type exports
+│   ├── pages/          # Astro pages
+│   │   ├── account/    # Account pages
+│   │   ├── admin/      # Admin pages
+│   │   │   └── products/ # Product management
+│   │   ├── api/        # API endpoints
+│   │   │   └── v1/     # API version 1
+│   │   │       ├── admin/   # Admin endpoints
+│   │   │       ├── cron/    # Cron jobs
+│   │   │       ├── debug/   # Debug endpoints
+│   │   │       ├── printful/ # Printful endpoints
+│   │   │       └── tags/    # Tag endpoints
+│   │   ├── auth/      # Authentication pages
+│   │   └── shop/      # Shop pages
+│   │       └── product/ # Product pages
 │   │
-│   └── utils/           # Utility functions
-│       └── helpers/     # Helper functions
-│           └── format.ts # Formatting utilities
+│   ├── scripts/       # Frontend scripts
+│   │
+│   ├── styles/        # Global styles
+│   │
+│   ├── types/         # TypeScript types
+│   │   ├── api/       # API types
+│   │   ├── common/    # Shared types
+│   │   ├── database/  # Database types
+│   │   └── printful/  # Printful types
+│   │
+│   └── utils/         # Utility functions
+│       └── helpers/   # Helper functions
 │
-├── tests/               # Test files
-│   ├── e2e/            # End-to-end tests
-│   ├── integration/    # Integration tests
-│   └── unit/           # Unit tests
+├── tests/             # Test files
+│   ├── e2e/          # End-to-end tests
+│   ├── integration/  # Integration tests
+│   └── unit/         # Unit tests
 │
-├── astro.config.mjs    # Astro configuration
-├── package.json        # Project dependencies
-├── tsconfig.json       # TypeScript configuration
-└── README.md          # Project documentation
+├── astro.config.mjs  # Astro configuration
+├── package.json      # Project dependencies
+├── tailwind.config.js # Tailwind configuration
+├── tsconfig.json     # TypeScript configuration
+└── wrangler.toml     # Cloudflare configuration
 ```
 
 ## Key Directories Explained
 
+### `.astro/`
+- `collections/`: Astro content collections configuration
+- `integrations/`: Astro framework integrations
+  - `_astrojs_cloudflare/`: Cloudflare Pages integration
+
+### `Docs/`
+- `api/`: API documentation and specifications
+- `backup-scripts/`: Database and content backup utilities
+- `development/`: Development guides and standards
+- `mvp-planning/`: MVP feature planning and roadmap
+
 ### `src/components/`
 - `common/`: Reusable UI components used across the application
-- `features/`: Feature-specific components organized by domain
+- `features/`: Domain-specific components
+  - `auth/`: Authentication components
+  - `products/`: Product-related components
 - `layouts/`: Layout components for page structure
+
+### `src/content/`
+- `about/`: About page content in Markdown
+- `products/`: Product content and metadata
+- `rules/`: Business rules and policies
 
 ### `src/lib/`
 - `auth/`: Authentication middleware and utilities
-- `config/`: Application configuration and environment setup
-- `database/`: Database utilities and query helpers
-- `monitoring/`: Monitoring and logging configuration
-- `supabase/`: Supabase client and related utilities
+- `config/`: Application configuration
+- `constants/`: Shared constants
+- `database/`: Database utilities and migrations
+- `monitoring/`: Application monitoring
+- `printful/`: Printful integration services
+- `supabase/`: Supabase client and utilities
 
 ### `src/pages/`
-- `api/v1/`: Versioned API endpoints organized by feature
-- `admin/`: Admin interface pages
-- `account/`: User account management pages
+- `account/`: User account management
+- `admin/`: Admin interface and tools
+- `api/v1/`: API endpoints
+  - `admin/`: Admin operations
+  - `cron/`: Scheduled tasks
+  - `debug/`: Development endpoints
+  - `printful/`: Printful webhooks
+  - `tags/`: Tag management
+- `auth/`: Authentication flows
+- `shop/`: E-commerce pages
+  - `product/`: Product details and listings
 
 ### `src/types/`
-- `database/`: Database schema and model types
-- `printful/`: Printful API type definitions
+- `api/`: API request/response types
 - `common/`: Shared type definitions
-- `env.d.ts`: Environment variable type definitions
+- `database/`: Database schema types
+- `printful/`: Printful API types
 
-### `scripts/`
-- Utility scripts for development, deployment, and maintenance
-- Environment setup and database management tools
+## Tech Stack
+
+- **Framework**: Astro
+- **Database**: Supabase (PostgreSQL)
+- **Authentication**: Supabase Auth
+- **Styling**: Tailwind CSS
+- **E-commerce**: Printful integration
+- **Hosting**: Cloudflare Pages
+- **Type Safety**: TypeScript
+- **Testing**: Jest (unit), Playwright (e2e)
+
+## Development Patterns
+
+### 1. Content Management
+- Use Astro content collections for static content
+- Markdown files for content with frontmatter
+- Type-safe content schemas
+- SEO-optimized content structure
+
+### 2. Component Architecture
+- Astro components for static pages
+- React components for interactive features
+- Tailwind CSS for styling
+- Proper hydration strategies:
+  - `client:load` for critical interactivity
+  - `client:visible` for deferred loading
+  - `client:idle` for non-critical features
+
+### 3. Data Flow
+- Server-side rendering for SEO
+- Static generation where possible
+- Dynamic imports for large components
+- Proper error boundaries
+- Type-safe database queries
+
+### 4. API Design
+- RESTful endpoints under `/api/v1`
+- Proper error handling
+- Rate limiting
+- Authentication middleware
+- Type-safe request/response
+
+### 5. Security
+- Supabase RLS policies
+- Protected admin routes
+- Environment variable management
+- CORS configuration
+- API key management
+
+### 6. Performance
+- Static generation
+- Image optimization
+- Code splitting
+- Lazy loading
+- Cache strategies
+
+## Deployment
+
+- Cloudflare Pages for hosting
+- GitHub Actions for CI/CD
+- Environment-specific configurations
+- Database migrations
+- Backup strategies
+
+## Monitoring
+
+- Error tracking
+- Performance monitoring
+- Usage analytics
+- Logging
+- Alerting
+
+## Best Practices
+
+1. **Code Organization**
+   - Follow directory structure
+   - Use appropriate abstractions
+   - Maintain clear boundaries
+   - Document complex logic
+
+2. **Type Safety**
+   - Use TypeScript strictly
+   - Define proper interfaces
+   - Avoid `any` types
+   - Validate API responses
+
+3. **Performance**
+   - Optimize images
+   - Minimize JavaScript
+   - Use proper caching
+   - Monitor metrics
+
+4. **Security**
+   - Validate inputs
+   - Sanitize outputs
+   - Use proper authentication
+   - Follow security best practices
 
 ## File Naming Conventions
 
@@ -153,32 +284,6 @@ atrocitee-astro/
    // Relative imports
    import { formatPrice } from '../utils/format';
    ```
-
-## Best Practices
-
-1. **File Organization**
-   - Keep related files together
-   - Use appropriate directory structure
-   - Follow naming conventions
-   - Maintain clear separation of concerns
-
-2. **Code Organization**
-   - Group related functionality
-   - Use appropriate abstractions
-   - Follow DRY principles
-   - Maintain clear boundaries
-
-3. **Type Safety**
-   - Use TypeScript strictly
-   - Define proper interfaces
-   - Avoid `any` types
-   - Use proper type exports
-
-4. **Documentation**
-   - Document complex logic
-   - Add JSDoc comments
-   - Keep README updated
-   - Document API changes
 
 ## Development Rules
 

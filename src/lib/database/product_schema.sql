@@ -169,6 +169,41 @@ CREATE TABLE charities (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
+-- Enable RLS for charities
+ALTER TABLE charities ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies
+DROP POLICY IF EXISTS "Charities are viewable by everyone" ON charities;
+DROP POLICY IF EXISTS "Only admins can insert charities" ON charities;
+DROP POLICY IF EXISTS "Only admins can update charities" ON charities;
+DROP POLICY IF EXISTS "Only admins can delete charities" ON charities;
+
+-- Create RLS policies for charities
+CREATE POLICY "Charities are viewable by everyone"
+ON charities
+FOR SELECT
+TO authenticated, anon
+USING (true);
+
+CREATE POLICY "Only admins can insert charities"
+ON charities
+FOR INSERT
+TO authenticated
+WITH CHECK (is_admin());
+
+CREATE POLICY "Only admins can update charities"
+ON charities
+FOR UPDATE
+TO authenticated
+USING (is_admin())
+WITH CHECK (is_admin());
+
+CREATE POLICY "Only admins can delete charities"
+ON charities
+FOR DELETE
+TO authenticated
+USING (is_admin());
+
 -- 4. Products Table
 CREATE TABLE products (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

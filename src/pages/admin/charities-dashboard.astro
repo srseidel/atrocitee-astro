@@ -1,0 +1,367 @@
+---
+import { createServerSupabaseClient } from "@lib/supabase/client";
+import { createAdminSupabaseClient } from "@lib/supabase/admin-client";
+import { redirectIfNotAdmin } from '@lib/auth/middleware';
+import AdminLayout from "@layouts/AdminLayout.astro";
+import type { Database } from "@local-types/database/schema";
+
+// Server-side rendering to ensure we can access cookies
+export const prerender = false;
+
+type Charity = Database['public']['Tables']['charities']['Row'];
+
+// Initialize variables
+let charities: Charity[] = [];
+let error: string | null = null;
+
+try {
+  // First, verify the user is authenticated and admin
+  const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    throw new Error('Unauthorized - Not authenticated');
+  }
+
+  // Check if user is admin
+  const { data: isAdmin } = await supabase.rpc('is_admin');
+  if (!isAdmin) {
+    throw new Error('Unauthorized - Not admin');
+  }
+
+  // Now use admin client for data operations
+  const adminClient = createAdminSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
+
+  // Get all charities from Supabase
+  const { data: charitiesData, error: charitiesError } = await adminClient
+    .from('charities')
+    .select('*')
+    .order('name', { ascending: true });
+
+  if (charitiesError) {
+    throw new Error(`Failed to fetch charities: ${charitiesError.message}`);
+  }
+
+  charities = charitiesData || [];
+
+} catch (e: unknown) {
+  console.error('Error in charities dashboard:', e);
+  error = e instanceof Error ? e.message : 'An unknown error occurred';
+}
+
+// Log for debugging
+console.log('Charities:', charities?.length || 0);
+console.log("Charities dashboard error:", error);
+---
+
+<AdminLayout title="Charities Dashboard - Atrocitee Admin">
+  <div class="min-h-screen bg-gray-100">
+    <div class="py-10">
+      <header>
+        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <h1 class="text-3xl font-bold leading-tight tracking-tight text-gray-900">Charities Dashboard</h1>
+        </div>
+      </header>
+      <main>
+        <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
+          <!-- Management Section -->
+          <div class="px-4 py-5 sm:px-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <h2 class="text-lg font-medium leading-6 text-gray-900">Charity Management</h2>
+                <p class="mt-1 text-sm text-gray-500">
+                  Manage charities that receive donations from product sales
+                </p>
+              </div>
+              <div class="flex space-x-4">
+                <button
+                  type="button"
+                  class="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                  id="addCharityButton"
+                >
+                  Add New Charity
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {error ? (
+            <div class="mt-8 px-4 sm:px-6">
+              <div class="rounded-md bg-red-50 p-4">
+                <div class="flex">
+                  <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">Error loading charities</h3>
+                    <div class="mt-2 text-sm text-red-700">
+                      <p>{error}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div class="mt-8">
+              <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+                <table class="min-w-full divide-y divide-gray-300">
+                  <thead class="bg-gray-50">
+                    <tr>
+                      <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Name</th>
+                      <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Website</th>
+                      <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Status</th>
+                      <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                        <span class="sr-only">Actions</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-200 bg-white">
+                    {charities.map((charity) => (
+                      <tr id={charity.id}>
+                        <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
+                          <div class="flex items-center">
+                            {charity.logo_url && (
+                              <img src={charity.logo_url} alt={charity.name} class="h-8 w-8 rounded-full mr-3" />
+                            )}
+                            {charity.name}
+                          </div>
+                        </td>
+                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                          {charity.website_url ? (
+                            <a href={charity.website_url} target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:text-indigo-900">
+                              Visit Website
+                            </a>
+                          ) : (
+                            <span class="text-gray-400">No website</span>
+                          )}
+                        </td>
+                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                          <span class={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${charity.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            {charity.active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                          <button
+                            type="button"
+                            class="text-indigo-600 hover:text-indigo-900 mr-4"
+                            data-charity-id={charity.id}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            class="text-red-600 hover:text-red-900"
+                            data-charity-id={charity.id}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  </div>
+</AdminLayout>
+
+<!-- Charity Form Modal (hidden by default) -->
+<div id="charity-modal" class="fixed inset-0 hidden">
+  <!-- Modal backdrop -->
+  <div class="absolute inset-0 bg-gray-500 bg-opacity-75"></div>
+  
+  <!-- Modal container -->
+  <div class="fixed inset-0 z-10 overflow-y-auto">
+    <div class="flex min-h-full items-center justify-center p-4">
+      <!-- Modal content -->
+      <div class="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl w-full max-w-md">
+        <h2 id="modal-title" class="text-xl font-semibold mb-4">Add New Charity</h2>
+        
+        <form id="charity-form" class="space-y-4">
+          <input type="hidden" id="charity-id">
+          <div>
+            <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <input type="text" id="name" name="name" required class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+          </div>
+          
+          <div>
+            <label for="description" class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea id="description" name="description" rows="3" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+          </div>
+          
+          <div>
+            <label for="website_url" class="block text-sm font-medium text-gray-700 mb-1">Website URL</label>
+            <input type="url" id="website_url" name="website_url" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+          </div>
+          
+          <div>
+            <label for="logo_url" class="block text-sm font-medium text-gray-700 mb-1">Logo URL</label>
+            <input type="url" id="logo_url" name="logo_url" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+          </div>
+          
+          <div class="flex items-center">
+            <input type="checkbox" id="active" name="active" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+            <label for="active" class="ml-2 block text-sm text-gray-900">Active</label>
+          </div>
+          
+          <div class="flex justify-end pt-4">
+            <button type="button" id="cancel-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded mr-2">
+              Cancel
+            </button>
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+              Save Charity
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // DOM elements
+  const addCharityBtn = document.getElementById('addCharityButton');
+  const charityModal = document.getElementById('charity-modal');
+  const modalTitle = document.getElementById('modal-title');
+  const charityForm = document.getElementById('charity-form') as HTMLFormElement;
+  const cancelBtn = document.getElementById('cancel-btn');
+  const charityIdInput = document.getElementById('charity-id') as HTMLInputElement;
+  const nameInput = document.getElementById('name') as HTMLInputElement;
+  const descriptionInput = document.getElementById('description') as HTMLTextAreaElement;
+  const websiteUrlInput = document.getElementById('website_url') as HTMLInputElement;
+  const logoUrlInput = document.getElementById('logo_url') as HTMLInputElement;
+  const activeInput = document.getElementById('active') as HTMLInputElement;
+  
+  // Function to show modal
+  const showModal = () => {
+    if (charityModal) {
+      charityModal.classList.remove('hidden');
+      document.body.style.overflow = 'hidden'; // Prevent scrolling when modal is open
+    }
+  };
+
+  // Function to hide modal
+  const hideModal = () => {
+    if (charityModal) {
+      charityModal.classList.add('hidden');
+      document.body.style.overflow = ''; // Restore scrolling
+    }
+  };
+
+  // Event Listeners
+  addCharityBtn?.addEventListener('click', () => {
+    modalTitle!.textContent = 'Add New Charity';
+    charityForm!.reset();
+    charityIdInput!.value = '';
+    activeInput!.checked = true;
+    showModal();
+  });
+  
+  cancelBtn?.addEventListener('click', hideModal);
+  
+  // Close modal when clicking outside
+  charityModal?.addEventListener('click', (e) => {
+    if (e.target === charityModal || e.target === charityModal.firstElementChild) {
+      hideModal();
+    }
+  });
+  
+  // Charity form submission
+  charityForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = {
+      name: nameInput!.value,
+      description: descriptionInput!.value,
+      website_url: websiteUrlInput!.value || null,
+      logo_url: logoUrlInput!.value || null,
+      active: activeInput!.checked
+    };
+    
+    try {
+      // If we have an ID, it's an update operation
+      const isUpdate = !!charityIdInput!.value;
+      const endpoint = isUpdate 
+        ? `/api/v1/admin/charities/${charityIdInput!.value}` 
+        : '/api/v1/admin/charities';
+      
+      const response = await fetch(endpoint, {
+        method: isUpdate ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(formData)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Error saving charity');
+      }
+
+      // Reload the page to show updated data
+      window.location.reload();
+    } catch (error) {
+      console.error('Error saving charity:', error);
+      alert('An error occurred while saving the charity');
+    }
+  });
+  
+  // Edit charity
+  document.querySelectorAll('button[data-charity-id]').forEach(button => {
+    button.addEventListener('click', async (e) => {
+      const charityId = (e.target as HTMLButtonElement).dataset.charityId;
+      if ((e.target as HTMLElement).classList.contains('text-red-600')) {
+        // Delete button clicked
+        if (confirm('Are you sure you want to delete this charity?')) {
+          try {
+            const response = await fetch(`/api/v1/admin/charities/${charityId}`, {
+              method: 'DELETE',
+              headers: {
+                'Accept': 'application/json'
+              }
+            });
+
+            if (!response.ok) {
+              const error = await response.json();
+              throw new Error(error.message || 'Error deleting charity');
+            }
+
+            // Reload the page to show updated data
+            window.location.reload();
+          } catch (error) {
+            console.error('Error deleting charity:', error);
+            alert('An error occurred while deleting the charity');
+          }
+        }
+      } else {
+        // Edit button clicked
+        try {
+          const response = await fetch(`/api/v1/admin/charities/${charityId}`);
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Error loading charity details');
+          }
+          
+          const charity = await response.json();
+          
+          // Fill the form
+          charityIdInput!.value = charity.id;
+          nameInput!.value = charity.name;
+          descriptionInput!.value = charity.description || '';
+          websiteUrlInput!.value = charity.website_url || '';
+          logoUrlInput!.value = charity.logo_url || '';
+          activeInput!.checked = charity.active;
+          
+          // Show the modal
+          modalTitle!.textContent = 'Edit Charity';
+          showModal();
+        } catch (error) {
+          console.error('Error loading charity:', error);
+          alert('An error occurred while loading the charity');
+        }
+      }
+    });
+  });
+</script> 

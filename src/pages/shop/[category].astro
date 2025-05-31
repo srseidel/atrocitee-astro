@@ -1,0 +1,112 @@
+---
+import { createServerSupabaseClient } from '@lib/supabase/client';
+import Layout from '@layouts/Layout.astro';
+import type { Database } from '@local-types/database/schema';
+import type { GetStaticPaths } from 'astro';
+
+interface ProductVariant {
+  retail_price: number | null;
+}
+
+type Product = Database['public']['Tables']['products']['Row'] & {
+  product_variants: ProductVariant[];
+};
+
+type Category = Database['public']['Tables']['categories']['Row'];
+
+// Get all category slugs at build time
+export const getStaticPaths = (async () => {
+  const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
+  const { data: categories } = await supabase
+    .from('categories')
+    .select('*')
+    .eq('active', true) as { data: Category[] | null };
+
+  return categories?.map((category) => ({
+    params: { category: category.slug },
+    props: { category }
+  })) || [];
+}) satisfies GetStaticPaths;
+
+// Get category data and products
+const { category } = Astro.props;
+const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
+
+// Get products in this category
+const { data: products } = await supabase
+  .from('products')
+  .select(`
+    *,
+    product_variants (
+      retail_price
+    )
+  `)
+  .eq('atrocitee_active', true)
+  .eq('category_id', category.id)
+  .order('created_at', { ascending: false }) as { data: Product[] | null };
+---
+
+<Layout title={`${category.name} - Shop`}>
+  <!-- Category hero -->
+  <div class="relative">
+    <div class="absolute inset-0">
+      <img
+        class="w-full h-64 object-cover"
+        src="https://via.placeholder.com/1920x384"
+        alt={category.name}
+      />
+      <div class="absolute inset-0 bg-gray-900 bg-opacity-50"></div>
+    </div>
+    <div class="relative max-w-7xl mx-auto py-24 px-4 sm:py-32 sm:px-6 lg:px-8">
+      <h1 class="text-4xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-6xl">
+        {category.name}
+      </h1>
+      {category.description && (
+        <p class="mt-6 text-xl text-white max-w-3xl">
+          {category.description}
+        </p>
+      )}
+    </div>
+  </div>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <!-- Products grid -->
+    <div class="grid grid-cols-1 gap-y-10 gap-x-6 sm:grid-cols-2 lg:grid-cols-4 xl:gap-x-8">
+      {products?.map((product: Product) => (
+        <div class="group relative">
+          <div class="w-full min-h-80 bg-gray-200 aspect-w-1 aspect-h-1 rounded-md overflow-hidden group-hover:opacity-75">
+            <img
+              src={product.thumbnail_url || 'https://via.placeholder.com/300'}
+              alt={product.name}
+              class="w-full h-full object-center object-cover"
+            />
+          </div>
+          <div class="mt-4 flex justify-between">
+            <div>
+              <h3 class="text-sm text-gray-700">
+                <a href={`/shop/product/${product.slug}`}>
+                  <span aria-hidden="true" class="absolute inset-0" />
+                  {product.name}
+                </a>
+              </h3>
+              <p class="mt-1 text-sm text-gray-500">{product.description}</p>
+            </div>
+            <p class="text-sm font-medium text-gray-900">
+              ${product.atrocitee_base_price?.toFixed(2)}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* Show message if no products */}
+    {(!products || products.length === 0) && (
+      <div class="text-center py-12">
+        <h3 class="text-lg font-medium text-gray-900">No products found</h3>
+        <p class="mt-2 text-sm text-gray-500">
+          Check back soon for new products in this category.
+        </p>
+      </div>
+    )}
+  </div>
+</Layout>

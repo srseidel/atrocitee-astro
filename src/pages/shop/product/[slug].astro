@@ -1,0 +1,211 @@
+---
+import { createServerSupabaseClient } from '@lib/supabase/client';
+import Layout from '@layouts/Layout.astro';
+import type { GetStaticPaths } from 'astro';
+import type { Database } from '@local-types/database/schema';
+
+type Product = Database['public']['Tables']['products']['Row'];
+type ProductVariant = Database['public']['Tables']['product_variants']['Row'];
+type Charity = Database['public']['Tables']['charities']['Row'];
+
+interface ProductWithRelations extends Product {
+  product_variants: ProductVariant[];
+  charities: Charity | null;
+}
+
+// Get all product slugs at build time
+export const getStaticPaths = (async ({ }) => {
+  const supabase = createServerSupabaseClient();
+  const { data: products } = await supabase
+    .from('products')
+    .select('slug')
+    .eq('atrocitee_active', true);
+
+  return products?.map(product => ({
+    params: { slug: product.slug }
+  })) || [];
+}) satisfies GetStaticPaths;
+
+// Get product data
+const { slug } = Astro.params;
+const supabase = createServerSupabaseClient();
+
+// Get product with its variants and charity info
+const { data: product } = await supabase
+  .from('products')
+  .select(`
+    *,
+    product_variants (
+      *
+    ),
+    charities (
+      name,
+      description,
+      website_url,
+      logo_url
+    )
+  `)
+  .eq('slug', slug)
+  .eq('atrocitee_active', true)
+  .single() as { data: ProductWithRelations | null };
+
+if (!product) {
+  return Astro.redirect('/404');
+}
+
+// Group variants by their options
+const variantOptions = product.product_variants.reduce((acc: Record<string, Set<string>>, variant: ProductVariant) => {
+  const options = variant.options as Record<string, string>;
+  Object.entries(options).forEach(([key, value]) => {
+    if (!acc[key]) {
+      acc[key] = new Set<string>();
+    }
+    acc[key].add(value);
+  });
+  return acc;
+}, {});
+
+// Convert Sets to Arrays for template use
+const options = Object.entries(variantOptions).reduce((acc: Record<string, string[]>, [key, values]) => {
+  acc[key] = Array.from(values);
+  return acc;
+}, {});
+---
+
+<Layout title={product.name}>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div class="lg:grid lg:grid-cols-2 lg:gap-x-8 lg:items-start">
+      <!-- Image gallery -->
+      <div class="flex flex-col">
+        <div class="aspect-w-1 aspect-h-1 rounded-lg bg-gray-100 overflow-hidden">
+          <img
+            src={product.thumbnail_url}
+            alt={product.name}
+            class="w-full h-full object-center object-cover"
+          />
+        </div>
+        
+        <!-- Additional images from variants -->
+        <div class="mt-4 grid grid-cols-4 gap-4">
+          {product.product_variants.map((variant) => {
+            const files = variant.files as { preview_url?: string }[];
+            return files.map((file) => (
+              file.preview_url && (
+                <div class="aspect-w-1 aspect-h-1 rounded-lg bg-gray-100 overflow-hidden">
+                  <img
+                    src={file.preview_url}
+                    alt={`${product.name} - ${variant.name}`}
+                    class="w-full h-full object-center object-cover"
+                  />
+                </div>
+              )
+            ));
+          })}
+        </div>
+      </div>
+
+      <!-- Product info -->
+      <div class="mt-10 px-4 sm:px-0 sm:mt-16 lg:mt-0">
+        <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">{product.name}</h1>
+        
+        <div class="mt-3">
+          <h2 class="sr-only">Product information</h2>
+          <p class="text-3xl text-gray-900">
+            ${product.atrocitee_base_price?.toFixed(2)}
+          </p>
+        </div>
+
+        <div class="mt-6">
+          <h3 class="sr-only">Description</h3>
+          <div class="text-base text-gray-700 space-y-6">
+            {product.description}
+          </div>
+        </div>
+
+        <form class="mt-6">
+          <!-- Variant Selection -->
+          {Object.entries(options).map(([optionName, values]) => (
+            <div class="mt-4">
+              <label class="block text-sm font-medium text-gray-700">
+                {optionName.charAt(0).toUpperCase() + optionName.slice(1)}
+              </label>
+              <select
+                class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                name={optionName}
+              >
+                <option value="">Select {optionName}</option>
+                {values.map((value) => (
+                  <option value={value}>{value}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+
+          <!-- Add to Cart Button -->
+          <div class="mt-10 flex">
+            <button
+              type="submit"
+              class="w-full bg-indigo-600 border border-transparent rounded-md py-3 px-8 flex items-center justify-center text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-50 focus:ring-indigo-500"
+            >
+              Add to cart
+            </button>
+          </div>
+        </form>
+
+        <!-- Charity Information -->
+        {product.charities && (
+          <div class="mt-10 border-t border-gray-200 pt-10">
+            <h3 class="text-sm font-medium text-gray-900">Supporting Charity</h3>
+            <div class="mt-4 flex items-center">
+              {product.charities.logo_url && (
+                <img
+                  src={product.charities.logo_url}
+                  alt={product.charities.name}
+                  class="h-12 w-12 rounded-full"
+                />
+              )}
+              <div class="ml-4">
+                <h4 class="text-sm font-medium text-gray-900">{product.charities.name}</h4>
+                <p class="mt-1 text-sm text-gray-500">{product.charities.description}</p>
+                {product.charities.website_url && (
+                  <a
+                    href={product.charities.website_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="mt-2 text-sm text-indigo-600 hover:text-indigo-500"
+                  >
+                    Learn more about {product.charities.name}
+                  </a>
+                )}
+              </div>
+            </div>
+            <p class="mt-4 text-sm text-gray-500">
+              ${product.atrocitee_donation_amount?.toFixed(2)} from each purchase goes to {product.charities.name}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script>
+// Client-side variant selection and add to cart logic
+const form = document.querySelector('form');
+const selects = form?.querySelectorAll('select');
+
+if (form && selects) {
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    
+    // Get selected options
+    const selectedOptions = Array.from(selects).reduce((acc: Record<string, string>, select: HTMLSelectElement) => {
+      acc[select.name] = select.value;
+      return acc;
+    }, {});
+
+    // TODO: Find matching variant and add to cart
+    console.log('Selected options:', selectedOptions);
+  });
+}
+</script> 
