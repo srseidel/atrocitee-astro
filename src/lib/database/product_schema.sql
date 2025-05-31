@@ -221,7 +221,7 @@ CREATE TABLE products (
   thumbnail_url TEXT,
   
   -- Atrocitee specific fields
-  atrocitee_active BOOLEAN DEFAULT TRUE,
+  published_status BOOLEAN DEFAULT FALSE,
   atrocitee_featured BOOLEAN DEFAULT FALSE,
   atrocitee_metadata JSONB DEFAULT '{}',
   atrocitee_base_price DECIMAL(10,2),
@@ -413,9 +413,9 @@ CREATE POLICY "Admin users can manage products" ON products
   USING (is_admin())
   WITH CHECK (is_admin());
 
-CREATE POLICY "Public read access to active products" ON products
+CREATE POLICY "Public read access to published products" ON products
   FOR SELECT
-  USING (atrocitee_active = true);
+  USING (published_status = true);
 
 -- Enable RLS for product_variants
 ALTER TABLE product_variants ENABLE ROW LEVEL SECURITY;
@@ -436,7 +436,7 @@ CREATE POLICY "Public read access to product variants" ON product_variants
   USING (EXISTS (
     SELECT 1 FROM products
     WHERE products.id = product_variants.product_id
-    AND products.atrocitee_active = true
+    AND products.published_status = true
   ));
 
 -- Enable RLS for printful_sync_history
@@ -466,15 +466,13 @@ CREATE POLICY "Admin users can manage product changes" ON printful_product_chang
   WITH CHECK (is_admin());
 
 -- Add comment to track the changes
-COMMENT ON TABLE products IS 'Updated 2024-03-23: Simplified RLS policies to use is_admin() function';
-COMMENT ON TABLE product_variants IS 'Updated 2024-03-23: Simplified RLS policies to use is_admin() function';
-COMMENT ON TABLE printful_sync_history IS 'Updated 2024-03-23: Added RLS policies using is_admin() function';
-COMMENT ON TABLE printful_product_changes IS 'Updated 2024-03-23: Added RLS policies using is_admin() function';
+COMMENT ON TABLE products IS 'Updated 2024-03-25: Renamed atrocitee_active to published_status for better clarity';
+COMMENT ON COLUMN products.published_status IS 'Indicates if the product is published (true) or unpublished (false) on the website';
 
 -- Add indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_products_printful_id ON products(printful_id);
 CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
-CREATE INDEX IF NOT EXISTS idx_products_atrocitee_active ON products(atrocitee_active);
+CREATE INDEX IF NOT EXISTS idx_products_published_status ON products(published_status);
 CREATE INDEX IF NOT EXISTS idx_products_atrocitee_category_id ON products(atrocitee_category_id);
 CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON product_variants(product_id);
 

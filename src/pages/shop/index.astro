@@ -20,11 +20,17 @@ const { data: products } = await supabase
   .select(`
     *,
     product_variants (
-      retail_price
+      *
+    ),
+    charities (
+      name,
+      description,
+      website_url,
+      logo_url
     )
   `)
-  .eq('atrocitee_active', true)
-  .order('created_at', { ascending: false }) as { data: Product[] | null };
+  .eq('published_status', true)
+  .order('created_at', { ascending: false });
 
 // Get all categories
 const { data: categories } = await supabase

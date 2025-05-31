@@ -1,8 +1,11 @@
 ---
-import { createServerSupabaseClient } from '@lib/supabase/client';
+import { createClient } from '@supabase/supabase-js';
 import Layout from '@layouts/Layout.astro';
-import type { GetStaticPaths } from 'astro';
 import type { Database } from '@local-types/database/schema';
+
+// Enable static site generation with on-demand revalidation
+export const prerender = true;
+export const partial = true;  // Enable partial prerendering for on-demand updates
 
 type Product = Database['public']['Tables']['products']['Row'];
 type ProductVariant = Database['public']['Tables']['product_variants']['Row'];
@@ -14,44 +17,44 @@ interface ProductWithRelations extends Product {
 }
 
 // Get all product slugs at build time
-export const getStaticPaths = (async ({ }) => {
-  const supabase = createServerSupabaseClient();
+export async function getStaticPaths() {
+  // Create a static Supabase client for build time
+  const supabase = createClient(
+    import.meta.env.PUBLIC_SUPABASE_URL,
+    import.meta.env.PUBLIC_SUPABASE_ANON_KEY
+  );
+  
+  // Get all published products
   const { data: products } = await supabase
     .from('products')
-    .select('slug')
-    .eq('atrocitee_active', true);
-
-  return products?.map(product => ({
-    params: { slug: product.slug }
-  })) || [];
-}) satisfies GetStaticPaths;
-
-// Get product data
-const { slug } = Astro.params;
-const supabase = createServerSupabaseClient();
-
-// Get product with its variants and charity info
-const { data: product } = await supabase
-  .from('products')
-  .select(`
-    *,
-    product_variants (
-      *
-    ),
-    charities (
+    .select(`
+      slug,
       name,
       description,
-      website_url,
-      logo_url
-    )
-  `)
-  .eq('slug', slug)
-  .eq('atrocitee_active', true)
-  .single() as { data: ProductWithRelations | null };
+      thumbnail_url,
+      published_status,
+      atrocitee_base_price,
+      atrocitee_donation_amount,
+      product_variants (
+        *
+      ),
+      charities (
+        name,
+        description,
+        website_url,
+        logo_url
+      )
+    `)
+    .eq('published_status', true) as { data: ProductWithRelations[] | null };
 
-if (!product) {
-  return Astro.redirect('/404');
+  // Return array of product pages to generate
+  return products?.map((product) => ({
+    params: { slug: product.slug },
+    props: { product } as { product: ProductWithRelations },
+  })) || [];
 }
+
+const { product } = Astro.props as { product: ProductWithRelations };
 
 // Group variants by their options
 const variantOptions = product.product_variants.reduce((acc: Record<string, Set<string>>, variant: ProductVariant) => {

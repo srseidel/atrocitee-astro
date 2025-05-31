@@ -23,12 +23,9 @@ export interface Database {
           printful_synced: boolean
           name: string
           description: string | null
-          slug: string | null
+          slug: string
           thumbnail_url: string | null
-          atrocitee_active: boolean
-          atrocitee_featured: boolean
-          atrocitee_tags: string[]
-          atrocitee_metadata: Json
+          published_status: boolean
           atrocitee_base_price: number | null
           atrocitee_donation_amount: number | null
           created_at: string
@@ -41,12 +38,9 @@ export interface Database {
           printful_synced?: boolean
           name: string
           description?: string | null
-          slug?: string | null
+          slug: string
           thumbnail_url?: string | null
-          atrocitee_active?: boolean
-          atrocitee_featured?: boolean
-          atrocitee_tags?: string[]
-          atrocitee_metadata?: Json
+          published_status?: boolean
           atrocitee_base_price?: number | null
           atrocitee_donation_amount?: number | null
           created_at?: string
@@ -59,12 +53,9 @@ export interface Database {
           printful_synced?: boolean
           name?: string
           description?: string | null
-          slug?: string | null
+          slug?: string
           thumbnail_url?: string | null
-          atrocitee_active?: boolean
-          atrocitee_featured?: boolean
-          atrocitee_tags?: string[]
-          atrocitee_metadata?: Json
+          published_status?: boolean
           atrocitee_base_price?: number | null
           atrocitee_donation_amount?: number | null
           created_at?: string

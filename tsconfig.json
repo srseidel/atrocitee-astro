@@ -4,7 +4,10 @@
   ],
   "include": [
     ".astro/types.d.ts",
-    "src/**/*",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.astro",
+    "src/**/*.mjs",
     "scripts/**/*",
     "re-org/api/printful/old_revisions/create-tables.ts",
     "re-org/api/printful/old_revisions/db-tables-check.ts",

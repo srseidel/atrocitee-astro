@@ -61,7 +61,20 @@ const { data: product, error: productError } = await supabase
   .from('products')
   .select(`
     *,
-    product_variants (*),
+    product_variants (
+      id,
+      name,
+      sku,
+      retail_price,
+      in_stock,
+      options,
+      files,
+      printful_id,
+      printful_external_id,
+      printful_product_id,
+      printful_synced,
+      stock_level
+    ),
     product_tags!fk_product_tags_product (
       tag_id,
       tags!fk_product_tags_tag (
@@ -75,20 +88,14 @@ const { data: product, error: productError } = await supabase
 
 // Log the query results with better variant details
 console.log('Product query results:', {
-  ...product,
-  product_variants: product?.product_variants?.map((variant: ProductVariant) => ({
+  id: product?.id,
+  name: product?.name,
+  atrocitee_base_price: product?.atrocitee_base_price,
+  variants: product?.product_variants?.map((variant: ProductVariant) => ({
     id: variant.id,
     name: variant.name,
     sku: variant.sku,
-    retail_price: variant.retail_price,
-    in_stock: variant.in_stock,
-    options: variant.options,
-    files: variant.files,
-    printful_id: variant.printful_id,
-    printful_external_id: variant.printful_external_id,
-    printful_product_id: variant.printful_product_id,
-    printful_synced: variant.printful_synced,
-    stock_level: variant.stock_level
+    retail_price: variant.retail_price
   }))
 });
 
@@ -164,10 +171,10 @@ if (Astro.request.method === 'POST') {
     name: formData.get('name'),
     slug: formData.get('slug'),
     description: formData.get('description'),
-    atrocitee_base_price: parseFloat(formData.get('base_price') as string) || 0,
-    atrocitee_donation_amount: parseFloat(formData.get('donation_amount') as string) || 0,
+    published_status: formData.get('status') === 'true',
+    atrocitee_base_price: parseFloat(formData.get('base_price') as string) || null,
+    atrocitee_donation_amount: parseFloat(formData.get('donation_amount') as string) || null,
     atrocitee_charity_id: formData.get('atrocitee_charity_id') || null,
-    atrocitee_active: formData.get('active') === 'true',
     atrocitee_featured: formData.get('featured') === 'true',
     atrocitee_category_id: formData.get('atrocitee_category_id') || null
   };
@@ -188,9 +195,9 @@ if (Astro.request.method === 'POST') {
         atrocitee_category_id: processedData.atrocitee_category_id,
         atrocitee_base_price: processedData.atrocitee_base_price,
         atrocitee_donation_amount: processedData.atrocitee_donation_amount,
-        atrocitee_active: processedData.atrocitee_active,
         atrocitee_featured: processedData.atrocitee_featured,
         atrocitee_charity_id: processedData.atrocitee_charity_id,
+        published_status: processedData.published_status,
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
@@ -260,7 +267,7 @@ if (Astro.request.method === 'POST') {
   <div class="container mx-auto p-6">
     <div class="mb-6 flex justify-between items-center">
       <h1 class="text-3xl font-bold">Edit Product</h1>
-      <a href="/admin/products/dashboard" class="text-blue-600 hover:text-blue-800">
+      <a href="/admin/products-dashboard" class="text-blue-600 hover:text-blue-800">
         ← Back to Products
       </a>
     </div>
@@ -321,12 +328,14 @@ if (Astro.request.method === 'POST') {
               id="product-base-price"
               type="number" 
               name="base_price" 
-              value={product.atrocitee_base_price || ''}
+              value={product.atrocitee_base_price !== null ? product.atrocitee_base_price : ''}
               step="0.01"
               min="0"
               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               aria-label="Product base price in USD"
+              required
             />
+            <p class="mt-1 text-sm text-gray-500">Set the base price for this product. This will be used as the selling price.</p>
           </div>
 
           <div>
@@ -363,17 +372,20 @@ if (Astro.request.method === 'POST') {
             </select>
           </div>
 
-          <div>
-            <label for="product-status" class="block text-sm font-medium text-gray-700">Product Status</label>
-            <select 
-              id="product-status"
-              name="active"
-              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              aria-label="Select product status"
-            >
-              <option value="true" selected={product.atrocitee_active}>Published</option>
-              <option value="false" selected={!product.atrocitee_active}>Unpublished</option>
-            </select>
+          <div class="sm:col-span-3">
+            <label for="status" class="block text-sm font-medium text-gray-700">
+              Publication Status
+            </label>
+            <div class="mt-1">
+              <select
+                id="status"
+                name="status"
+                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              >
+                <option value="true" selected={product.published_status}>Published</option>
+                <option value="false" selected={!product.published_status}>Unpublished</option>
+              </select>
+            </div>
           </div>
 
           <div>
@@ -435,12 +447,19 @@ if (Astro.request.method === 'POST') {
             </fieldset>
           </div>
 
-          <div class="flex justify-end">
+          <div class="flex justify-between">
             <button 
               type="submit"
               class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
             >
               Save Changes
+            </button>
+            <button 
+              type="button"
+              id="deleteProduct"
+              class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700"
+            >
+              Delete Product
             </button>
           </div>
         </form>
@@ -515,37 +534,44 @@ if (Astro.request.method === 'POST') {
   </div>
 </AdminLayout>
 
-<script>
+<script define:vars={{ productId: product.id }}>
   // Auto-generate slug from name
   const nameInput = document.querySelector('input[name="name"]');
   const slugInput = document.querySelector('input[name="slug"]');
 
-  nameInput?.addEventListener('input', (e) => {
-    const name = (e.target as HTMLInputElement).value;
-    const slug = name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '');
-    if (slugInput) {
-      (slugInput as HTMLInputElement).value = slug;
-    }
-  });
+  if (nameInput && slugInput) {
+    nameInput.addEventListener('input', (e) => {
+      const target = e.target;
+      if (target instanceof HTMLInputElement) {
+        const name = target.value;
+        const slug = name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, '');
+        if (slugInput instanceof HTMLInputElement) {
+          slugInput.value = slug;
+        }
+      }
+    });
 
-  // Initialize slug if empty
-  if (nameInput && slugInput && !(slugInput as HTMLInputElement).value) {
-    const name = (nameInput as HTMLInputElement).value;
-    const slug = name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '');
-    (slugInput as HTMLInputElement).value = slug;
+    // Initialize slug if empty
+    if (slugInput instanceof HTMLInputElement && !slugInput.value) {
+      if (nameInput instanceof HTMLInputElement) {
+        const name = nameInput.value;
+        const slug = name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, '');
+        slugInput.value = slug;
+      }
+    }
   }
 
   // Add form submission logging
   const form = document.querySelector('form');
   form?.addEventListener('submit', (e) => {
-    const formData = new FormData(e.target as HTMLFormElement);
-    const data: Record<string, any> = {};
+    const formData = new FormData(e.target);
+    const data = {};
     
     // Log all form fields
     for (const [key, value] of formData.entries()) {
@@ -553,5 +579,35 @@ if (Astro.request.method === 'POST') {
     }
     
     console.log('Submitting form data:', data);
+  });
+
+  // Handle product deletion
+  const deleteButton = document.getElementById('deleteProduct');
+  deleteButton?.addEventListener('click', async () => {
+    if (!confirm('Are you sure you want to delete this product? This action cannot be undone. The product will be re-added on next sync if it still exists in Printful.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/v1/admin/products/${productId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete product');
+      }
+
+      // Redirect to products dashboard after successful deletion
+      window.location.href = '/admin/products-dashboard';
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      alert(error instanceof Error ? error.message : 'Failed to delete product');
+    }
   });
 </script> 

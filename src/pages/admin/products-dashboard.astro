@@ -13,7 +13,7 @@ interface Product {
   id: string;
   name: string;
   printful_id: string;
-  atrocitee_active: boolean;
+  published_status: boolean;
   atrocitee_base_price: number;
   atrocitee_donation_amount: number;
 }
@@ -264,10 +264,12 @@ console.log("Products dashboard error:", error);
                       </td>
                       <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{product.printful_id}</td>
                       <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        <span class={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${
-                          product.atrocitee_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        <span class={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          product.published_status 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-yellow-100 text-yellow-800'
                         }`}>
-                          {product.atrocitee_active ? 'Active' : 'Inactive'}
+                          {product.published_status ? 'Published' : 'Unpublished'}
                         </span>
                       </td>
                       <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${product.atrocitee_base_price}</td>

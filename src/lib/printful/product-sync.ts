@@ -3,6 +3,14 @@ import { PrintfulService } from './service';
 import type { AstroCookies } from 'astro';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+// Helper function to generate URL-friendly slugs
+function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
 export class PrintfulProductSync {
   private static instance: PrintfulProductSync;
   private printfulService: PrintfulService;
@@ -139,16 +147,31 @@ export class PrintfulProductSync {
             productId = existingProduct.id;
           } else {
             console.log(`[Sync] Creating new product ${product.id} (${product.name})`);
+            // Calculate default base price from first variant if creating new product
+            let defaultBasePrice = null;
+            if (variants.length > 0) {
+              defaultBasePrice = parseFloat(variants[0].retail_price);
+              console.log(`[Sync] Setting default base price to ${defaultBasePrice} from first variant`);
+            }
+
             // Create new product
             const { data: newProduct, error: insertError } = await this.supabase
               .from('products')
               .insert({
-                name: product.name,
                 printful_id: product.id,
+                printful_external_id: product.external_id,
                 printful_synced: true,
-                atrocitee_active: true,
-                atrocitee_base_price: variants[0]?.retail_price || 0,
-                atrocitee_donation_amount: 0
+                name: product.name,
+                description: product.description || null,
+                slug: generateSlug(product.name),
+                thumbnail_url: product.thumbnail_url,
+                published_status: false,
+                atrocitee_featured: false,
+                atrocitee_metadata: {},
+                atrocitee_base_price: defaultBasePrice,
+                atrocitee_donation_amount: null,
+                atrocitee_charity_id: null,
+                atrocitee_category_id: null,
               })
               .select('id')
               .single();
