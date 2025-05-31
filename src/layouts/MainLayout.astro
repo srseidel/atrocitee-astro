@@ -29,11 +29,12 @@ const currentPath = Astro.url.pathname;
 // Check for authentication state
 let isAuthenticated = false;
 let isAdmin = false;
+let userEmail = '';
 
 try {
   // Only attempt to check auth on the server
   if (Astro.request.headers) {
-    const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+    const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
     const { data: { user }, error } = await supabase.auth.getUser();
     isAuthenticated = !!user;
     
@@ -48,6 +49,7 @@ try {
                   .single()
                 )?.data?.role === 'admin';
     }
+    userEmail = user?.email || '';
   }
 } catch (error) {
   // If there's an error or we're in static mode, default to not authenticated
@@ -110,9 +112,13 @@ const navLinks = [
           <!-- Right-side actions -->
           <div class="flex items-center space-x-4">
             {isAuthenticated ? (
-              <a href="/account" class="btn btn-secondary hidden sm:inline-flex">
-                My Account
-              </a>
+              <>
+                <span class="hidden sm:inline text-sm text-neutral-700" title={userEmail}>{userEmail}</span>
+                <a href="/account" class="btn btn-secondary hidden sm:inline-flex">
+                  My Account
+                </a>
+                <a href="/auth/logout" class="btn btn-outline ml-2">Logout</a>
+              </>
             ) : (
               <a href="/auth/login" class="btn btn-secondary hidden sm:inline-flex">
                 Login

@@ -9,7 +9,10 @@ export const prerender = false;
 // Authentication is now handled by middleware in src/middleware.ts
 
 // Fetch dashboard data from the database
-const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+const supabase = createServerSupabaseClient({ 
+  cookies: Astro.cookies,
+  request: Astro.request
+});
 
 // Get order stats
 const { count: orderCount, error: orderError } = await supabase

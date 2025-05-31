@@ -1,0 +1,328 @@
+---
+// Server-side rendering for auth
+export const prerender = false;
+
+import AdminLayout from "@layouts/AdminLayout.astro";
+import { createServerSupabaseClient } from '@lib/supabase/client';
+import { redirectIfNotAdmin } from '@lib/auth/middleware';
+
+// Check admin access
+const redirectResponse = await redirectIfNotAdmin(Astro);
+if (redirectResponse) {
+  return redirectResponse;
+}
+
+// Get Supabase client
+const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
+
+// Fetch current admins
+const { data: admins, error: adminsError } = await supabase
+  .from('profiles')
+  .select('id, email, created_at')
+  .eq('role', 'admin');
+
+if (adminsError) {
+  console.error('Error fetching admins:', adminsError);
+}
+
+interface User {
+  id: string;
+  email: string;
+  role: string;
+  created_at: string;
+}
+---
+
+<AdminLayout title="User Management">
+  <div class="p-6">
+    <h1 class="text-2xl font-bold mb-6">User Management</h1>
+
+    <!-- Admin Users Section -->
+    <div class="mb-8">
+      <h2 class="text-xl font-semibold mb-4">Current Administrators</h2>
+      <div class="bg-white rounded-lg shadow overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Added On</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            {admins?.map((admin) => (
+              <tr>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{admin.email}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {new Date(admin.created_at).toLocaleDateString()}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- User Search Section -->
+    <div>
+      <h2 class="text-xl font-semibold mb-4">Search Users</h2>
+      <div class="bg-white rounded-lg shadow p-6">
+        <!-- Search Form -->
+        <form id="searchForm" class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Email Search -->
+            <div>
+              <label for="emailSearch" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input
+                type="text"
+                id="emailSearch"
+                placeholder="Search by email..."
+                class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            
+            <!-- Role Filter -->
+            <div>
+              <label for="roleFilter" class="block text-sm font-medium text-gray-700 mb-1">Role</label>
+              <select
+                id="roleFilter"
+                class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">All Roles</option>
+                <option value="admin">Admin</option>
+                <option value="user">User</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Search Buttons -->
+          <div class="flex space-x-4">
+            <button
+              type="submit"
+              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              Search
+            </button>
+            <button
+              type="button"
+              id="showAllBtn"
+              class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+            >
+              Show All Users
+            </button>
+          </div>
+        </form>
+
+        <!-- Results Table -->
+        <div class="mt-6 overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200" id="usersTable">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <!-- Populated by JavaScript -->
+            </tbody>
+          </table>
+
+          <!-- Empty State -->
+          <div id="emptyState" class="py-8 text-center text-gray-500">
+            Use the search above to find users
+          </div>
+
+          <!-- Loading State -->
+          <div id="loadingState" class="hidden py-8 text-center text-gray-500">
+            Loading users...
+          </div>
+
+          <!-- Error State -->
+          <div id="errorState" class="hidden py-8 text-center text-red-500">
+            Error loading users. Please try again.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Info Message -->
+    <div class="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-700">
+      <p class="text-sm">
+        <strong>Note:</strong> For security reasons, admin access can only be managed through the Supabase dashboard. 
+        Please contact the system administrator if you need to modify user roles.
+      </p>
+    </div>
+  </div>
+
+  <script>
+    interface User {
+      id: string;
+      email: string;
+      role: string;
+      created_at: string;
+    }
+
+    const searchForm = document.getElementById('searchForm') as HTMLFormElement;
+    const emailSearch = document.getElementById('emailSearch') as HTMLInputElement;
+    const roleFilter = document.getElementById('roleFilter') as HTMLSelectElement;
+    const showAllBtn = document.getElementById('showAllBtn') as HTMLButtonElement;
+    const usersTable = document.getElementById('usersTable') as HTMLTableElement;
+    const emptyState = document.getElementById('emptyState') as HTMLDivElement;
+    const loadingState = document.getElementById('loadingState') as HTMLDivElement;
+    const errorState = document.getElementById('errorState') as HTMLDivElement;
+
+    // Track current users for client-side filtering
+    let currentUsers: User[] = [];
+
+    // Helper to show/hide states
+    function updateStates(loading: boolean, error: boolean, empty: boolean) {
+      loadingState.classList.toggle('hidden', !loading);
+      errorState.classList.toggle('hidden', !error);
+      emptyState.classList.toggle('hidden', !empty);
+      usersTable.classList.toggle('hidden', empty);
+    }
+
+    // Client-side filtering function
+    function filterUsers(users: User[], searchEmail: string, searchRole: string): User[] {
+      return users.filter(user => {
+        const emailMatch = !searchEmail || user.email.toLowerCase().includes(searchEmail.toLowerCase());
+        const roleMatch = !searchRole || 
+          (searchRole === 'user' && !user.role) || 
+          (user.role === searchRole);
+        return emailMatch && roleMatch;
+      });
+    }
+
+    // Render users to the table
+    function renderUsers(users: User[]) {
+      const tbody = usersTable.querySelector('tbody');
+      if (!tbody) return;
+
+      if (users.length === 0) {
+        updateStates(false, false, true);
+        return;
+      }
+
+      tbody.innerHTML = users.map(user => `
+        <tr>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${user.email}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            ${new Date(user.created_at).toLocaleDateString()}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm">
+            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+              user.role === 'admin' 
+                ? 'bg-green-100 text-green-800' 
+                : 'bg-gray-100 text-gray-800'
+            }">
+              ${user.role || 'user'}
+            </span>
+          </td>
+        </tr>
+      `).join('');
+
+      updateStates(false, false, false);
+    }
+
+    // Add table header for client-side search
+    function addTableSearch() {
+      const thead = usersTable.querySelector('thead');
+      if (!thead) return;
+
+      const searchRow = document.createElement('tr');
+      searchRow.innerHTML = `
+        <tr class="bg-gray-50">
+          <th class="px-6 py-2">
+            <input
+              type="text"
+              placeholder="Filter by email..."
+              class="w-full px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-blue-500"
+              data-filter="email"
+            />
+          </th>
+          <th class="px-6 py-2"></th>
+          <th class="px-6 py-2">
+            <select
+              class="w-full px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-blue-500"
+              data-filter="role"
+            >
+              <option value="">All Roles</option>
+              <option value="admin">Admin</option>
+              <option value="user">User</option>
+            </select>
+          </th>
+        </tr>
+      `;
+
+      // Add filter listeners
+      const emailFilter = searchRow.querySelector('[data-filter="email"]') as HTMLInputElement;
+      const roleFilter = searchRow.querySelector('[data-filter="role"]') as HTMLSelectElement;
+
+      [emailFilter, roleFilter].forEach(filter => {
+        filter?.addEventListener('input', () => {
+          const filteredUsers = filterUsers(
+            currentUsers,
+            emailFilter.value,
+            roleFilter.value
+          );
+          renderUsers(filteredUsers);
+        });
+      });
+
+      // Insert after the header row
+      thead.querySelector('tr')?.after(searchRow);
+    }
+
+    // Fetch users based on search criteria
+    async function fetchUsers(email?: string, role?: string) {
+      try {
+        updateStates(true, false, false);
+        
+        const queryParams = new URLSearchParams();
+        if (email) queryParams.append('email', email);
+        if (role) queryParams.append('role', role);
+        
+        const response = await fetch(`/api/v1/admin/users?${queryParams}`);
+        if (!response.ok) throw new Error('Failed to fetch users');
+        
+        const data = await response.json();
+        
+        if (!data.users || data.users.length === 0) {
+          updateStates(false, false, true);
+          return;
+        }
+
+        // Store users for client-side filtering
+        currentUsers = data.users;
+        
+        // Add table search if not already added
+        if (!usersTable.querySelector('[data-filter]')) {
+          addTableSearch();
+        }
+
+        renderUsers(currentUsers);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        updateStates(false, true, false);
+      }
+    }
+
+    // Handle search form submission
+    searchForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const email = emailSearch.value.trim();
+      const role = roleFilter.value;
+      fetchUsers(email || undefined, role || undefined);
+    });
+
+    // Handle show all button click
+    showAllBtn.addEventListener('click', () => {
+      emailSearch.value = '';
+      roleFilter.value = '';
+      fetchUsers();
+    });
+
+    // Initialize with empty state
+    updateStates(false, false, true);
+  </script>
+</AdminLayout> 

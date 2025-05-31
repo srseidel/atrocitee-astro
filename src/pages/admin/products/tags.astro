@@ -9,7 +9,10 @@ export const prerender = false;
 // Authentication is now handled by middleware in src/middleware.ts
 
 // Fetch tags from the database
-const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+const supabase = createServerSupabaseClient({ 
+  cookies: Astro.cookies,
+  request: Astro.request
+});
 const { data: tags, error } = await supabase
   .from('tags')
   .select('*')
@@ -100,41 +103,50 @@ interface Tag {
   </div>
   
   <!-- Tag Form Modal (hidden by default) -->
-  <div id="tag-modal" class="fixed inset-0 bg-gray-500 bg-opacity-75 items-center justify-center hidden">
-    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-auto">
-      <h2 id="modal-title" class="text-xl font-semibold mb-4">Add New Tag</h2>
-      
-      <form id="tag-form" class="space-y-4">
-        <input type="hidden" id="tag-id">
-        <div>
-          <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Name</label>
-          <input type="text" id="name" name="name" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+  <div id="tag-modal" class="fixed inset-0 hidden">
+    <!-- Modal backdrop -->
+    <div class="absolute inset-0 bg-gray-500 bg-opacity-75"></div>
+    
+    <!-- Modal container -->
+    <div class="fixed inset-0 z-10 overflow-y-auto">
+      <div class="flex min-h-full items-center justify-center p-4">
+        <!-- Modal content -->
+        <div class="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl w-full max-w-md">
+          <h2 id="modal-title" class="text-xl font-semibold mb-4">Add New Tag</h2>
+          
+          <form id="tag-form" class="space-y-4">
+            <input type="hidden" id="tag-id">
+            <div>
+              <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <input type="text" id="name" name="name" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+            </div>
+            
+            <div>
+              <label for="slug" class="block text-sm font-medium text-gray-700 mb-1">Slug</label>
+              <input type="text" id="slug" name="slug" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+            </div>
+            
+            <div>
+              <label for="description" class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <textarea id="description" name="description" rows="3" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+            </div>
+            
+            <div class="flex items-center">
+              <input type="checkbox" id="active" name="active" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+              <label for="active" class="ml-2 block text-sm text-gray-900">Active</label>
+            </div>
+            
+            <div class="flex justify-end pt-4">
+              <button type="button" id="cancel-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded mr-2">
+                Cancel
+              </button>
+              <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                Save Tag
+              </button>
+            </div>
+          </form>
         </div>
-        
-        <div>
-          <label for="slug" class="block text-sm font-medium text-gray-700 mb-1">Slug</label>
-          <input type="text" id="slug" name="slug" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-        </div>
-        
-        <div>
-          <label for="description" class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-          <textarea id="description" name="description" rows="3" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
-        </div>
-        
-        <div class="flex items-center">
-          <input type="checkbox" id="active" name="active" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-          <label for="active" class="ml-2 block text-sm text-gray-900">Active</label>
-        </div>
-        
-        <div class="flex justify-end pt-4">
-          <button type="button" id="cancel-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded mr-2">
-            Cancel
-          </button>
-          <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-            Save Tag
-          </button>
-        </div>
-      </form>
+      </div>
     </div>
   </div>
 </AdminLayout>
@@ -154,17 +166,38 @@ interface Tag {
   const editButtons = document.querySelectorAll('.edit-tag');
   const deleteButtons = document.querySelectorAll('.delete-tag');
   
+  // Function to show modal
+  const showModal = () => {
+    if (tagModal) {
+      tagModal.classList.remove('hidden');
+      document.body.style.overflow = 'hidden'; // Prevent scrolling when modal is open
+    }
+  };
+
+  // Function to hide modal
+  const hideModal = () => {
+    if (tagModal) {
+      tagModal.classList.add('hidden');
+      document.body.style.overflow = ''; // Restore scrolling
+    }
+  };
+
   // Event Listeners
   addTagBtn?.addEventListener('click', () => {
     modalTitle!.textContent = 'Add New Tag';
     tagForm!.reset();
     tagIdInput!.value = '';
     activeInput!.checked = true;
-    tagModal?.classList.remove('hidden');
+    showModal();
   });
   
-  cancelBtn?.addEventListener('click', () => {
-    tagModal?.classList.add('hidden');
+  cancelBtn?.addEventListener('click', hideModal);
+  
+  // Close modal when clicking outside
+  tagModal?.addEventListener('click', (e) => {
+    if (e.target === tagModal || e.target === tagModal.firstElementChild) {
+      hideModal();
+    }
   });
   
   // Generate slug from name
@@ -240,7 +273,11 @@ interface Tag {
           throw new Error(result.message || 'Error loading tag details');
         }
         
-        const tag = await response.json();
+        const { data: tag } = await response.json();
+        
+        if (!tag) {
+          throw new Error('Tag not found');
+        }
         
         // Fill the form
         tagIdInput!.value = tag.id;
@@ -251,7 +288,7 @@ interface Tag {
         
         // Show the modal
         modalTitle!.textContent = 'Edit Tag';
-        tagModal?.classList.remove('hidden');
+        showModal();
       } catch (error) {
         console.error('Error loading tag:', error);
         alert('An error occurred while loading the tag');
@@ -266,7 +303,7 @@ interface Tag {
         const tagId = button.getAttribute('data-id');
         
         try {
-          const response = await fetch(`/api/v1/tags?id=${tagId}`, {
+          const response = await fetch(`/api/v1/tags/${tagId}`, {
             method: 'DELETE',
             headers: {
               'Accept': 'application/json'

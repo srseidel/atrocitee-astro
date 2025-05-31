@@ -2,8 +2,10 @@ import { createServerSupabaseClient } from '@lib/supabase/client';
 
 import type { APIRoute } from 'astro';
 
+export const prerender = false;
+
 export const POST: APIRoute = async ({ request, cookies }) => {
-  const supabase = createServerSupabaseClient({ cookies });
+  const supabase = createServerSupabaseClient({ cookies, request });
   
   try {
     // Check Authorization header
@@ -59,8 +61,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 };
 
 // Also allow GET to retrieve the latest backup status
-export const GET: APIRoute = async ({ cookies }) => {
-  const supabase = createServerSupabaseClient({ cookies });
+export const GET: APIRoute = async ({ cookies, request }) => {
+  const supabase = createServerSupabaseClient({ cookies, request });
   
   try {
     // Get the latest backup status

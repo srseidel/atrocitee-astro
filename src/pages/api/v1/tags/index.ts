@@ -10,7 +10,7 @@ export const prerender = false;
 export async function GET({ request, cookies }: APIContext) {
   try {
     // Initialize Supabase client
-    const supabase = createServerSupabaseClient({ cookies });
+    const supabase = createServerSupabaseClient({ cookies, request });
     
     // Fetch tags with basic error handling
     const { data, error } = await supabase
@@ -62,7 +62,7 @@ export async function GET({ request, cookies }: APIContext) {
 // POST: Create a new tag
 export async function POST({ request, cookies }: APIContext) {
   try {
-    const supabase = createServerSupabaseClient({ cookies });
+    const supabase = createServerSupabaseClient({ cookies, request });
     
     // Verify admin permissions would go here in a real implementation
     
@@ -139,7 +139,7 @@ export async function POST({ request, cookies }: APIContext) {
 // DELETE: Delete a tag
 export async function DELETE({ request, cookies }: APIContext) {
   try {
-    const supabase = createServerSupabaseClient({ cookies });
+    const supabase = createServerSupabaseClient({ cookies, request });
     
     // Get tag ID from URL
     const url = new URL(request.url);
@@ -159,7 +159,7 @@ export async function DELETE({ request, cookies }: APIContext) {
     }
 
     // Check if user is admin
-    const isUserAdmin = await isAdmin({ cookies });
+    const isUserAdmin = await isAdmin(cookies);
     if (!isUserAdmin) {
       return new Response(JSON.stringify({
         error: 'Unauthorized',

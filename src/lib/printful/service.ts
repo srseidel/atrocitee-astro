@@ -253,7 +253,7 @@ export class PrintfulService {
   async getProductVariants(productId: number): Promise<PrintfulVariant[]> {
     try {
       // Use the sync product endpoint to get both product and variants
-      const response = await this.fetch<PrintfulProductList>(`/store/products/${productId}`);
+      const response = await this.fetch<PrintfulProductList>(`/sync/products/${productId}`);
       return response.result.sync_variants;
     } catch (error) {
       // eslint-disable-next-line no-console

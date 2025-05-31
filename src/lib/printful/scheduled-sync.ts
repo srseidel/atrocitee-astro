@@ -7,8 +7,8 @@
 
 import * as Sentry from '@sentry/astro';
 
-import PrintfulProductSync from '@lib/printful/product-sync';
-import { createServerSupabaseClient } from '@lib/supabase';
+import { PrintfulProductSync } from '@lib/printful/product-sync';
+import { createAdminSupabaseClient } from '@lib/supabase/admin-client';
 
 /**
  * Run a scheduled product synchronization
@@ -19,28 +19,19 @@ export async function runScheduledSync() {
     // eslint-disable-next-line no-console
     console.log('[Scheduled Sync] Starting scheduled product synchronization');
     
-    // Create a server-side Supabase client with empty cookies
-    // This will use the service role key instead of user authentication
-    const supabase = createServerSupabaseClient({ cookies: {} });
+    // Create an admin client that uses the service role key
+    const supabase = createAdminSupabaseClient();
     
-    // Create a product sync instance with the supabase client
-    const productSync = new PrintfulProductSync({ cookies: {} });
+    // Create a product sync instance
+    const productSync = PrintfulProductSync.getInstance();
     
     // Run the sync process
-    const { success, failed, syncId } = await productSync.syncAllProducts('scheduled');
+    const result = await productSync.syncProducts();
     
     // eslint-disable-next-line no-console
-    console.log(`[Scheduled Sync] Completed with ${success} successes and ${failed} failures`);
+    console.log(`[Scheduled Sync] Completed with ${result.syncedCount} successes and ${result.failedCount} failures`);
     
-    // Log the sync event
-    await supabase
-      .from('printful_sync_history')
-      .update({
-        message: `Scheduled sync completed with ${success} successes and ${failed} failures`
-      })
-      .eq('id', syncId);
-    
-    return { success, failed, syncId };
+    return result;
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('[Scheduled Sync] Error:', error);
@@ -60,8 +51,8 @@ export async function runScheduledSync() {
  */
 export async function shouldRunSync(minHoursBetweenSyncs = 12): Promise<boolean> {
   try {
-    // Create a server-side Supabase client
-    const supabase = createServerSupabaseClient({ cookies: {} });
+    // Create an admin client that uses the service role key
+    const supabase = createAdminSupabaseClient();
     
     // Get the most recent sync
     const { data, error } = await supabase

@@ -30,10 +30,27 @@ export default function LoginForm() {
       if (signInError) {
         setError((signInError as AuthError).message);
       } else {
-        // Get the redirect URL from the query parameters or default to /admin/dashboard
-        const url = new URL(window.location.href);
-        const redirectTo = url.searchParams.get('redirect') || '/admin/dashboard';
-        window.location.href = redirectTo;
+        // Fetch the user and check admin status
+        const { data: { user } } = await supabase.auth.getUser();
+        let isAdmin = false;
+
+        // Check app_metadata first
+        if (user?.app_metadata?.role === 'admin' || user?.app_metadata?.is_admin === true) {
+          isAdmin = true;
+        } else if (user) {
+          // Fallback: check the 'profiles' table for a 'role' field
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          if (!error && data?.role === 'admin') {
+            isAdmin = true;
+          }
+        }
+
+        // Redirect based on admin status
+        window.location.href = isAdmin ? '/admin/dashboard' : '/account';
       }
     } catch (err) {
       setError('An unexpected error occurred');
@@ -81,7 +98,7 @@ export default function LoginForm() {
           className="btn btn-primary"
           disabled={loading}
         >
-          {loading ? 'Signing in...' : 'Sign in'}
+          {loading ? 'Signing in...' : 'Login'}
         </button>
         
         <a href="/auth/forgot-password" className="text-sm text-primary hover:text-primary-dark">

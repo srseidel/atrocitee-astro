@@ -6,9 +6,9 @@ import type { APIRoute } from 'astro';
 // Ensure this endpoint is server-rendered
 export const prerender = false;
 
-export const GET: APIRoute = async ({ cookies }) => {
+export const GET: APIRoute = async ({ request, cookies }) => {
   try {
-    const supabase = createServerSupabaseClient({ cookies });
+    const supabase = createServerSupabaseClient({ cookies, request });
     
     const { data: categories, error } = await supabase
       .from('atrocitee_categories')
@@ -46,7 +46,7 @@ export const GET: APIRoute = async ({ cookies }) => {
 export const POST: APIRoute = async ({ request, cookies }) => {
   try {
     // Check if user is admin
-    const isAdminUser = await isAdmin({ cookies });
+    const isAdminUser = await isAdmin(cookies);
     if (!isAdminUser) {
       return new Response(JSON.stringify({
         error: 'Unauthorized',
@@ -59,7 +59,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       });
     }
 
-    const supabase = createServerSupabaseClient({ cookies });
+    const supabase = createServerSupabaseClient({ cookies, request });
     const body = await request.json();
     
     const { data, error } = await supabase

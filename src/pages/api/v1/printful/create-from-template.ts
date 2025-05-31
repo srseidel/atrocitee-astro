@@ -14,7 +14,7 @@ export const prerender = false;
 export async function POST({ request, cookies }: APIContext) {
   try {
     // Check if user is admin
-    const isAdminUser = await isAdmin({ cookies });
+    const isAdminUser = await isAdmin(cookies);
     if (!isAdminUser) {
       return new Response(JSON.stringify({
         error: 'Unauthorized',
@@ -61,7 +61,7 @@ export async function POST({ request, cookies }: APIContext) {
     const name = productName || product.name;
 
     // Insert the product into our database
-    const supabase = createServerSupabaseClient({ cookies });
+    const supabase = createServerSupabaseClient({ cookies, request });
     const { data: productData, error: productError } = await supabase
       .from('products')
       .insert({

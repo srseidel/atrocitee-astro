@@ -501,4 +501,32 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Make sure the function can be called by authenticated users
-GRANT EXECUTE ON FUNCTION is_admin(UUID) TO authenticated; 
+GRANT EXECUTE ON FUNCTION is_admin(UUID) TO authenticated;
+
+-- RLS policies for products table
+-- Remove old policies if present
+DROP POLICY IF EXISTS "Admin users have full access to products" ON products;
+DROP POLICY IF EXISTS "Public read access to active products" ON products;
+
+-- Admin policies
+CREATE POLICY "Admin users can select products"
+  ON products FOR SELECT
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+CREATE POLICY "Admin users can insert products"
+  ON products FOR INSERT
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+CREATE POLICY "Admin users can update products"
+  ON products FOR UPDATE
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+CREATE POLICY "Admin users can delete products"
+  ON products FOR DELETE
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- Public policy
+CREATE POLICY "Public read access to active products"
+  ON products FOR SELECT
+  USING (active = true); 

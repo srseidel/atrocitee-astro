@@ -5,8 +5,12 @@ import { createServerSupabaseClient } from '@lib/supabase/client';
 export const prerender = false;
 
 // Handle logout
-const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
 await supabase.auth.signOut();
+
+// Explicitly clear Supabase auth cookies
+Astro.cookies.delete('sb-access-token', { path: '/' });
+Astro.cookies.delete('sb-refresh-token', { path: '/' });
 
 // Redirect to the home page
 return Astro.redirect('/');

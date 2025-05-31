@@ -2,7 +2,6 @@
 // Server-side rendering for auth
 export const prerender = false;
 
-import { redirectIfNotAdmin } from "@lib/auth/middleware";
 import { PrintfulService } from "@lib/printful/service";
 import { createServerSupabaseClient } from "@lib/supabase/client";
 
@@ -14,7 +13,16 @@ interface ProductVariant {
   sku: string;
   retail_price: number;
   in_stock: boolean;
-  options: Record<string, string>;
+  options: Array<{
+    id: string;
+    value: string | boolean | Array<string>;
+  }>;
+  files: Record<string, any>;
+  printful_id: number;
+  printful_external_id: string | null;
+  printful_product_id: number;
+  printful_synced: boolean;
+  stock_level: number | null;
 }
 
 interface Charity {
@@ -32,25 +40,31 @@ interface ProductTag {
   tags: Tag;
 }
 
-// Check if user is admin and redirect if not
-const redirectResponse = await redirectIfNotAdmin(Astro);
-if (redirectResponse) return redirectResponse;
+// Initialize Supabase client
+const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
+
+// Get the user's session
+const { data: { session } } = await supabase.auth.getSession();
+
+// Check if user is admin
+const isAdmin = session?.user?.app_metadata?.role === 'admin';
+if (!isAdmin) {
+  return new Response('Unauthorized', { status: 401 });
+}
 
 // Get product ID from URL
 const { id } = Astro.params;
-
-// Initialize Supabase client
-const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+console.log('Fetching product with ID:', id);
 
 // Get product details
 const { data: product, error: productError } = await supabase
   .from('products')
   .select(`
     *,
-    product_variants!product_variants_product_id_fkey (*),
-    product_tags (
+    product_variants (*),
+    product_tags!fk_product_tags_product (
       tag_id,
-      tags (
+      tags!fk_product_tags_tag (
         id,
         name
       )
@@ -59,9 +73,34 @@ const { data: product, error: productError } = await supabase
   .eq('id', id)
   .single();
 
+// Log the query results with better variant details
+console.log('Product query results:', {
+  ...product,
+  product_variants: product?.product_variants?.map((variant: ProductVariant) => ({
+    id: variant.id,
+    name: variant.name,
+    sku: variant.sku,
+    retail_price: variant.retail_price,
+    in_stock: variant.in_stock,
+    options: variant.options,
+    files: variant.files,
+    printful_id: variant.printful_id,
+    printful_external_id: variant.printful_external_id,
+    printful_product_id: variant.printful_product_id,
+    printful_synced: variant.printful_synced,
+    stock_level: variant.stock_level
+  }))
+});
+
 // Handle product not found error first
 if (productError || !product) {
-  console.error('Product error:', productError);
+  console.error('Product error:', {
+    error: productError,
+    id,
+    message: productError?.message,
+    details: productError?.details,
+    hint: productError?.hint
+  });
   return new Response('Product not found', { status: 404 });
 }
 
@@ -85,18 +124,29 @@ const { data: charities } = await supabase
   .order('name');
 
 // Fetch all tags for the tag selector
-const { data: tags } = await supabase
+const { data: tags, error: tagsError } = await supabase
   .from('tags')
   .select('id, name')
   .eq('active', true)
   .order('name');
 
+if (tagsError) {
+  console.error('Error fetching tags:', {
+    error: tagsError,
+    message: tagsError.message,
+    details: tagsError.details,
+    hint: tagsError.hint
+  });
+}
+
 // Fetch all categories for the dropdown
-const { data: categories } = await supabase
+const { data: categories, error: categoriesError } = await supabase
   .from('atrocitee_categories')
   .select('id, name, slug')
   .eq('is_active', true)
   .order('name');
+
+console.log('Categories query result:', { categories, error: categoriesError });
 
 // Handle form submission
 if (Astro.request.method === 'POST') {
@@ -119,7 +169,7 @@ if (Astro.request.method === 'POST') {
     atrocitee_charity_id: formData.get('atrocitee_charity_id') || null,
     atrocitee_active: formData.get('active') === 'true',
     atrocitee_featured: formData.get('featured') === 'true',
-    atrocitee_category_id: formData.get('category_id') || null
+    atrocitee_category_id: formData.get('atrocitee_category_id') || null
   };
 
   console.log('Processed form data:', processedData);
@@ -344,7 +394,7 @@ if (Astro.request.method === 'POST') {
             <label for="product-category" class="block text-sm font-medium text-gray-700">Product Category</label>
             <select 
               id="product-category"
-              name="category_id"
+              name="atrocitee_category_id"
               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               aria-label="Select product category"
             >
@@ -417,12 +467,18 @@ if (Astro.request.method === 'POST') {
                   </div>
                 </div>
                 
-                {variant.options && Object.keys(variant.options).length > 0 && (
+                {Array.isArray(variant.options) && variant.options.length > 0 && (
                   <div class="mt-2">
                     <p class="text-sm text-gray-500">Options:</p>
                     <ul class="text-sm">
-                      {Object.entries(variant.options).map(([key, value]) => (
-                        <li>{key}: {value}</li>
+                      {variant.options.map((option) => (
+                        <li class="text-gray-600">
+                          {option.id}: {
+                            Array.isArray(option.value) 
+                              ? option.value.join(', ') || 'None'
+                              : String(option.value || 'None')
+                          }
+                        </li>
                       ))}
                     </ul>
                   </div>

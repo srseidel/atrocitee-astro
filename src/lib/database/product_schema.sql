@@ -16,6 +16,18 @@ DROP TABLE IF EXISTS categories CASCADE;
 DROP TABLE IF EXISTS charities CASCADE;
 DROP TABLE IF EXISTS atrocitee_categories CASCADE;
 
+-- Grant schema usage first
+GRANT USAGE ON SCHEMA public TO authenticated;
+GRANT USAGE ON SCHEMA public TO service_role;
+
+-- Grant sequence permissions
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO service_role;
+
+-- Grant service role access to all tables
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+
 -- 1. Atrocitee Categories Table (Create this first as it's referenced by printful_category_mapping)
 CREATE TABLE atrocitee_categories (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -35,10 +47,19 @@ FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 -- Enable RLS for atrocitee_categories
 ALTER TABLE atrocitee_categories ENABLE ROW LEVEL SECURITY;
 
--- Create RLS policy for atrocitee_categories
+-- Drop existing policies
+DROP POLICY IF EXISTS "Admin full access to atrocitee categories" ON atrocitee_categories;
+DROP POLICY IF EXISTS "Public read access to atrocitee categories" ON atrocitee_categories;
+
+-- Create RLS policies for atrocitee_categories
 CREATE POLICY "Admin full access to atrocitee categories" ON atrocitee_categories
     FOR ALL
+    TO authenticated
     USING (is_admin());
+
+CREATE POLICY "Public read access to atrocitee categories" ON atrocitee_categories
+    FOR SELECT
+    USING (is_active = true);
 
 -- Insert initial core categories
 INSERT INTO atrocitee_categories (slug, name, description, is_active)
@@ -118,6 +139,24 @@ CREATE TABLE tags (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
+-- Enable RLS for tags
+ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies
+DROP POLICY IF EXISTS "Admin users can manage tags" ON tags;
+DROP POLICY IF EXISTS "Public can view active tags" ON tags;
+
+-- Create RLS policies for tags
+CREATE POLICY "Admin users can manage tags" ON tags
+  FOR ALL
+  TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin());
+
+CREATE POLICY "Public can view active tags" ON tags
+  FOR SELECT
+  USING (active = true);
+
 -- 3. Charities Table
 CREATE TABLE charities (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -135,10 +174,10 @@ CREATE TABLE products (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   
   -- Printful specific fields
-  printful_id INTEGER UNIQUE,
+  printful_id BIGINT UNIQUE,
   printful_external_id TEXT,
   printful_synced BOOLEAN DEFAULT FALSE,
-  printful_catalog_variant_id INTEGER,
+  printful_catalog_variant_id BIGINT,
   
   -- Product metadata
   name TEXT NOT NULL,
@@ -166,11 +205,10 @@ CREATE TABLE product_variants (
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   
   -- Printful specific fields
-  printful_id INTEGER UNIQUE,
+  printful_id BIGINT UNIQUE,
   printful_external_id TEXT,
-  printful_product_id INTEGER REFERENCES products(printful_id),
+  printful_product_id BIGINT,
   printful_synced BOOLEAN DEFAULT FALSE,
-  printful_catalog_variant_id INTEGER,
   
   -- Variant metadata
   name TEXT NOT NULL,
@@ -190,6 +228,13 @@ CREATE TABLE product_variants (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Add indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_product_variants_printful_id ON product_variants(printful_id);
+CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON product_variants(product_id);
+
+-- Add comment to track the changes
+COMMENT ON TABLE product_variants IS 'Updated 2024-03-23: Aligned schema with Printful API structure';
 
 -- 6. Product Tags Junction Table
 CREATE TABLE product_tags (
@@ -316,106 +361,91 @@ CREATE TRIGGER update_printful_product_changes_timestamp
 BEFORE UPDATE ON printful_product_changes
 FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 
--- Enable Row Level Security on all tables
-ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
-ALTER TABLE charities ENABLE ROW LEVEL SECURITY;
+-- Enable RLS for products
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+
+-- Grant permissions
+GRANT ALL ON products TO authenticated;
+
+-- Drop old policies
+DROP POLICY IF EXISTS "Admin users can manage products" ON products;
+DROP POLICY IF EXISTS "Public read access to active products" ON products;
+
+-- Create RLS policies for products
+CREATE POLICY "Admin users can manage products" ON products
+  FOR ALL
+  TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin());
+
+CREATE POLICY "Public read access to active products" ON products
+  FOR SELECT
+  USING (atrocitee_active = true);
+
+-- Enable RLS for product_variants
 ALTER TABLE product_variants ENABLE ROW LEVEL SECURITY;
-ALTER TABLE product_tags ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
-ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE backup_status ENABLE ROW LEVEL SECURITY;
-ALTER TABLE printful_category_mapping ENABLE ROW LEVEL SECURITY;
+
+-- Drop old policies
+DROP POLICY IF EXISTS "Admin full access to product variants" ON product_variants;
+DROP POLICY IF EXISTS "Public read access to product variants" ON product_variants;
+
+-- Create RLS policies for product_variants
+CREATE POLICY "Admin users can manage product variants" ON product_variants
+  FOR ALL
+  TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin());
+
+CREATE POLICY "Public read access to product variants" ON product_variants
+  FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM products
+    WHERE products.id = product_variants.product_id
+    AND products.atrocitee_active = true
+  ));
+
+-- Enable RLS for printful_sync_history
 ALTER TABLE printful_sync_history ENABLE ROW LEVEL SECURITY;
+
+-- Drop old policies
+DROP POLICY IF EXISTS "Admin full access to sync history" ON printful_sync_history;
+
+-- Create RLS policies for printful_sync_history
+CREATE POLICY "Admin users can manage sync history" ON printful_sync_history
+  FOR ALL
+  TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin());
+
+-- Enable RLS for printful_product_changes
 ALTER TABLE printful_product_changes ENABLE ROW LEVEL SECURITY;
 
--- Create RLS Policies for Admin Access
+-- Drop old policies
+DROP POLICY IF EXISTS "Admin full access to product changes" ON printful_product_changes;
 
--- Helper function to check admin role
-CREATE OR REPLACE FUNCTION is_admin()
-RETURNS BOOLEAN AS $$
-BEGIN
-  RETURN (
-    auth.jwt() ->> 'role' = 'admin' OR
-    EXISTS (
-      SELECT 1 FROM profiles 
-      WHERE id = auth.uid() 
-      AND role = 'admin'
-    )
-  );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- Create RLS policies for printful_product_changes
+CREATE POLICY "Admin users can manage product changes" ON printful_product_changes
+  FOR ALL
+  TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin());
 
--- Categories Policies
-CREATE POLICY "Admin full access to categories" ON categories
-    FOR ALL
-    USING (is_admin());
+-- Add comment to track the changes
+COMMENT ON TABLE products IS 'Updated 2024-03-23: Simplified RLS policies to use is_admin() function';
+COMMENT ON TABLE product_variants IS 'Updated 2024-03-23: Simplified RLS policies to use is_admin() function';
+COMMENT ON TABLE printful_sync_history IS 'Updated 2024-03-23: Added RLS policies using is_admin() function';
+COMMENT ON TABLE printful_product_changes IS 'Updated 2024-03-23: Added RLS policies using is_admin() function';
 
--- Tags Policies
-CREATE POLICY "Admin full access to tags" ON tags
-    FOR ALL
-    USING (is_admin());
-
--- Charities Policies
-CREATE POLICY "Admin full access to charities" ON charities
-    FOR ALL
-    USING (is_admin());
-
--- Products Policies
-CREATE POLICY "Admin full access to products" ON products
-    FOR ALL
-    USING (is_admin());
-
--- Product Variants Policies
-CREATE POLICY "Admin full access to product variants" ON product_variants
-    FOR ALL
-    USING (is_admin());
-
--- Product Tags Policies
-CREATE POLICY "Admin full access to product tags" ON product_tags
-    FOR ALL
-    USING (is_admin());
-
--- Orders Policies
-CREATE POLICY "Admin full access to orders" ON orders
-    FOR ALL
-    USING (is_admin());
-
--- Order Items Policies
-CREATE POLICY "Admin full access to order items" ON order_items
-    FOR ALL
-    USING (is_admin());
-
--- Backup Status Policies
-CREATE POLICY "Admin full access to backup status" ON backup_status
-    FOR ALL
-    USING (is_admin());
-
--- Printful Sync History Policies
-CREATE POLICY "Admin full access to printful sync history" ON printful_sync_history
-    FOR ALL
-    USING (is_admin());
-
--- Printful Product Changes Policies
-CREATE POLICY "Admin full access to printful product changes" ON printful_product_changes
-    FOR ALL
-    USING (is_admin());
-
--- Grant necessary permissions
-GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated;
-GRANT USAGE ON SCHEMA public TO authenticated;
+-- Add indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_products_printful_id ON products(printful_id);
+CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
+CREATE INDEX IF NOT EXISTS idx_products_atrocitee_active ON products(atrocitee_active);
+CREATE INDEX IF NOT EXISTS idx_products_atrocitee_category_id ON products(atrocitee_category_id);
+CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON product_variants(product_id);
 
 -- Migration: Remove redundant atrocitee_tags field (2024-03-23)
 -- Description: Removes the redundant atrocitee_tags field from the products table
 -- as we're using the product_tags table for the many-to-many relationship
-
--- First, ensure we have a backup of any data in the field
-CREATE TABLE IF NOT EXISTS backup_product_tags AS
-SELECT id, atrocitee_tags
-FROM products
-WHERE atrocitee_tags IS NOT NULL;
 
 -- Remove the field from the products table
 ALTER TABLE products DROP COLUMN IF EXISTS atrocitee_tags;
@@ -440,42 +470,168 @@ ALTER TABLE product_tags
 CREATE INDEX IF NOT EXISTS idx_product_tags_product_id ON product_tags(product_id);
 CREATE INDEX IF NOT EXISTS idx_product_tags_tag_id ON product_tags(tag_id);
 
--- Add RLS policies for product_tags table
+-- Drop all existing policies first
+DROP POLICY IF EXISTS "Enable read access for all users" ON product_tags;
+DROP POLICY IF EXISTS "Admin users can insert tags" ON product_tags;
+DROP POLICY IF EXISTS "Admin users can update tags" ON product_tags;
+DROP POLICY IF EXISTS "Admin users can delete tags" ON product_tags;
+DROP POLICY IF EXISTS "Anyone can view active tags" ON tags;
+DROP POLICY IF EXISTS "Admin users can manage tags" ON tags;
+DROP POLICY IF EXISTS "Public can view all product tags" ON product_tags;
+DROP POLICY IF EXISTS "Admin users can manage product tags" ON product_tags;
+DROP POLICY IF EXISTS "Public can view all tags" ON tags;
+DROP POLICY IF EXISTS "Admin users can select tags" ON tags;
+DROP POLICY IF EXISTS "Admin users can insert tags" ON tags;
+DROP POLICY IF EXISTS "Admin users can update tags" ON tags;
+DROP POLICY IF EXISTS "Admin users can delete tags" ON tags;
+DROP POLICY IF EXISTS "Public can view active tags" ON tags;
+DROP POLICY IF EXISTS "Anyone can view tags" ON tags;
+DROP POLICY IF EXISTS "Admin users can select product_tags" ON product_tags;
+DROP POLICY IF EXISTS "Admin users can insert product_tags" ON product_tags;
+DROP POLICY IF EXISTS "Admin users can update product_tags" ON product_tags;
+DROP POLICY IF EXISTS "Admin users can delete product_tags" ON product_tags;
+DROP POLICY IF EXISTS "Public can view product_tags" ON product_tags;
+DROP POLICY IF EXISTS "Anyone can view product tags" ON product_tags;
+
+-- Remove any existing RLS
+ALTER TABLE tags DISABLE ROW LEVEL SECURITY;
+ALTER TABLE product_tags DISABLE ROW LEVEL SECURITY;
+
+-- Enable RLS
+ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE product_tags ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Enable read access for all users" ON product_tags
+-- Grant base permissions
+GRANT ALL ON tags TO authenticated;
+GRANT ALL ON product_tags TO authenticated;
+GRANT ALL ON tags TO service_role;
+GRANT ALL ON product_tags TO service_role;
+
+-- Create policies for tags
+CREATE POLICY "Public can view all tags" ON tags
   FOR SELECT
   USING (true);
 
-CREATE POLICY "Enable insert for authenticated users" ON product_tags
-  FOR INSERT
+CREATE POLICY "Admin users can manage tags" ON tags
+  FOR ALL
   TO authenticated
-  WITH CHECK (true);
+  USING (is_admin())
+  WITH CHECK (is_admin());
 
-CREATE POLICY "Enable update for authenticated users" ON product_tags
-  FOR UPDATE
-  TO authenticated
-  USING (true)
-  WITH CHECK (true);
-
-CREATE POLICY "Enable delete for authenticated users" ON product_tags
-  FOR DELETE
-  TO authenticated
+-- Create policies for product_tags
+CREATE POLICY "Public can view all product tags" ON product_tags
+  FOR SELECT
   USING (true);
 
--- Add trigger to update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = CURRENT_TIMESTAMP;
-  RETURN NEW;
-END;
-$$ language 'plpgsql';
+CREATE POLICY "Admin users can manage product tags" ON product_tags
+  FOR ALL
+  TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin());
 
-CREATE TRIGGER update_product_tags_updated_at
-  BEFORE UPDATE ON product_tags
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
+-- Grant sequence permissions
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO service_role;
 
--- Add comment to track the changes
-COMMENT ON TABLE product_tags IS 'Updated 2024-03-23: Enhanced with proper constraints, indexes, and RLS policies'; 
+-- Grant schema usage
+GRANT USAGE ON SCHEMA public TO authenticated;
+GRANT USAGE ON SCHEMA public TO service_role;
+
+-- Grant permissions to all tables
+GRANT ALL ON atrocitee_categories TO authenticated;
+GRANT ALL ON printful_category_mapping TO authenticated;
+GRANT ALL ON categories TO authenticated;
+GRANT ALL ON tags TO authenticated;
+GRANT ALL ON charities TO authenticated;
+GRANT ALL ON products TO authenticated;
+GRANT ALL ON product_variants TO authenticated;
+GRANT ALL ON product_tags TO authenticated;
+GRANT ALL ON orders TO authenticated;
+GRANT ALL ON order_items TO authenticated;
+GRANT ALL ON backup_status TO authenticated;
+GRANT ALL ON printful_sync_history TO authenticated;
+GRANT ALL ON printful_product_changes TO authenticated;
+
+-- Enable RLS for all tables
+ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE charities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE backup_status ENABLE ROW LEVEL SECURITY;
+
+-- Create RLS policies for categories
+DROP POLICY IF EXISTS "Admin users can manage categories" ON categories;
+DROP POLICY IF EXISTS "Public read access to active categories" ON categories;
+
+CREATE POLICY "Admin users can manage categories" ON categories
+  FOR ALL
+  TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin());
+
+CREATE POLICY "Public read access to active categories" ON categories
+  FOR SELECT
+  USING (active = true);
+
+-- Create RLS policies for charities
+DROP POLICY IF EXISTS "Admin users can manage charities" ON charities;
+DROP POLICY IF EXISTS "Public read access to active charities" ON charities;
+
+CREATE POLICY "Admin users can manage charities" ON charities
+  FOR ALL
+  TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin());
+
+CREATE POLICY "Public read access to active charities" ON charities
+  FOR SELECT
+  USING (active = true);
+
+-- Create RLS policies for orders
+DROP POLICY IF EXISTS "Admin users can manage all orders" ON orders;
+DROP POLICY IF EXISTS "Users can manage their own orders" ON orders;
+
+CREATE POLICY "Admin users can manage all orders" ON orders
+  FOR ALL
+  TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin());
+
+CREATE POLICY "Users can manage their own orders" ON orders
+  FOR ALL
+  TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+-- Create RLS policies for order_items
+DROP POLICY IF EXISTS "Admin users can manage all order items" ON order_items;
+DROP POLICY IF EXISTS "Users can manage their own order items" ON order_items;
+
+CREATE POLICY "Admin users can manage all order items" ON order_items
+  FOR ALL
+  TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin());
+
+CREATE POLICY "Users can manage their own order items" ON order_items
+  FOR ALL
+  TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM orders
+    WHERE orders.id = order_items.order_id
+    AND orders.user_id = auth.uid()
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM orders
+    WHERE orders.id = order_items.order_id
+    AND orders.user_id = auth.uid()
+  ));
+
+-- Create RLS policies for backup_status
+DROP POLICY IF EXISTS "Admin users can manage backup status" ON backup_status;
+
+CREATE POLICY "Admin users can manage backup status" ON backup_status
+  FOR ALL
+  TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin()); 

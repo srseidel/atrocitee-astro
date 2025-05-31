@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/astro';
 
-import { isAdmin } from '@lib/auth/middleware';
-import PrintfulProductSync from '@lib/printful/product-sync';
+import { isAdmin } from '../../../../lib/auth/middleware';
+import { PrintfulProductSync } from '../../../../lib/printful/product-sync';
 
 import type { APIContext } from 'astro';
 
@@ -30,7 +30,7 @@ export async function GET({ request, cookies, url }: APIContext) {
     const status = url.searchParams.get('status') as 'pending_review' | 'approved' | 'rejected' | 'applied' | undefined;
     
     // Initialize the product sync service
-    const productSync = new PrintfulProductSync(cookies);
+    const productSync = PrintfulProductSync.getInstance(cookies);
     
     // Get product changes
     const changes = await productSync.getProductChanges(status);
@@ -127,7 +127,7 @@ export async function POST({ request, cookies }: APIContext) {
     }
     
     // Initialize the product sync service
-    const productSync = new PrintfulProductSync(cookies);
+    const productSync = PrintfulProductSync.getInstance(cookies);
     
     // Review the product change
     const success = await productSync.reviewProductChange(

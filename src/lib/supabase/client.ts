@@ -66,46 +66,51 @@ export const createBrowserSupabaseClient = (): SupabaseClient | MockSupabaseClie
 // For direct usage in components (backward compatible with existing code)
 export const supabase = createBrowserSupabaseClient();
 
-// Helper to adapt AstroCookies to Supabase SSR's expected interface
-const astroCookiesAdapter = (cookies: AstroCookies): {
-  get: (key: string) => string | null;
-  set: (key: string, value: string, options: { path?: string; maxAge?: number; domain?: string; sameSite?: 'lax' | 'strict' | 'none'; secure?: boolean }) => void;
-  remove: (key: string, options: { path?: string; domain?: string }) => void;
-  getAll: () => { name: string; value: string }[];
-} => ({
-  get: (key: string): string | null => {
-    const cookie = cookies.get(key);
-    return cookie ? cookie.value : null;
-  },
-  set: (key: string, value: string, options: { path?: string; maxAge?: number; domain?: string; sameSite?: 'lax' | 'strict' | 'none'; secure?: boolean }): void => {
-    cookies.set(key, value, { 
-      ...options, 
-      path: '/',
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production'
-    });
-  },
-  remove: (key: string, options: { path?: string; domain?: string }): void => {
-    cookies.delete(key, { 
-      ...options, 
-      path: '/',
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production'
-    });
-  },
-  getAll: (): { name: string; value: string }[] => {
-    // Since AstroCookies doesn't have entries(), we'll return an empty array
-    // This is fine since Supabase only uses getAll for debugging
-    return [];
-  }
-});
+export const createServerSupabaseClient = ({
+  cookies,
+  request,
+}: {
+  cookies: AstroCookies;
+  request: Request;
+}): TypedSupabaseClient => {
+  try {
+    if (!env.supabase.url || !env.supabase.anonKey) {
+      throw new Error('Missing Supabase environment variables');
+    }
 
-export const createServerSupabaseClient = ({ cookies }: { cookies: AstroCookies }): TypedSupabaseClient => {
-  return createServerClient(
-    env.supabase.url,
-    env.supabase.anonKey,
-    { cookies: astroCookiesAdapter(cookies) }
-  );
+    return createServerClient(
+      env.supabase.url,
+      env.supabase.anonKey,
+      {
+        cookies: {
+          getAll() {
+            if (!request) return [];
+            const cookieHeader = request.headers.get('cookie') || '';
+            return cookieHeader
+              .split(';')
+              .map(cookie => cookie.trim())
+              .filter(Boolean)
+              .map(cookie => {
+                const [name, ...rest] = cookie.split('=');
+                return { name, value: rest.join('=') };
+              });
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) => {
+                cookies.set(name, value, options);
+              });
+            } catch (error) {
+              console.error('Error setting cookies:', error);
+            }
+          }
+        }
+      }
+    );
+  } catch (error) {
+    console.error('Error creating Supabase client:', error);
+    throw error;
+  }
 };
 
 // Auth helper functions (for backward compatibility)
@@ -151,11 +156,12 @@ export const getCurrentUser = async (): Promise<unknown> => {
 
 // Type-safe helper for checking admin status
 export async function checkAdminStatus(supabase: ReturnType<typeof createServerSupabaseClient>, userId: string): Promise<boolean> {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', userId)
-    .single();
+  const { data, error } = await supabase.rpc('is_admin', { user_id: userId });
   
-  return profile?.role === 'admin';
+  if (error) {
+    console.error('Error checking admin status:', error);
+    return false;
+  }
+  
+  return data === true;
 } 

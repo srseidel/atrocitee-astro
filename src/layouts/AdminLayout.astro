@@ -2,22 +2,25 @@
 // Server-side rendering for auth
 export const prerender = false;
 
-import { redirectIfNotAdmin } from "@lib/auth/middleware";
-
 import MainLayout from "@layouts/MainLayout.astro";
-
-// Check if user is admin and redirect if not
-const redirectResponse = await redirectIfNotAdmin(Astro);
-if (redirectResponse) {
-  console.log("[DEBUG] AdminLayout: Redirecting to", redirectResponse.headers.get('Location'));
-  return redirectResponse;
-}
+import { createServerSupabaseClient } from '@lib/supabase/client';
 
 interface Props {
   title?: string;
 }
 
 const { title = "Admin Dashboard" } = Astro.props;
+
+let isAuthenticated = false;
+let userEmail = '';
+try {
+  if (Astro.request.headers) {
+    const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
+    const { data: { user } } = await supabase.auth.getUser();
+    isAuthenticated = !!user;
+    userEmail = user?.email || '';
+  }
+} catch {}
 ---
 
 <MainLayout title={title}>
@@ -50,6 +53,13 @@ const { title = "Admin Dashboard" } = Astro.props;
             </a>
           </li>
         </ul>
+        {isAuthenticated && (
+          <div class="p-4 border-t mt-4">
+            <div class="text-xs text-neutral-500 mb-1">Signed in as</div>
+            <div class="font-medium text-sm text-neutral-800 truncate" title={userEmail}>{userEmail}</div>
+            <a href="/auth/logout" class="btn btn-outline mt-2 w-full">Logout</a>
+          </div>
+        )}
       </nav>
     </aside>
     

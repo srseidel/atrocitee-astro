@@ -1,8 +1,19 @@
 import { createServerClient } from '@supabase/ssr';
-
+import { createServerSupabaseClient, checkAdminStatus } from '@lib/supabase/client';
 import { env } from '@lib/config/env';
+import type { AstroCookies, AstroGlobal, MiddlewareHandler } from 'astro';
+import type { SupabaseClient, User } from '@supabase/supabase-js';
+import type { APIContext } from 'astro';
 
-import type { MiddlewareHandler , AstroCookies , AstroGlobal } from 'astro';
+// Define custom locals type
+declare global {
+  namespace App {
+    interface Locals {
+      user: User | null;
+      supabase: SupabaseClient;
+    }
+  }
+}
 
 // Helper to adapt AstroCookies to Supabase SSR's expected interface
 const astroCookiesAdapter = (cookies: AstroCookies): {
@@ -23,10 +34,11 @@ const astroCookiesAdapter = (cookies: AstroCookies): {
   set: (key: string, value: string, options: { path?: string; maxAge?: number; domain?: string; sameSite?: 'lax' | 'strict' | 'none'; secure?: boolean }): void => {
     try {
       cookies.set(key, value, { 
-        ...options, 
         path: '/',
         sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production'
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: options.maxAge || 60 * 60 * 24 * 7, // Default to 7 days if not specified
+        ...options // Allow overriding defaults
       });
     } catch (error) {
       console.error(`Error setting cookie ${key}:`, error);
@@ -35,7 +47,6 @@ const astroCookiesAdapter = (cookies: AstroCookies): {
   remove: (key: string, options: { path?: string; domain?: string }): void => {
     try {
       cookies.delete(key, { 
-        ...options, 
         path: '/',
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production'
@@ -46,8 +57,6 @@ const astroCookiesAdapter = (cookies: AstroCookies): {
   },
   getAll: (): { name: string; value: string }[] => {
     try {
-      // Since AstroCookies doesn't have entries(), we'll return an empty array
-      // This is fine since Supabase only uses getAll for debugging
       return [];
     } catch (error) {
       console.error('Error getting all cookies:', error);
@@ -59,188 +68,211 @@ const astroCookiesAdapter = (cookies: AstroCookies): {
 // Pattern matching for protected routes
 const ADMIN_ROUTE_PATTERN = /^\/admin\//;
 const ACCOUNT_ROUTE_PATTERN = /^\/account(\/|$)/;
+const ADMIN_API_ROUTE_PATTERN = /^\/api\/v1\/(admin|tags)\//;
 const ACCOUNT_SETTINGS_PATH = '/account/setting';
 const ACCOUNT_ORDER_PATH = '/account/order';
-const AUTH_PATHS = ['/auth/login', '/auth/register', '/auth/reset-password', '/auth/forgot-password'];
+const AUTH_PATHS = ['/auth/login', '/auth/signin', '/auth/signup', '/auth/reset-password', '/auth/forgot-password'];
 
 // Helper function to check if a user is an admin
-export const isAdmin = async ({ cookies }: { cookies: AstroCookies }): Promise<boolean> => {
+export async function isAdmin(supabase: SupabaseClient): Promise<boolean> {
   try {
-    const supabase = createServerSupabaseClient({ cookies });
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
     
-    if (error || !user) {
-      return false;
-    }
-    
-    // Check user metadata for admin role
-    const isAdminUser = user.app_metadata?.role === 'admin' || 
-                        user.user_metadata?.role === 'admin';
-    
-    if (isAdminUser) {
-      return true;
-    }
-    
-    // Make RPC call to check admin status in database
-    const { data: adminCheckResult, error: adminCheckError } = await supabase
-      .rpc('is_admin', { user_id: user.id });
-    
-    return !adminCheckError && !!adminCheckResult;
+    // Check the role directly from app_metadata
+    return user.app_metadata?.role === 'admin';
   } catch (error) {
     console.error('Error checking admin status:', error);
     return false;
   }
-};
+}
 
 // Helper function to redirect if user is not admin
 export const redirectIfNotAdmin = async (Astro: AstroGlobal): Promise<Response | null> => {
   try {
-    const isAdminUser = await isAdmin({ cookies: Astro.cookies });
+    const isAdminUser = await isAdmin(Astro.locals.supabase);
     
     if (!isAdminUser) {
-      return new Response(null, {
-        status: 302,
-        headers: {
-          'Location': '/auth/unauthorized'
-        }
-      });
+      return Astro.redirect('/auth/login?redirect=/admin');
     }
     
     return null;
   } catch (error) {
-    console.error('Error in redirectIfNotAdmin:', error);
-    return new Response(null, {
-      status: 302,
-      headers: {
-        'Location': '/auth/login'
-      }
-    });
+    console.error('Error checking admin status:', error);
+    return Astro.redirect('/auth/login?redirect=/admin');
   }
 };
 
 // Authentication middleware
-export const authMiddleware: MiddlewareHandler = async ({ cookies, request, url }, next): Promise<Response> => {
-  // Skip auth check for non-protected routes and auth pages
-  const pathname = url.pathname;
-  const isAuthPage = AUTH_PATHS.includes(pathname);
-  const isProtectedRoute = ADMIN_ROUTE_PATTERN.test(pathname) || 
-                           ACCOUNT_ROUTE_PATTERN.test(pathname) || 
-                           pathname === ACCOUNT_SETTINGS_PATH || 
-                           pathname === ACCOUNT_ORDER_PATH;
+export const authMiddleware: MiddlewareHandler = async (context, next) => {
+  const { cookies, request, url } = context;
   
-  if (!isProtectedRoute || isAuthPage) {
-    const response = await next();
-    return response instanceof Response ? response : new Response();
+  // Skip auth check for public routes
+  const pathname = url.pathname;
+  const isPublicRoute = !pathname.startsWith('/admin') && 
+                       !pathname.startsWith('/account') && 
+                       !ADMIN_API_ROUTE_PATTERN.test(pathname);
+  
+  if (isPublicRoute) {
+    return next();
   }
 
-  // Determine if this is an admin route that requires admin privileges
-  const requiresAdmin = ADMIN_ROUTE_PATTERN.test(pathname);
-  
   try {
     // Create Supabase client
-    const supabase = createServerSupabaseClient({ cookies });
-    
-    // Get user
-    const { data: { user }, error } = await supabase.auth.getUser();
-    
-    // eslint-disable-next-line no-console
-    console.log(`[Middleware] Auth check for ${pathname}, User:`, user?.id || 'none');
-    
-    // If no user or error, redirect to login
-    if (error || !user) {
-      // eslint-disable-next-line no-console
-      console.log(`[Middleware] No authenticated user found:`, error?.message);
-      return new Response(null, {
-        status: 302,
+    const supabase = createServerSupabaseClient({ cookies, request });
+
+    // Get user session
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // Add user to locals so it's available in all routes
+    context.locals.user = user;
+    context.locals.supabase = supabase;
+
+    // Check for admin routes (both web and API)
+    const isAdminRoute = pathname.startsWith('/admin') || ADMIN_API_ROUTE_PATTERN.test(pathname);
+    if (isAdminRoute && (!user?.app_metadata?.role || user.app_metadata.role !== 'admin')) {
+      // For API routes, return 403 instead of redirecting
+      if (pathname.startsWith('/api')) {
+        return new Response(JSON.stringify({
+          error: 'Unauthorized',
+          message: 'Admin privileges required',
+          success: false
+        }), {
+          status: 403,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+      }
+      // For web routes, redirect to unauthorized page
+      return context.redirect('/auth/unauthorized');
+    }
+
+    // If trying to access account routes without being logged in, redirect to login
+    if (pathname.startsWith('/account') && !user) {
+      return context.redirect('/auth/login');
+    }
+
+    return next();
+  } catch (error) {
+    console.error('Middleware error:', error);
+    // For API routes, return 500 instead of redirecting
+    if (pathname.startsWith('/api')) {
+      return new Response(JSON.stringify({
+        error: 'Server Error',
+        message: error instanceof Error ? error.message : 'Internal server error',
+        success: false
+      }), {
+        status: 500,
         headers: {
-          'Location': `/auth/login?redirect=${encodeURIComponent(pathname)}`
+          'Content-Type': 'application/json'
         }
       });
     }
+    return context.redirect('/auth/login');
+  }
+};
+
+// Helper function to redirect if user is not authenticated
+export const redirectIfNotAuthenticated = async (Astro: AstroGlobal): Promise<Response | null> => {
+  try {
+    const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
+    const { data: { user } } = await supabase.auth.getUser();
     
-    // If admin route, check admin permissions
-    if (requiresAdmin) {
-      // Check user metadata for admin role
-      const isAdminUser = user.app_metadata?.role === 'admin' || 
-                          user.user_metadata?.role === 'admin';
-      
-      // eslint-disable-next-line no-console
-      console.log(`[Middleware] Admin check for user ${user.id}, metadata check:`, isAdminUser);
-      
-      if (!isAdminUser) {
-        // Make RPC call to check admin status in database
-        const { data: adminCheckResult, error: adminCheckError } = await supabase
-          .rpc('is_admin', { user_id: user.id });
-        
-        // eslint-disable-next-line no-console
-        console.log(`[Middleware] Admin DB check result:`, adminCheckResult, adminCheckError?.message);
-        
-        // If not admin or error checking, redirect to unauthorized page
-        if (adminCheckError || !adminCheckResult) {
-          // eslint-disable-next-line no-console
-          console.log(`[Middleware] User is not an admin, redirecting to unauthorized`);
-          return new Response(null, {
-            status: 302,
-            headers: {
-              'Location': '/auth/unauthorized'
-            }
-          });
-        }
-      }
+    if (!user) {
+      return Astro.redirect('/auth/login');
     }
     
-    // User is authenticated (and is admin if required), proceed
-    // eslint-disable-next-line no-console
-    console.log(`[Middleware] Auth check passed for ${pathname}`);
-    const response = await next();
-    return response instanceof Response ? response : new Response();
+    return null;
   } catch (error) {
-    console.error('Authentication middleware error:', error);
+    console.error('Error checking authentication:', error);
+    return Astro.redirect('/auth/login');
+  }
+};
+
+// Helper function to redirect if user is authenticated
+export const redirectIfAuthenticated = async (Astro: AstroGlobal): Promise<Response | null> => {
+  try {
+    const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
+    const { data: { user } } = await supabase.auth.getUser();
     
-    // On error, redirect to login
-    return new Response(null, {
-      status: 302,
-      headers: {
-        'Location': `/auth/login?redirect=${encodeURIComponent(pathname)}`
+    if (user) {
+      return Astro.redirect('/');
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error checking authentication:', error);
+    return null;
+  }
+};
+
+// Helper function to get user data
+export const getUser = async (Astro: AstroGlobal) => {
+  try {
+    const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
+    const { data: { user }, error } = await supabase.auth.getUser();
+    
+    if (error || !user) {
+      return null;
+    }
+    
+    return user;
+  } catch (error) {
+    console.error('Error in getUser:', error);
+    return null;
+  }
+};
+
+// Helper function to update user admin role
+export const updateUserToAdmin = async (
+  email: string,
+  supabaseAdminClient: SupabaseClient,
+  isAdmin: boolean = true // Add parameter to control admin status
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    // First, get the user by email
+    const { data: { users }, error: getUserError } = await supabaseAdminClient.auth.admin.listUsers();
+    
+    if (getUserError) {
+      throw getUserError;
+    }
+
+    const targetUser = users.find(u => u.email === email);
+    if (!targetUser) {
+      return { success: false, error: 'User not found' };
+    }
+
+    // Update the user's role in auth.users
+    const { error: updateError } = await supabaseAdminClient.auth.admin.updateUserById(
+      targetUser.id,
+      { 
+        app_metadata: { 
+          role: isAdmin ? 'admin' : null 
+        }
       }
-    });
-  }
-};
-
-// Combined middleware for auth and CSP
-export const onRequest: MiddlewareHandler = async (context, next): Promise<Response> => {
-  // First run auth middleware
-  const authResponse = await authMiddleware(context, next);
-  
-  // If auth middleware returned a response (redirect), return it
-  if (authResponse instanceof Response) {
-    return authResponse;
-  }
-  
-  // Otherwise, get the response from next()
-  const response = await next();
-  
-  // Add CSP headers
-  if (response instanceof Response) {
-    response.headers.set(
-      'Content-Security-Policy',
-      "default-src 'self'; " +
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-      "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://fonts.googleapis.com; " +
-      "style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://fonts.googleapis.com; " +
-      "font-src 'self' data: https://fonts.gstatic.com; " +
-      "img-src 'self' data: https:; " +
-      "connect-src 'self' https://*.supabase.co https://api.printful.com https://astro.build https://*.astro.build;"
     );
-  }
-  
-  return response;
-};
 
-export const createServerSupabaseClient = ({ cookies }: { cookies: AstroCookies }): ReturnType<typeof createServerClient> => {
-  return createServerClient(
-    env.supabase.url,
-    env.supabase.anonKey,
-    { cookies: astroCookiesAdapter(cookies) }
-  );
+    if (updateError) {
+      throw updateError;
+    }
+
+    // Update the user's role in profiles table
+    const { error: profileError } = await supabaseAdminClient
+      .from('profiles')
+      .update({ role: isAdmin ? 'admin' : null })
+      .eq('id', targetUser.id);
+
+    if (profileError) {
+      throw profileError;
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to update user role' 
+    };
+  }
 }; 

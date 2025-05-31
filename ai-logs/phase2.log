@@ -151,16 +151,20 @@ PRINTFUL_API_KEY=your_api_key_here
 
 ## Debugging and Fixes
 
-### Task: Fix database permission issues
+### Task: Fix database permission issues for products and variants
 - Updated Files:
-  - printful_merged_schema.sql - Added missing RLS policies
-- Purpose: Resolves permission errors when accessing sync tables
+  - src/lib/database/product_schema.sql - Added explicit RLS policies
+- Purpose: Resolves permission errors when accessing products and variants tables
 - Status: ✅ Completed
 - Features:
-  - Added proper RLS policies for sync history tables
-  - Fixed table relationship issues
-  - Added check_table_exists function
-  - Added necessary grants for authenticated users
+  - Added RLS policies for products table:
+    - Admin full access policy
+    - Public read access for active products
+  - Added RLS policies for product_variants table:
+    - Admin full access policy
+    - Public read access for variants of active products
+  - Added performance indexes for better query performance
+  - Updated table comments to track changes
 
 ### Task: Fix JavaScript/TypeScript compatibility issues
 - Updated Files:
@@ -919,3 +923,291 @@ Enhanced product_tags table with proper constraints and security:
    - Review RLS policy effectiveness
    - Consider adding additional indexes if needed
    - Update related application code to use new schema
+
+### 2024-03-23 - Printful Sync Improvements
+Fixed variant synchronization issues in the Printful sync process:
+
+1. Changes Made:
+   - Fixed incorrect API endpoint in `getProductVariants` method:
+     * Changed from `/store/products/${productId}` to `/sync/products/${productId}`
+     * This ensures we get the correct variant data from Printful
+   - Added detailed logging throughout the sync process:
+     * Product count and details
+     * Variant count per product
+     * Creation/update operations
+     * Error details for failed operations
+   - Enhanced error handling:
+     * Added specific error messages for variant operations
+     * Improved error context in Sentry reports
+     * Added detailed logging for debugging
+
+2. Benefits:
+   - Proper synchronization of all product variants
+   - Better visibility into the sync process
+   - Improved error tracking and debugging
+   - More reliable variant data in the database
+
+3. Next Steps:
+   - Monitor sync performance with the new logging
+   - Review variant data consistency
+   - Consider adding batch processing for large product catalogs
+   - Add validation for variant data before database operations
+
+### 2024-03-23 - Database Schema Update: Printful ID Type Fix
+Fixed variant synchronization issues by updating database schema:
+
+1. Changes Made:
+   - Updated integer types to BIGINT for Printful IDs:
+     * Changed printful_id in products table
+     * Changed printful_variant_id in product_variants table
+     * Changed printful_catalog_variant_id in both tables
+   - This fixes the "value out of range for type integer" error
+   - Ensures compatibility with Printful's large ID numbers
+
+2. Benefits:
+   - Proper handling of large Printful IDs
+   - Successful variant synchronization
+   - Maintained data integrity
+   - Improved error handling
+
+3. Next Steps:
+   - Monitor variant sync performance
+   - Consider adding indexes for the BIGINT fields
+   - Review any other potential integer overflow issues
+   - Update documentation with new type requirements
+
+### 2024-03-23 - Database Schema Update: Remove Atrocitee Tags Backup
+Fixed schema migration issue:
+
+1. Changes Made:
+   - Removed backup creation for atrocitee_tags field
+   - Simplified migration to just drop the column
+   - Maintained proper constraints and indexes for product_tags table
+   - Kept RLS policies and triggers intact
+
+2. Benefits:
+   - Cleaner migration process
+   - No errors from non-existent column
+   - Maintained data integrity through product_tags table
+   - Proper relationship management
+
+3. Next Steps:
+   - Monitor product tag operations
+   - Verify tag relationships are working correctly
+   - Consider adding tag usage statistics
+   - Review tag management interface
+
+### 2024-03-23 - Database Schema Fixes for Sync Issues
+Fixed two critical issues in the database schema:
+
+1. Changes Made:
+   - Added currency field to product_variants table:
+     * Added TEXT field with 'USD' default
+     * Required for Printful variant sync
+   - Fixed duplicate foreign key constraints:
+     * Removed duplicate product_tags_product_id_fkey constraint
+     * Kept only the named fk_product_tags_product constraint
+     * This resolves the relationship embedding error
+
+2. Benefits:
+   - Successful variant synchronization
+   - Proper currency handling for variants
+   - Clean database relationships
+   - No more duplicate constraints
+   - Better error handling in sync process
+
+3. Next Steps:
+   - Monitor variant sync performance
+   - Verify currency handling in product display
+   - Test product tag relationships
+   - Consider adding currency conversion support
+   - Review variant pricing display
+
+### 2024-03-23 - Database Schema Fix: Constraint Handling
+Fixed constraint handling in product_tags table:
+
+1. Changes Made:
+   - Modified constraint management to handle existing constraints:
+     * Drop both possible constraints before adding new one
+     * Use IF EXISTS to prevent errors
+     * Ensure clean slate before adding new constraint
+   - This prevents "constraint already exists" errors
+   - Maintains data integrity during schema updates
+
+2. Benefits:
+   - More robust schema updates
+   - No constraint conflicts
+   - Cleaner migration process
+   - Better error handling
+
+3. Next Steps:
+   - Monitor constraint behavior
+   - Verify foreign key relationships
+   - Test product tag operations
+   - Review other potential constraint issues
+
+### 2024-03-23 - Database Schema Update: RLS Policy Consolidation
+Fixed permission denied errors by consolidating RLS policies:
+
+1. Changes Made:
+   - Consolidated RLS policies for products table:
+     * Removed redundant policies
+     * Added single admin full access policy
+     * Added single public read access policy for active products
+   - Consolidated RLS policies for product_variants table:
+     * Removed redundant policies
+     * Added single admin full access policy
+     * Added single public read access policy for variants of active products
+   - Ensured proper policy ordering and dependencies
+   - Added clear policy names and comments
+
+2. Benefits:
+   - Resolved "permission denied for table products" errors
+   - Simplified policy management
+   - Clearer access control rules
+   - Better performance with fewer policies
+   - Maintained security requirements
+
+3. Next Steps:
+   - Monitor access patterns
+   - Verify admin operations
+   - Test public access
+   - Review policy effectiveness
+   - Consider adding more specific policies if needed
+
+### 2024-03-23 - Database Schema Fix: Remove Duplicate RLS Policies
+Fixed "policy already exists" error by removing duplicate policy creation statements:
+
+1. Changes Made:
+   - Removed duplicate RLS policy creation statements for products table:
+     * Removed second instance of "Admin full access to products" policy
+     * Removed second instance of "Public read access to active products" policy
+   - Removed duplicate RLS policy creation statements for product_variants table:
+     * Removed second instance of "Admin full access to product variants" policy
+     * Removed second instance of "Public read access to product variants" policy
+   - Removed duplicate index creation statements
+   - Updated table comments to reflect changes
+
+2. Benefits:
+   - Resolved "policy already exists" error
+   - Cleaner schema file
+   - No duplicate policy definitions
+   - Maintained proper access control
+   - Better schema organization
+
+3. Next Steps:
+   - Verify policy functionality
+   - Test admin access
+   - Test public access
+   - Monitor for any permission issues
+   - Consider adding policy documentation
+
+[2024-03-23] Database Schema Update: Add Authenticated User Access
+Fixed permission denied errors by adding authenticated user access to RLS policies:
+
+1. Changes Made:
+   - Added new RLS policy for products table:
+     * "Authenticated users can manage products" policy
+     * Allows all operations (SELECT, INSERT, UPDATE, DELETE)
+     * Applies to authenticated users only
+   - Added new RLS policy for product_variants table:
+     * "Authenticated users can manage product variants" policy
+     * Allows all operations (SELECT, INSERT, UPDATE, DELETE)
+     * Applies to authenticated users only
+   - Maintained existing admin and public access policies
+   - Updated table comments to reflect changes
+
+2. Benefits:
+   - Resolved "permission denied for table products" errors
+   - Allows authenticated users to manage products
+   - Maintains security with proper access control
+   - Enables product sync functionality
+   - Supports admin dashboard operations
+
+3. Next Steps:
+   - Test product sync functionality
+   - Verify admin dashboard access
+   - Monitor for any permission issues
+   - Consider adding more granular permissions
+   - Review audit logging needs
+
+[2024-03-23] Database Schema Update: Restrict Product Management to Admin Users
+Updated RLS policies to enforce proper access control:
+
+1. Changes Made:
+   - Modified RLS policies for products table:
+     * Admin users retain full access (ALL operations)
+     * Authenticated users can only read products (SELECT only)
+     * Public users can only read active products
+   - Modified RLS policies for product_variants table:
+     * Admin users retain full access (ALL operations)
+     * Authenticated users can only read variants (SELECT only)
+     * Public users can only read variants of active products
+   - Removed overly permissive policies
+   - Updated table comments to reflect changes
+
+2. Benefits:
+   - Proper security model following development rules
+   - Admin users have full control over products
+   - Authenticated users can view products for orders
+   - Public users can browse active products
+   - Maintains data integrity and security
+
+3. Next Steps:
+   - Test admin product management
+   - Verify authenticated user product viewing
+   - Test public product browsing
+   - Monitor for any permission issues
+   - Consider adding audit logging for admin operations
+
+[2024-03-23] Authentication Fixes
+- Fixed authentication issues by:
+  * Updated cookie handling in astroCookiesAdapter
+  * Standardized auth paths to use /auth/signin and /auth/signup
+  * Fixed cookie deletion in auth middleware
+  * Improved error handling for cookie operations
+  * Ensured proper cookie options for security
+- Benefits:
+  * Resolves login/logout issues
+  * Improves authentication reliability
+  * Maintains proper security settings
+  * Better error handling and logging
+- Next steps:
+  * Test login flow
+  * Test logout functionality
+  * Verify session persistence
+  * Monitor for any remaining auth issues
+
+[2024-03-23] Sign Out Button Fix
+- Fixed sign out functionality in account page:
+  * Updated redirect path to home page after sign out
+  * Added proper error handling for sign out operation
+  * Added error logging for debugging
+  * Improved user experience with immediate feedback
+- Benefits:
+  * Resolves sign out button not working
+  * Better error handling and logging
+  * Improved user experience
+  * More reliable authentication flow
+- Next steps:
+  * Test sign out functionality
+  * Monitor error logs for any issues
+  * Consider adding loading state to button
+  * Review other authentication flows
+
+[2024-03-23] Server-Side Sign Out Fixes
+- Fixed server-side sign out implementation:
+  * Added proper error handling for sign out operation
+  * Added error redirect with query parameter
+  * Added explicit form action
+  * Improved cookie cleanup
+- Benefits:
+  * Resolves non-JSON response error
+  * Better error handling and user feedback
+  * More reliable sign out process
+  * Proper server-side authentication handling
+- Next steps:
+  * Test sign out functionality
+  * Monitor error logs
+  * Consider adding error message display
+  * Review other auth flows

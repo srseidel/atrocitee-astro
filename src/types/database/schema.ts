@@ -74,6 +74,7 @@ export interface Database {
       product_variants: {
         Row: {
           id: string
+          product_id: string
           printful_id: number | null
           printful_external_id: string | null
           printful_product_id: number | null
@@ -91,6 +92,7 @@ export interface Database {
         }
         Insert: {
           id?: string
+          product_id: string
           printful_id?: number | null
           printful_external_id?: string | null
           printful_product_id?: number | null
@@ -108,6 +110,7 @@ export interface Database {
         }
         Update: {
           id?: string
+          product_id?: string
           printful_id?: number | null
           printful_external_id?: string | null
           printful_product_id?: number | null

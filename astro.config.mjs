@@ -4,7 +4,6 @@ import tailwind from '@astrojs/tailwind';
 import react from '@astrojs/react';
 import cloudflare from '@astrojs/cloudflare';
 import sentry from '@sentry/astro';
-import vercel from '@astrojs/vercel/serverless';
 import { VitePWA } from 'vite-plugin-pwa';
 
 // Determine if we're in development or production mode
@@ -15,7 +14,13 @@ export default defineConfig({
   // In development, use static output to avoid SSR issues
   // In production, use server output for dynamic features
   output: isDev ? 'static' : 'server',
-  adapter: cloudflare(),
+  adapter: cloudflare({
+    runtime: {
+      mode: 'local',
+      type: 'pages'
+    }
+  }),
+  
   integrations: [
     tailwind(),
     react({
@@ -87,23 +92,29 @@ export default defineConfig({
       ),
     }
   },
-  // Add CSP configuration
-  server: {
-    headers: {
-      'Content-Security-Policy': `
-        default-src 'self';
-        script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.tailwindcss.com;
-        style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com;
-        img-src 'self' data: https: blob:;
-        font-src 'self' data:;
-        connect-src 'self' ${isDev ? 'ws://localhost:* ws://127.0.0.1:* ' : ''}https://*.supabase.co https://api.printful.com;
-        frame-src 'self';
-        object-src 'none';
-        base-uri 'self';
-        form-action 'self';
-        frame-ancestors 'none';
-        upgrade-insecure-requests;
-      `.replace(/\s+/g, ' ').trim()
+  // Add headers configuration for Cloudflare
+  headers: [
+    {
+      source: '/(.*)',
+      headers: [
+        {
+          key: 'Content-Security-Policy',
+          value: `
+            default-src 'self';
+            script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.tailwindcss.com;
+            style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://fonts.googleapis.com;
+            img-src 'self' data: https: blob:;
+            font-src 'self' data: https://fonts.gstatic.com;
+            connect-src 'self' ${isDev ? 'ws://localhost:* ws://127.0.0.1:* ' : ''}https://*.supabase.co https://api.printful.com https://sentry.io;
+            frame-src 'self';
+            object-src 'none';
+            base-uri 'self';
+            form-action 'self';
+            frame-ancestors 'none';
+            upgrade-insecure-requests;
+          `.replace(/\s+/g, ' ').trim()
+        }
+      ]
     }
-  }
+  ]
 });

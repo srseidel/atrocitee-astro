@@ -45,7 +45,7 @@ If you're not using wrangler.toml, you can set environment variables directly in
 4. Add both environment variables for each environment (Production and Preview)
 5. Save the changes
 
-> **IMPORTANT**: When using wrangler.toml, only secret values should be set in the Cloudflare dashboard. Regular environment variables must be defined in the wrangler.toml file.
+> **IMPORTANT**: When using wrangler.toml, only secret values should be set in the Cloudflare dashboard. Regular environment variables must be defined in the wrangler.toml file
 
 ### Preventing Build-Time Errors
 

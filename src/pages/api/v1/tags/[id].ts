@@ -7,9 +7,9 @@ import type { APIContext } from 'astro';
 export const prerender = false;
 
 // GET: Fetch a single tag
-export async function GET({ params, cookies }: APIContext) {
+export async function GET({ params, cookies, request }: APIContext) {
   try {
-    const supabase = createServerSupabaseClient({ cookies });
+    const supabase = createServerSupabaseClient({ cookies, request });
     const { id } = params;
 
     if (!id) {
@@ -85,7 +85,7 @@ export async function GET({ params, cookies }: APIContext) {
 // PUT: Update a tag
 export async function PUT({ params, request, cookies }: APIContext) {
   try {
-    const supabase = createServerSupabaseClient({ cookies });
+    const supabase = createServerSupabaseClient({ cookies, request });
     const { id } = params;
 
     if (!id) {
@@ -95,21 +95,6 @@ export async function PUT({ params, request, cookies }: APIContext) {
         success: false
       }), {
         status: 400,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-    }
-
-    // Check if user is admin
-    const isUserAdmin = await isAdmin(supabase);
-    if (!isUserAdmin) {
-      return new Response(JSON.stringify({
-        error: 'Unauthorized',
-        message: 'Admin privileges required',
-        success: false
-      }), {
-        status: 403,
         headers: {
           'Content-Type': 'application/json'
         }
@@ -185,9 +170,9 @@ export async function PUT({ params, request, cookies }: APIContext) {
 }
 
 // DELETE: Delete a tag
-export async function DELETE({ params, cookies }: APIContext) {
+export async function DELETE({ params, cookies, request }: APIContext) {
   try {
-    const supabase = createServerSupabaseClient({ cookies });
+    const supabase = createServerSupabaseClient({ cookies, request });
     const { id } = params;
 
     if (!id) {
@@ -197,21 +182,6 @@ export async function DELETE({ params, cookies }: APIContext) {
         success: false
       }), {
         status: 400,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-    }
-
-    // Check if user is admin
-    const isUserAdmin = await isAdmin(supabase);
-    if (!isUserAdmin) {
-      return new Response(JSON.stringify({
-        error: 'Unauthorized',
-        message: 'Admin privileges required',
-        success: false
-      }), {
-        status: 403,
         headers: {
           'Content-Type': 'application/json'
         }

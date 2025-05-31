@@ -11,7 +11,7 @@ export const prerender = false;
 export const POST: APIRoute = async ({ request, cookies }) => {
   try {
     // Check if user is admin
-    const isAdminUser = await isAdmin({ cookies });
+    const isAdminUser = await isAdmin(cookies);
     if (!isAdminUser) {
       return new Response(JSON.stringify({
         error: 'Unauthorized',
@@ -25,7 +25,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     }
 
     // Initialize dependencies
-    const supabase = createServerSupabaseClient({ cookies });
+    const supabase = createServerSupabaseClient({ cookies, request });
     const printfulService = PrintfulService.getInstance();
     const productSync = new PrintfulProductSync(supabase, printfulService);
     

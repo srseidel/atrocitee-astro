@@ -1,8 +1,8 @@
 ---
 import { redirectIfNotAuthenticated, getUser } from "@lib/auth/middleware";
+import { createServerSupabaseClient } from '@lib/supabase/client';
 
-import Container from '@components/ui/Container.astro';
-
+import Container from '@components/common/Container.astro';
 import MainLayout from '@layouts/MainLayout.astro';
 
 // Ensure this page is server-rendered, not statically generated
@@ -14,6 +14,26 @@ if (redirectResponse) return redirectResponse;
 
 // Get user data for the page
 const user = await getUser(Astro);
+
+// Handle sign out if form was submitted
+if (Astro.request.method === 'POST') {
+  const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
+  
+  // Sign out using server client
+  const { error } = await supabase.auth.signOut();
+  
+  if (error) {
+    console.error('Error signing out:', error);
+    return Astro.redirect('/account?error=signout-failed');
+  }
+  
+  // Clear auth cookies
+  Astro.cookies.delete('sb-access-token', { path: '/' });
+  Astro.cookies.delete('sb-refresh-token', { path: '/' });
+  
+  // Redirect to home page
+  return Astro.redirect('/');
+}
 ---
 
 <MainLayout title="My Account">
@@ -25,12 +45,14 @@ const user = await getUser(Astro);
         <h2 class="text-xl font-semibold mb-4">Welcome, {user?.email}</h2>
         <p class="text-neutral-600 mb-4">Your account was created on {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</p>
         
-        <button 
-          id="sign-out-btn"
-          class="btn btn-secondary"
-        >
-          Sign Out
-        </button>
+        <form method="POST" action="/account">
+          <button 
+            type="submit"
+            class="btn btn-secondary"
+          >
+            Logout
+          </button>
+        </form>
       </div>
       
       <div class="grid md:grid-cols-2 gap-6">
@@ -56,15 +78,4 @@ const user = await getUser(Astro);
       </div>
     </div>
   </Container>
-</MainLayout>
-
-<script>
-  import { createBrowserSupabaseClient } from '@lib/supabase/client';
-  
-  // Handle sign out button
-  document.getElementById('sign-out-btn')?.addEventListener('click', async () => {
-    const supabase = createBrowserSupabaseClient();
-    await supabase.auth.signOut();
-    window.location.href = '/auth/login';
-  });
-</script> 
+</MainLayout> 

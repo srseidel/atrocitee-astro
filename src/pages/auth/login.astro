@@ -11,7 +11,7 @@ import MainLayout from '@layouts/MainLayout.astro';
 export const prerender = false;
 
 // Check if user is already logged in
-const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
 const { data: { user }, error } = await supabase.auth.getUser();
 
 // If user is already logged in, redirect to admin dashboard or the requested page
@@ -24,7 +24,7 @@ if (user) {
 <MainLayout title="Login">
   <Container>
     <div class="max-w-md mx-auto my-16">
-      <h1 class="text-3xl font-bold mb-8 text-center">Sign In</h1>
+      <h1 class="text-3xl font-bold mb-8 text-center">Login</h1>
       <div class="card">
         <div class="card-body p-6">
           <LoginForm client:only="react" />

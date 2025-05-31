@@ -438,4 +438,91 @@ Our design system is implemented using Tailwind CSS with custom components defin
 }
 ```
 
-This approach gives us the flexibility of custom component classes while maintaining the utility-first workflow of Tailwind CSS. 
+This approach gives us the flexibility of custom component classes while maintaining the utility-first workflow of Tailwind CSS.
+
+## UI Organization Rules
+
+### Dashboard Layout
+Dashboards should be organized into clear, distinct sections with consistent spacing and visual hierarchy:
+
+1. **Section Organization**
+   - Each major feature area should be in its own section
+   - Sections should be visually separated with consistent spacing
+   - Use clear headings and descriptive subtext for each section
+
+2. **Management vs. Sync Separation**
+   - Keep management features (e.g., tags, products) separate from sync features
+   - Use distinct visual styling for each type of section
+   - Group related actions together within their respective sections
+
+3. **Action Button Placement**
+   - Primary actions should be prominently placed in their relevant sections
+   - Secondary actions should be visually distinct from primary actions
+   - Related actions should be grouped together
+   - Use consistent button styling across similar actions
+
+4. **Section Header Pattern**
+```html
+<div class="px-4 py-5 sm:px-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-lg font-medium leading-6 text-gray-900">Section Title</h2>
+      <p class="mt-1 text-sm text-gray-500">
+        Section description or context
+      </p>
+    </div>
+    <div class="flex space-x-4">
+      <!-- Action buttons -->
+    </div>
+  </div>
+</div>
+```
+
+5. **Table Layout**
+   - Use consistent table styling across all data displays
+   - Include clear column headers
+   - Maintain consistent spacing and alignment
+   - Use appropriate text sizes for different types of data
+
+6. **Status Indicators**
+   - Use consistent color coding for status indicators
+   - Active/Inactive states should be clearly distinguishable
+   - Use appropriate contrast for accessibility
+
+7. **Responsive Design**
+   - Ensure all sections stack appropriately on mobile
+   - Maintain readability at all screen sizes
+   - Use appropriate spacing for different viewport sizes
+
+### Example Dashboard Structure
+```html
+<div class="min-h-screen bg-gray-100">
+  <div class="py-10">
+    <!-- Page Header -->
+    <header>
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <h1 class="text-3xl font-bold leading-tight tracking-tight text-gray-900">Dashboard Title</h1>
+      </div>
+    </header>
+    
+    <main>
+      <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
+        <!-- Management Section -->
+        <div class="px-4 py-5 sm:px-6">
+          <!-- Section content -->
+        </div>
+
+        <!-- Sync Section -->
+        <div class="px-4 py-5 sm:px-6 mt-6">
+          <!-- Section content -->
+        </div>
+
+        <!-- Data Display Section -->
+        <div class="mt-8">
+          <!-- Section content -->
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+``` 

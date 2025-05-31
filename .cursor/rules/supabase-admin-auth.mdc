@@ -1,0 +1,40 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: Guidelines for creating protected Admin or API routes for Atrocitee, including Row Level Security policies
+globs:
+  - "src/pages/admin/**/*"
+  - "src/pages/api/**/*"
+  - "supabase/migrations/**/*"
+  - "supabase/policies/**/*"
+alwaysApply: true
+---
+
+# Protected Routes and RLS Guide
+
+## ❗ Route Access Control
+
+All routes under `/admin` or `/api` must:
+
+- Be accessible **only to authenticated users**.
+- Perform an **auth check** at the top of the file or in middleware.
+- Use `serverSupabaseClient` or `createServerClient` (for RSC or API routes) to securely access Supabase.
+
+## 🔐 Supabase Row Level Security (RLS)
+
+All protected Supabase tables **must**:
+
+- Have RLS enabled.
+- Use policies that **filter rows by the logged-in user's role, org, or ID**.
+- Example policy for `products`:
+
+```sql
+CREATE POLICY "Users can view their own products"
+  ON public.products
+  FOR SELECT
+  USING (
+    auth.uid() = user_id
+  );
