@@ -1,7 +1,7 @@
 import { isAdmin } from '@lib/auth/middleware';
-import PrintfulProductSync from '@lib/printful/product-sync';
+import { PrintfulProductSync } from '@lib/printful/product-sync';
 import { PrintfulService } from '@lib/printful/service';
-import { createServerSupabaseClient } from '@lib/supabase/client';
+import { createAdminSupabaseClient } from '@lib/supabase/admin-client';
 
 import type { APIRoute } from 'astro';
 
@@ -10,8 +10,11 @@ export const prerender = false;
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   try {
-    // Check if user is admin
-    const isAdminUser = await isAdmin(cookies);
+    // Initialize Supabase client first for admin check
+    const supabase = await createAdminSupabaseClient({ cookies, request });
+    
+    // Check if user is admin using the Supabase client
+    const isAdminUser = await isAdmin(supabase);
     if (!isAdminUser) {
       return new Response(JSON.stringify({
         error: 'Unauthorized',
@@ -24,10 +27,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       });
     }
 
-    // Initialize dependencies
-    const supabase = createServerSupabaseClient({ cookies, request });
-    const printfulService = PrintfulService.getInstance();
-    const productSync = new PrintfulProductSync(supabase, printfulService);
+    // Initialize remaining dependencies
+    const productSync = PrintfulProductSync.getInstance(supabase);
     
     // Sync categories from Printful
     const result = await productSync.syncCategories();

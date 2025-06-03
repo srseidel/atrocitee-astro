@@ -301,4 +301,65 @@ export class PrintfulProductSync {
       throw error;
     }
   }
+
+  /**
+   * Syncs Printful categories to our database
+   */
+  public async syncCategories(): Promise<{ added: number; existing: number }> {
+    try {
+      let added = 0;
+      let existing = 0;
+
+      // Get categories from Printful
+      const categories = await this.printfulService.getCatalogCategories();
+      
+      // Process each category
+      for (const category of categories) {
+        // Check if category exists
+        const { data: existingCategory, error: selectError } = await this.supabase
+          .from('product_categories')
+          .select('id')
+          .eq('printful_id', category.id)
+          .maybeSingle();
+
+        if (selectError) {
+          throw selectError;
+        }
+
+        const categoryData = {
+          printful_id: category.id,
+          name: category.title,
+          parent_id: category.parent_id,
+          updated_at: new Date().toISOString()
+        };
+
+        if (existingCategory) {
+          // Update existing category
+          const { error: updateError } = await this.supabase
+            .from('product_categories')
+            .update(categoryData)
+            .eq('id', existingCategory.id);
+
+          if (updateError) {
+            throw updateError;
+          }
+          existing++;
+        } else {
+          // Create new category
+          const { error: insertError } = await this.supabase
+            .from('product_categories')
+            .insert(categoryData);
+
+          if (insertError) {
+            throw insertError;
+          }
+          added++;
+        }
+      }
+
+      return { added, existing };
+    } catch (error) {
+      return this.handleDatabaseError(error, 'syncing categories');
+    }
+  }
 } 

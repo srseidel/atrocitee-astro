@@ -29,6 +29,22 @@ You are an expert in JavaScript, TypeScript, and Astro framework for scalable we
   - Use Astro's component props for data passing.
   - Leverage Astro's built-in components like <Markdown /> when appropriate.
 
+  Astro File Structure Requirements
+  - ALWAYS use the following structure for .astro files:
+    ```astro
+    ---
+    // Imports and JavaScript/TypeScript code go here
+    // Props, data fetching, and other logic
+    ---
+
+    <!-- Template code goes here -->
+    ```
+  - NEVER omit the frontmatter delimiters (---)
+  - The closing frontmatter delimiter MUST be present before any template code
+  - Keep frontmatter code (between ---) and template code clearly separated
+  - Use proper JSX comments in the template section ({/* */})
+  - Use regular JS comments in the frontmatter section (//)
+
   Routing and Pages
   - Utilize Astro's file-based routing system in the src/pages/ directory.
   - Implement dynamic routes using [...slug].astro syntax.
@@ -184,6 +200,134 @@ export default defineConfig({
 - Document complex logic
 - Document all major changes and API endpoints
 - Maintain clear commit messages
+
+## TypeScript Type Guards
+
+When working with unknown types or type assertions in Astro components, always use type guards to ensure type safety. This is especially important when:
+
+1. Working with Sets, Maps, or other iterable collections
+2. Handling data from external APIs or databases
+3. Working with props or dynamic values
+
+### Type Guard Patterns
+
+```typescript
+// For Sets
+function isStringSet(value: unknown): value is Set<string> {
+  return value instanceof Set;
+}
+
+// For Arrays
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(item => typeof item === 'string');
+}
+
+// For Objects with specific shape
+function isProduct(value: unknown): value is Product {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    'name' in value
+  );
+}
+```
+
+### Usage Examples
+
+```typescript
+// With Sets
+const values: unknown = getValues();
+if (isStringSet(values)) {
+  const arrayValues = [...values]; // Safe to spread
+}
+
+// With Arrays
+const data: unknown = await fetchData();
+if (isStringArray(data)) {
+  data.map(item => item.toUpperCase()); // Safe to use string methods
+}
+
+// With Objects
+const product: unknown = await getProduct();
+if (isProduct(product)) {
+  console.log(product.name); // Safe to access properties
+}
+```
+
+### Best Practices
+
+1. Always define type guards at the top of your component script
+2. Use descriptive names that indicate what type is being checked
+3. Return type predicates (e.g., `value is Set<string>`) for better type inference
+4. Provide fallback values when using with ternary operators
+5. Consider adding runtime type checks in production for critical paths
+
+### Common Patterns in Astro
+
+```typescript
+// With Props
+interface Props {
+  data?: unknown;
+}
+
+function isValidProp(data: unknown): data is RequiredPropType {
+  // Add type checks here
+  return true;
+}
+
+const { data } = Astro.props;
+const safeData = isValidProp(data) ? data : defaultValue;
+
+// With Dynamic Imports
+const modules = await Astro.glob('../components/*.astro');
+if (isAstroComponent(module)) {
+  // Safe to use as component
+}
+
+// With Database Results
+const { data } = await supabase.from('table').select();
+if (isDBResult(data)) {
+  // Safe to use data
+}
+```
+
+### Error Handling with Type Guards
+
+Always provide meaningful fallbacks when using type guards:
+
+```typescript
+// Good: Explicit fallback with logging
+const safeValue = isValidType(value) 
+  ? value 
+  : (() => {
+      console.error('Invalid type received:', value);
+      return defaultValue;
+    })();
+
+// Good: Type guard with error boundary
+try {
+  if (!isValidType(value)) {
+    throw new Error('Invalid type');
+  }
+  // Use value safely
+} catch (error) {
+  // Handle error appropriately
+}
+```
+
+### Testing Type Guards
+
+Include tests for your type guards:
+
+```typescript
+describe('Type Guards', () => {
+  test('isStringSet', () => {
+    expect(isStringSet(new Set(['a', 'b']))).toBe(true);
+    expect(isStringSet(['a', 'b'])).toBe(false);
+  });
+});
+```
 
 import { onRequest } from '@lib/auth/middleware';
 

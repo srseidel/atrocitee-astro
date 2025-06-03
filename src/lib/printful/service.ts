@@ -16,13 +16,9 @@ import type {
   PrintfulProductList
 } from '../../types/printful/api';
 
-import pkg from '@supabase/supabase-js';
-
-import ENV from '@config/env';
-
-import PrintfulClient from '@lib/printful/api-client';
-
-const { createClient } = pkg;
+import { supabase } from '@lib/supabase/client';
+import { env } from '@lib/config/env';
+import { PrintfulClient } from '@lib/printful/api-client';
 import type { Database } from '../../types/database/schema';
 
 /**
@@ -155,18 +151,10 @@ export class PrintfulService {
   private static instance: PrintfulService;
   private apiKey: string;
   private baseUrl: string;
-  private supabase: ReturnType<typeof createClient<Database>>;
 
   private constructor() {
-    this.apiKey = ENV.PRINTFUL_API_KEY || '';
+    this.apiKey = env.printful.apiKey || '';
     this.baseUrl = 'https://api.printful.com';
-    
-    const supabaseUrl = ENV.PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = ENV.PUBLIC_SUPABASE_ANON_KEY;
-    
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error('Missing Supabase URL or Anon Key');
-    }
     
     if (!this.apiKey) {
       throw new Error('Missing Printful API Key');
@@ -174,8 +162,6 @@ export class PrintfulService {
 
     // eslint-disable-next-line no-console
     console.log("Printful service initialized");
-    
-    this.supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
   }
 
   public static getInstance(): PrintfulService {

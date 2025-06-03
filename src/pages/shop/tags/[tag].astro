@@ -1,0 +1,139 @@
+---
+import { createClient } from '@supabase/supabase-js';
+import Layout from '@layouts/Layout.astro';
+import type { Database } from '@local-types/database/schema';
+import type { GetStaticPaths } from 'astro';
+
+// Enable static generation for this page
+export const prerender = true;
+
+type Product = Database['public']['Tables']['products']['Row'];
+type ProductVariant = Database['public']['Tables']['product_variants']['Row'];
+type Tag = Database['public']['Tables']['tags']['Row'];
+type Category = Database['public']['Tables']['categories']['Row'];
+
+interface ProductWithRelations extends Product {
+  product_variants: ProductVariant[];
+  categories: Category;
+  product_tags: {
+    tag_id: string;
+    tags: Tag;
+  }[];
+}
+
+// Get all tag slugs at build time
+export const getStaticPaths = (async () => {
+  // Create a static Supabase client for build time
+  const supabase = createClient(
+    import.meta.env.PUBLIC_SUPABASE_URL,
+    import.meta.env.PUBLIC_SUPABASE_ANON_KEY
+  );
+  
+  // Get all active tags
+  const { data: tags } = await supabase
+    .from('tags')
+    .select('*')
+    .eq('active', true) as { data: Tag[] | null };
+
+  // Get all published products with their tags and categories
+  const { data: products } = await supabase
+    .from('products')
+    .select(`
+      *,
+      product_variants (
+        *
+      ),
+      categories!inner (
+        *
+      ),
+      product_tags!inner (
+        tag_id,
+        tags!inner (
+          id,
+          name,
+          slug
+        )
+      )
+    `)
+    .eq('published_status', true) as { data: ProductWithRelations[] | null };
+
+  // Group products by tag
+  const productsByTag = new Map<string, ProductWithRelations[]>();
+  
+  products?.forEach(product => {
+    product.product_tags.forEach(pt => {
+      const tag = pt.tags;
+      if (!productsByTag.has(tag.slug)) {
+        productsByTag.set(tag.slug, []);
+      }
+      productsByTag.get(tag.slug)?.push(product);
+    });
+  });
+
+  // Return array of tag pages to generate
+  return tags?.map((tag) => ({
+    params: { tag: tag.slug },
+    props: { 
+      tag,
+      products: productsByTag.get(tag.slug) || []
+    }
+  })) || [];
+}) satisfies GetStaticPaths;
+
+const { tag, products } = Astro.props;
+---
+
+<Layout title={`${tag.name} Products - Shop`}>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    {/* Tag header */}
+    <div class="text-center mb-12">
+      <h1 class="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
+        {tag.name}
+      </h1>
+      {tag.description && (
+        <p class="mt-4 text-xl text-gray-500">
+          {tag.description}
+        </p>
+      )}
+    </div>
+
+    {/* Products grid */}
+    <div class="grid grid-cols-1 gap-y-10 gap-x-6 sm:grid-cols-2 lg:grid-cols-4 xl:gap-x-8">
+      {products.map((product: ProductWithRelations) => (
+        <div class="group relative">
+          <div class="w-full min-h-80 bg-gray-200 aspect-w-1 aspect-h-1 rounded-md overflow-hidden group-hover:opacity-75">
+            <img
+              src={product.thumbnail_url || 'https://via.placeholder.com/300'}
+              alt={product.name}
+              class="w-full h-full object-center object-cover"
+            />
+          </div>
+          <div class="mt-4 flex justify-between">
+            <div>
+              <h3 class="text-sm text-gray-700">
+                <a href={`/shop/${product.categories.slug}/${product.slug}`}>
+                  <span aria-hidden="true" class="absolute inset-0" />
+                  {product.name}
+                </a>
+              </h3>
+              <p class="mt-1 text-sm text-gray-500">{product.description}</p>
+            </div>
+            <p class="text-sm font-medium text-gray-900">
+              ${product.atrocitee_base_price?.toFixed(2)}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* Show message if no products */}
+    {(!products || products.length === 0) && (
+      <div class="text-center py-12">
+        <h3 class="text-lg font-medium text-gray-900">No products found</h3>
+        <p class="mt-2 text-sm text-gray-500">
+          Check back soon for new products with this tag.
+        </p>
+      </div>
+    )}
+  </div>
+</Layout> 

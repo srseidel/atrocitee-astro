@@ -399,12 +399,9 @@ FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 -- Enable RLS for products
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 
--- Grant permissions
-GRANT ALL ON products TO authenticated;
-
--- Drop old policies
+-- Drop existing policies
 DROP POLICY IF EXISTS "Admin users can manage products" ON products;
-DROP POLICY IF EXISTS "Public read access to active products" ON products;
+DROP POLICY IF EXISTS "Public can view published products" ON products;
 
 -- Create RLS policies for products
 CREATE POLICY "Admin users can manage products" ON products
@@ -413,16 +410,17 @@ CREATE POLICY "Admin users can manage products" ON products
   USING (is_admin())
   WITH CHECK (is_admin());
 
-CREATE POLICY "Public read access to published products" ON products
+CREATE POLICY "Public can view published products" ON products
   FOR SELECT
+  TO authenticated, anon
   USING (published_status = true);
 
 -- Enable RLS for product_variants
 ALTER TABLE product_variants ENABLE ROW LEVEL SECURITY;
 
--- Drop old policies
-DROP POLICY IF EXISTS "Admin full access to product variants" ON product_variants;
-DROP POLICY IF EXISTS "Public read access to product variants" ON product_variants;
+-- Drop existing policies
+DROP POLICY IF EXISTS "Admin users can manage product variants" ON product_variants;
+DROP POLICY IF EXISTS "Public can view variants of published products" ON product_variants;
 
 -- Create RLS policies for product_variants
 CREATE POLICY "Admin users can manage product variants" ON product_variants
@@ -431,13 +429,16 @@ CREATE POLICY "Admin users can manage product variants" ON product_variants
   USING (is_admin())
   WITH CHECK (is_admin());
 
-CREATE POLICY "Public read access to product variants" ON product_variants
+CREATE POLICY "Public can view variants of published products" ON product_variants
   FOR SELECT
-  USING (EXISTS (
-    SELECT 1 FROM products
-    WHERE products.id = product_variants.product_id
-    AND products.published_status = true
-  ));
+  TO authenticated, anon
+  USING (
+    EXISTS (
+      SELECT 1 FROM products
+      WHERE products.id = product_variants.product_id
+      AND products.published_status = true
+    )
+  );
 
 -- Enable RLS for printful_sync_history
 ALTER TABLE printful_sync_history ENABLE ROW LEVEL SECURITY;

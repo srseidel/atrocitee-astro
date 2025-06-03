@@ -150,6 +150,58 @@ export interface Database {
           updated_at?: string
         }
       }
+      tags: {
+        Row: {
+          id: string
+          name: string
+          slug: string
+          description: string | null
+          active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          slug: string
+          description?: string | null
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          slug?: string
+          description?: string | null
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      product_tags: {
+        Row: {
+          id: string
+          product_id: string
+          tag_id: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          tag_id: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          tag_id?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
       printful_sync_history: {
         Row: {
           id: string
@@ -280,6 +332,35 @@ export interface Database {
           website_url?: string | null
           logo_url?: string | null
           active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      atrocitee_categories: {
+        Row: {
+          id: string
+          name: string
+          slug: string
+          description: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          slug: string
+          description?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          slug?: string
+          description?: string | null
+          is_active?: boolean
           created_at?: string
           updated_at?: string
         }

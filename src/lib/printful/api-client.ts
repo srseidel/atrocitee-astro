@@ -6,8 +6,7 @@
  */
 
 import * as Sentry from '@sentry/astro';
-
-import ENV from '@config/env';
+import { env } from '@lib/config/env';
 
 import type { 
   PrintfulResponse, 
@@ -53,18 +52,18 @@ export class PrintfulApiError extends Error {
 /**
  * Main Printful API client
  */
-export default class PrintfulClient {
+export class PrintfulClient {
   private apiKey: string;
   private baseUrl: string;
   private headers: HeadersInit;
 
-  constructor(apiKey = ENV.PRINTFUL_API_KEY, baseUrl = API_BASE_URL) {
+  constructor(apiKey = env.printful.apiKey, baseUrl = API_BASE_URL) {
     // Add debug logging for environment variables
     // eslint-disable-next-line no-console
     console.log('[Printful] Environment check:', {
       apiKeyExists: !!apiKey,
       apiKeyLength: apiKey ? apiKey.length : 0,
-      nodeEnv: ENV.NODE_ENV
+      nodeEnv: env.sentry.environment
     });
 
     if (!apiKey) {

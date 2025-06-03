@@ -9,18 +9,24 @@ interface ProductVariant {
 
 type Product = Database['public']['Tables']['products']['Row'] & {
   product_variants: ProductVariant[];
+  charities?: Database['public']['Tables']['charities']['Row'] | null;
 };
 
-type Category = Database['public']['Tables']['categories']['Row'];
+type Category = Database['public']['Tables']['atrocitee_categories']['Row'];
 
-// Get all active products
+// Use server-side rendering
+export const prerender = false;
+
+// Get all active products with their variants and charity info
 const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
-const { data: products } = await supabase
+const { data: products, error: productsError } = await supabase
   .from('products')
   .select(`
     *,
     product_variants (
-      *
+      retail_price,
+      in_stock,
+      stock_level
     ),
     charities (
       name,
@@ -32,14 +38,27 @@ const { data: products } = await supabase
   .eq('published_status', true)
   .order('created_at', { ascending: false });
 
+if (productsError) {
+  console.error('Error fetching products:', productsError);
+}
+
 // Get all categories
-const { data: categories } = await supabase
-  .from('categories')
+const { data: categories, error: categoriesError } = await supabase
+  .from('atrocitee_categories')
   .select('*')
-  .eq('active', true) as { data: Category[] | null };
+  .eq('is_active', true);
+
+if (categoriesError) {
+  console.error('Error fetching categories:', categoriesError);
+}
 
 // Get featured products
 const featuredProducts = products?.filter(p => p.atrocitee_featured) || [];
+
+// Debug logging
+console.log('Products loaded:', products?.length || 0);
+console.log('Categories loaded:', categories?.length || 0);
+console.log('Featured products:', featuredProducts.length);
 ---
 
 <Layout title="Shop">

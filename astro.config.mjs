@@ -15,12 +15,12 @@ export default defineConfig({
   // In production, use server output for dynamic features
   output: isDev ? 'static' : 'server',
   adapter: cloudflare({
-    runtime: {
-      mode: 'local',
-      type: 'pages'
-    }
+    imageService: 'compile'
   }),
   
+  // Configure which pages should be prerendered (static)
+  prefetch: true,
+
   integrations: [
     tailwind(),
     react({
@@ -91,30 +91,5 @@ export default defineConfig({
         (isDev ? 'development' : 'production')
       ),
     }
-  },
-  // Add headers configuration for Cloudflare
-  headers: [
-    {
-      source: '/(.*)',
-      headers: [
-        {
-          key: 'Content-Security-Policy',
-          value: `
-            default-src 'self';
-            script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.tailwindcss.com;
-            style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://fonts.googleapis.com;
-            img-src 'self' data: https: blob:;
-            font-src 'self' data: https://fonts.gstatic.com;
-            connect-src 'self' ${isDev ? 'ws://localhost:* ws://127.0.0.1:* ' : ''}https://*.supabase.co https://api.printful.com https://sentry.io;
-            frame-src 'self';
-            object-src 'none';
-            base-uri 'self';
-            form-action 'self';
-            frame-ancestors 'none';
-            upgrade-insecure-requests;
-          `.replace(/\s+/g, ' ').trim()
-        }
-      ]
-    }
-  ]
+  }
 });

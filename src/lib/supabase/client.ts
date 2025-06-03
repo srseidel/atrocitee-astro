@@ -1,7 +1,5 @@
 import { createServerClient, createBrowserClient } from '@supabase/ssr';
-import pkg from '@supabase/supabase-js';
-
-const { createClient } = pkg;
+import { createClient } from '@supabase/supabase-js';
 import { env } from '@lib/config/env';
 
 import type { TypedSupabaseClient } from '../../types/supabase';

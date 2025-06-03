@@ -38,3 +38,42 @@ CREATE POLICY "Users can view their own products"
   USING (
     auth.uid() = user_id
   );
+
+```
+
+## 🛡️ Secure Views
+
+All database views **must**:
+
+- Use `SECURITY INVOKER` (default) instead of `SECURITY DEFINER`
+- Add `security_barrier` option to prevent information leakage
+- Have explicit column selection (no SELECT *)
+- Have proper RLS policies on underlying tables
+- Have explicit GRANT statements for access control
+
+Example of a secure view:
+
+```sql
+CREATE OR REPLACE VIEW public_profiles 
+WITH (security_barrier)
+AS
+  SELECT 
+    id,
+    display_name,
+    avatar_url,
+    role
+  FROM profiles
+  WITH (security_invoker = true);
+
+-- Grant minimal necessary permissions
+GRANT SELECT ON public_profiles TO authenticated, anon;
+
+COMMENT ON VIEW public_profiles IS 'Safe, publicly accessible profile information. Uses security barrier and invoker rights for protection.';
+```
+
+Key security principles for views:
+- Only expose necessary columns
+- Use RLS on base tables for row-level filtering
+- Grant minimal necessary permissions
+- Add security barrier to prevent optimization leaks
+- Document security measures in view comments

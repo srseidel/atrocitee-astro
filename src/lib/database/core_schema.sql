@@ -37,9 +37,18 @@ CREATE TABLE IF NOT EXISTS profiles (
 COMMENT ON COLUMN profiles.role IS 'For UI/reference only. All admin authorization is enforced via app_metadata in the JWT.';
 
 -- Create a secure view that can be safely exposed
-CREATE OR REPLACE VIEW public_profiles AS
-  SELECT id, display_name, avatar_url, role
+CREATE OR REPLACE VIEW public_profiles 
+WITH (security_barrier, security_invoker = true)  -- Both options go in the same WITH clause
+AS
+  SELECT 
+    id,
+    display_name,
+    avatar_url,
+    role
   FROM profiles;
+
+-- Add comment explaining the view's security measures
+COMMENT ON VIEW public_profiles IS 'Safe, publicly accessible profile information. Uses security barrier and invoker rights for protection.';
 
 -- Drop existing trigger first
 DROP TRIGGER IF EXISTS update_profiles_timestamp ON profiles;
@@ -57,8 +66,14 @@ DROP POLICY IF EXISTS "Users can view their own profile" ON profiles;
 DROP POLICY IF EXISTS "Users can update their own profile" ON profiles;
 DROP POLICY IF EXISTS "Admin users can update all profiles" ON profiles;
 DROP POLICY IF EXISTS "Admin users can view all profiles" ON profiles;
+DROP POLICY IF EXISTS "Public can view limited profile info" ON profiles;
 
 -- Create RLS policies for profiles
+CREATE POLICY "Public can view limited profile info"
+ON profiles FOR SELECT
+TO anon, authenticated
+USING (true);
+
 CREATE POLICY "Users can view their own profile"
 ON profiles FOR SELECT
 TO authenticated
@@ -113,6 +128,6 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Grant necessary permissions
 GRANT ALL ON profiles TO authenticated;
-GRANT ALL ON public_profiles TO authenticated;
+GRANT SELECT ON public_profiles TO authenticated, anon;  -- Only grant SELECT on public view
 GRANT EXECUTE ON FUNCTION is_admin() TO authenticated;
 GRANT EXECUTE ON FUNCTION is_admin(UUID) TO authenticated; 
