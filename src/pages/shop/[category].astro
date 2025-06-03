@@ -10,9 +10,72 @@ interface ProductVariant {
 
 type Product = Database['public']['Tables']['products']['Row'] & {
   product_variants: ProductVariant[];
+  charities?: Database['public']['Tables']['charities']['Row'] | null;
+  atrocitee_category_id: number;
 };
 
-type Category = Database['public']['Tables']['categories']['Row'];
+type Category = Database['public']['Tables']['atrocitee_categories']['Row'];
+
+// Use server-side rendering
+export const prerender = false;
+
+const { category: categorySlug } = Astro.params;
+
+// Get all active products with their variants and charity info
+const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
+
+// Get current category
+const { data: currentCategory } = await supabase
+  .from('atrocitee_categories')
+  .select('*')
+  .eq('slug', categorySlug)
+  .single();
+
+if (!currentCategory) {
+  return Astro.redirect('/404');
+}
+
+// Get all products in this category
+const { data: categoryProducts } = await supabase
+  .from('products')
+  .select(`
+    *,
+    product_variants (
+      retail_price,
+      in_stock,
+      stock_level
+    ),
+    charities (
+      name,
+      description,
+      website_url,
+      logo_url
+    )
+  `)
+  .eq('published_status', true)
+  .eq('atrocitee_category_id', currentCategory.id)
+  .order('created_at', { ascending: false });
+
+// Get all categories for the sidebar
+const { data: categories } = await supabase
+  .from('atrocitee_categories')
+  .select('*')
+  .eq('is_active', true);
+
+// Get all products for counts
+const { data: products } = await supabase
+  .from('products')
+  .select('*')
+  .eq('published_status', true);
+
+// Get featured products
+const featuredProducts = products?.filter(p => p.atrocitee_featured) || [];
+
+// Debug logging
+console.log('Current category:', currentCategory?.name);
+console.log('Category products:', categoryProducts?.length || 0);
+console.log('All categories:', categories?.length || 0);
+console.log('Featured products:', featuredProducts?.length || 0);
 
 // Get all category slugs at build time
 export const getStaticPaths = (async () => {
@@ -27,92 +90,132 @@ export const getStaticPaths = (async () => {
     props: { category }
   })) || [];
 }) satisfies GetStaticPaths;
-
-// Get category data and products
-const { category } = Astro.props;
-const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
-
-// Get products in this category
-const { data: products } = await supabase
-  .from('products')
-  .select(`
-    *,
-    product_variants (
-      *
-    ),
-    charities (
-      name,
-      description,
-      website_url,
-      logo_url
-    )
-  `)
-  .eq('published_status', true)
-  .eq('atrocitee_category_id', category.id)
-  .order('created_at', { ascending: false }) as { data: Product[] | null };
 ---
 
-<Layout title={`${category.name} - Shop`}>
-  <!-- Category hero -->
+<Layout title={`${currentCategory?.name || 'Shop'} | Atrocitee`}>
+  {/* Hero section */}
   <div class="relative">
     <div class="absolute inset-0">
       <img
         class="w-full h-64 object-cover"
-        src="https://via.placeholder.com/1920x384"
-        alt={category.name}
+        src="https://images.unsplash.com/photo-1525268771113-32d9e9021a97?ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80"
+        alt="Shop hero"
       />
       <div class="absolute inset-0 bg-gray-900 bg-opacity-50"></div>
     </div>
     <div class="relative max-w-7xl mx-auto py-24 px-4 sm:py-32 sm:px-6 lg:px-8">
       <h1 class="text-4xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-6xl">
-        {category.name}
+        {currentCategory?.name || 'Shop'}
       </h1>
-      {category.description && (
-        <p class="mt-6 text-xl text-white max-w-3xl">
-          {category.description}
-        </p>
-      )}
+      <p class="mt-6 text-xl text-white max-w-3xl">
+        {currentCategory?.description || 'Every purchase helps support charitable causes. Look good, feel good, do good.'}
+      </p>
     </div>
   </div>
 
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-    <!-- Products grid -->
-    <div class="grid grid-cols-1 gap-y-10 gap-x-6 sm:grid-cols-2 lg:grid-cols-4 xl:gap-x-8">
-      {products?.map((product: Product) => (
-        <div class="group relative">
-          <div class="w-full min-h-80 bg-gray-200 aspect-w-1 aspect-h-1 rounded-md overflow-hidden group-hover:opacity-75">
-            <img
-              src={product.thumbnail_url || 'https://via.placeholder.com/300'}
-              alt={product.name}
-              class="w-full h-full object-center object-cover"
-            />
-          </div>
-          <div class="mt-4 flex justify-between">
-            <div>
-              <h3 class="text-sm text-gray-700">
-                <a href={`/shop/product/${product.slug}`}>
-                  <span aria-hidden="true" class="absolute inset-0" />
-                  {product.name}
-                </a>
+  <div class="min-h-screen bg-gray-50">
+    <div class="flex">
+      {/* Category Sidebar - Admin Style */}
+      <div class="hidden lg:block lg:w-64 bg-white border-r border-gray-200">
+        <div class="flex-1 flex flex-col min-h-0">
+          <nav class="flex-1 space-y-1 pt-6" aria-label="Sidebar">
+            <div class="px-3 py-2">
+              <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Categories
               </h3>
-              <p class="mt-1 text-sm text-gray-500">{product.description}</p>
             </div>
-            <p class="text-sm font-medium text-gray-900">
-              ${product.atrocitee_base_price?.toFixed(2)}
-            </p>
-          </div>
-        </div>
-      ))}
-    </div>
+            <a
+              href="/shop"
+              class:list={[
+                'group flex items-center px-3 py-2 text-sm font-medium rounded-md',
+                !currentCategory ? 'bg-gray-200 text-gray-900' : 'text-gray-700 hover:bg-gray-50'
+              ]}
+            >
+              <span class="truncate">All Products</span>
+              {products && (
+                <span class="ml-auto inline-block py-0.5 px-3 text-xs rounded-full bg-gray-100 text-gray-700">
+                  {products.length}
+                </span>
+              )}
+            </a>
+            {categories?.map((category: Category) => {
+              const categoryProducts = products?.filter(p => p.atrocitee_category_id === category.id) || [];
+              return (
+                <a
+                  href={`/shop/${category.slug}`}
+                  class:list={[
+                    'group flex items-center px-3 py-2 text-sm font-medium rounded-md',
+                    category.id === currentCategory?.id ? 'bg-gray-200 text-gray-900' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                  ]}
+                >
+                  <span class="truncate">{category.name}</span>
+                  <span class="ml-auto inline-block py-0.5 px-3 text-xs rounded-full bg-gray-100 text-gray-700">
+                    {categoryProducts.length}
+                  </span>
+                </a>
+              );
+            })}
 
-    {/* Show message if no products */}
-    {(!products || products.length === 0) && (
-      <div class="text-center py-12">
-        <h3 class="text-lg font-medium text-gray-900">No products found</h3>
-        <p class="mt-2 text-sm text-gray-500">
-          Check back soon for new products in this category.
-        </p>
+            {/* Featured Filter */}
+            {featuredProducts.length > 0 && (
+              <div class="mt-8">
+                <div class="px-3 py-2">
+                  <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Featured
+                  </h3>
+                </div>
+                <a
+                  href="/shop#featured"
+                  class="group flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md"
+                >
+                  <span class="truncate">Featured Products</span>
+                  <span class="ml-auto inline-block py-0.5 px-3 text-xs rounded-full bg-gray-100 text-gray-700">
+                    {featuredProducts.length}
+                  </span>
+                </a>
+              </div>
+            )}
+          </nav>
+        </div>
       </div>
-    )}
+
+      {/* Main Content */}
+      <div class="flex-1">
+        <main>
+          <div class="py-6">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              {/* Category Products */}
+              <div class="mt-6 grid grid-cols-1 gap-y-10 gap-x-6 sm:grid-cols-2 lg:grid-cols-3 xl:gap-x-8">
+                {categoryProducts?.map((product: Product) => (
+                  <div class="group relative">
+                    <div class="w-full min-h-80 bg-gray-200 aspect-w-1 aspect-h-1 rounded-md overflow-hidden group-hover:opacity-75">
+                      <img
+                        src={product.thumbnail_url || 'https://via.placeholder.com/300'}
+                        alt={product.name}
+                        class="w-full h-full object-center object-cover"
+                      />
+                    </div>
+                    <div class="mt-4 flex justify-between">
+                      <div>
+                        <h3 class="text-sm text-gray-700">
+                          <a href={`/shop/product/${product.slug}`}>
+                            <span aria-hidden="true" class="absolute inset-0" />
+                            {product.name}
+                          </a>
+                        </h3>
+                        <p class="mt-1 text-sm text-gray-500">{product.description}</p>
+                      </div>
+                      <p class="text-sm font-medium text-gray-900">
+                        ${product.atrocitee_base_price?.toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
   </div>
 </Layout>
