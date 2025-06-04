@@ -277,11 +277,19 @@ console.log("Products dashboard error:", error);
                       <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                         <a
                           href={`/admin/products/${product.id}`}
-                          class="text-blue-600 hover:text-blue-800"
+                          class="text-blue-600 hover:text-blue-800 mr-4"
                           data-product-id={product.id}
                         >
                           Configure
                         </a>
+                        <button
+                          type="button"
+                          class="text-green-600 hover:text-green-800"
+                          data-product-id={product.id}
+                          data-action="download-mockups"
+                        >
+                          Download Mockups
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -341,14 +349,20 @@ console.log("Products dashboard error:", error);
   });
 
   // Handle change approval/rejection
-  document.querySelectorAll('[data-action]').forEach(button => {
+  document.querySelectorAll('[data-action="approve"], [data-action="reject"]').forEach(button => {
     button.addEventListener('click', async (e) => {
       const target = e.target as HTMLButtonElement;
       const action = target.dataset.action;
       const changeId = target.dataset.changeId;
       
+      if (!changeId) {
+        console.error('No change ID found');
+        alert('Error: Could not process change - missing ID');
+        return;
+      }
+
       try {
-        const response = await fetch(`/api/printful/changes/${changeId}`, {
+        const response = await fetch(`/api/v1/admin/products/changes/${changeId}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -375,6 +389,46 @@ console.log("Products dashboard error:", error);
       const target = e.target as HTMLButtonElement;
       const productId = target.dataset.productId;
       window.location.href = `/admin/products/${productId}`;
+    });
+  });
+
+  // Handle mockup downloads
+  document.querySelectorAll('[data-action="download-mockups"]').forEach(button => {
+    button.addEventListener('click', async (e) => {
+      const target = e.target as HTMLButtonElement;
+      const productId = target.dataset.productId;
+      
+      try {
+        // Disable button and show loading state
+        target.disabled = true;
+        const originalText = target.textContent;
+        target.textContent = 'Downloading...';
+        
+        const response = await fetch('/api/v1/admin/products/download-mockups', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ productId })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.message || 'Failed to download mockups');
+        }
+        
+        // Show success message with details
+        alert(`Mockups downloaded successfully!\nDownloaded ${data.results.length} variant mockups.`);
+        
+      } catch (error) {
+        console.error('Error downloading mockups:', error);
+        alert(error instanceof Error ? error.message : 'Failed to download mockups');
+      } finally {
+        // Reset button state
+        target.disabled = false;
+        target.textContent = 'Download Mockups';
+      }
     });
   });
 </script> 

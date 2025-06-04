@@ -116,6 +116,14 @@ export class PrintfulProductSync {
           const variants = await this.printfulService.getProductVariants(product.id);
           console.log(`[Sync] Product ${product.id} (${product.name}) has ${variants.length} variants`);
           
+          // Add debug logging for variant names
+          console.log('[Sync] Variant names:', variants.map(v => ({
+            id: v.id,
+            name: v.name,
+            options: v.options,
+            files: v.files
+          })));
+          
           // Check if product exists in our database
           const { data: existingProduct, error: selectError } = await this.supabase
             .from('products')

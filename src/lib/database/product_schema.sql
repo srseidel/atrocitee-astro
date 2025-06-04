@@ -50,16 +50,33 @@ ALTER TABLE atrocitee_categories ENABLE ROW LEVEL SECURITY;
 -- Drop existing policies
 DROP POLICY IF EXISTS "Admin full access to atrocitee categories" ON atrocitee_categories;
 DROP POLICY IF EXISTS "Public read access to atrocitee categories" ON atrocitee_categories;
+DROP POLICY IF EXISTS "Published categories are viewable by everyone" ON atrocitee_categories;
+DROP POLICY IF EXISTS "Authenticated users can view all categories" ON atrocitee_categories;
 
 -- Create RLS policies for atrocitee_categories
-CREATE POLICY "Admin full access to atrocitee categories" ON atrocitee_categories
-    FOR ALL
-    TO authenticated
-    USING (is_admin());
+CREATE POLICY "Published categories are viewable by everyone"
+ON atrocitee_categories
+FOR SELECT
+TO public
+USING (is_active = true);
 
-CREATE POLICY "Public read access to atrocitee categories" ON atrocitee_categories
-    FOR SELECT
-    USING (is_active = true);
+CREATE POLICY "Authenticated users can view all categories"
+ON atrocitee_categories
+FOR SELECT
+TO authenticated
+USING (true);
+
+CREATE POLICY "Admin users can manage categories"
+ON atrocitee_categories
+FOR ALL
+TO authenticated
+USING (is_admin())
+WITH CHECK (is_admin());
+
+-- Grant necessary permissions
+GRANT SELECT ON atrocitee_categories TO anon;
+GRANT SELECT ON atrocitee_categories TO authenticated;
+GRANT ALL ON atrocitee_categories TO authenticated;
 
 -- Insert initial core categories
 INSERT INTO atrocitee_categories (slug, name, description, is_active)
@@ -234,6 +251,39 @@ CREATE TABLE products (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Enable RLS for products table
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies
+DROP POLICY IF EXISTS "Published products are viewable by everyone" ON products;
+DROP POLICY IF EXISTS "Authenticated users can view all products" ON products;
+DROP POLICY IF EXISTS "Admin users can manage all products" ON products;
+
+-- Create RLS policies for products
+CREATE POLICY "Published products are viewable by everyone"
+ON products
+FOR SELECT
+TO public
+USING (published_status = true);
+
+CREATE POLICY "Authenticated users can view all products"
+ON products
+FOR SELECT
+TO authenticated
+USING (true);
+
+CREATE POLICY "Admin users can manage all products"
+ON products
+FOR ALL
+TO authenticated
+USING (is_admin())
+WITH CHECK (is_admin());
+
+-- Grant necessary permissions
+GRANT SELECT ON products TO anon;
+GRANT SELECT ON products TO authenticated;
+GRANT ALL ON products TO authenticated;
+
 -- 5. Product Variants Table
 CREATE TABLE product_variants (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -396,49 +446,45 @@ CREATE TRIGGER update_printful_product_changes_timestamp
 BEFORE UPDATE ON printful_product_changes
 FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 
--- Enable RLS for products
-ALTER TABLE products ENABLE ROW LEVEL SECURITY;
-
--- Drop existing policies
-DROP POLICY IF EXISTS "Admin users can manage products" ON products;
-DROP POLICY IF EXISTS "Public can view published products" ON products;
-
--- Create RLS policies for products
-CREATE POLICY "Admin users can manage products" ON products
-  FOR ALL
-  TO authenticated
-  USING (is_admin())
-  WITH CHECK (is_admin());
-
-CREATE POLICY "Public can view published products" ON products
-  FOR SELECT
-  TO authenticated, anon
-  USING (published_status = true);
-
 -- Enable RLS for product_variants
 ALTER TABLE product_variants ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies
 DROP POLICY IF EXISTS "Admin users can manage product variants" ON product_variants;
 DROP POLICY IF EXISTS "Public can view variants of published products" ON product_variants;
+DROP POLICY IF EXISTS "Published variants are viewable by everyone" ON product_variants;
+DROP POLICY IF EXISTS "Authenticated users can view all variants" ON product_variants;
 
 -- Create RLS policies for product_variants
-CREATE POLICY "Admin users can manage product variants" ON product_variants
-  FOR ALL
-  TO authenticated
-  USING (is_admin())
-  WITH CHECK (is_admin());
+CREATE POLICY "Published variants are viewable by everyone"
+ON product_variants
+FOR SELECT
+TO public
+USING (
+  EXISTS (
+    SELECT 1 FROM products
+    WHERE products.id = product_variants.product_id
+    AND products.published_status = true
+  )
+);
 
-CREATE POLICY "Public can view variants of published products" ON product_variants
-  FOR SELECT
-  TO authenticated, anon
-  USING (
-    EXISTS (
-      SELECT 1 FROM products
-      WHERE products.id = product_variants.product_id
-      AND products.published_status = true
-    )
-  );
+CREATE POLICY "Authenticated users can view all variants"
+ON product_variants
+FOR SELECT
+TO authenticated
+USING (true);
+
+CREATE POLICY "Admin users can manage product variants"
+ON product_variants
+FOR ALL
+TO authenticated
+USING (is_admin())
+WITH CHECK (is_admin());
+
+-- Grant necessary permissions
+GRANT SELECT ON product_variants TO anon;
+GRANT SELECT ON product_variants TO authenticated;
+GRANT ALL ON product_variants TO authenticated;
 
 -- Enable RLS for printful_sync_history
 ALTER TABLE printful_sync_history ENABLE ROW LEVEL SECURITY;

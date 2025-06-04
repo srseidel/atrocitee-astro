@@ -253,4 +253,74 @@ export class PrintfulService {
     const response = await this.fetch<{ result: Array<{ id: number; title: string; parent_id: number | null }> }>('/store/categories');
     return response.result;
   }
+
+  /**
+   * Generate mockups for a product variant
+   * @param productId The Printful product ID
+   * @param variantIds Array of variant IDs to generate mockups for
+   * @param imageUrl URL of the design image to use for the mockup
+   */
+  async generateMockups(productId: number, variantIds: number[], imageUrl: string): Promise<string[]> {
+    try {
+      // 1. Get printfiles to understand the required dimensions
+      const printfiles = await this.fetch<any>(`/mockup-generator/printfiles/${productId}`);
+      const printfile = printfiles.result.printfiles[0]; // Using first printfile for now
+
+      // 2. Create mockup generation task
+      const taskResponse = await this.fetch<any>(
+        `/mockup-generator/create-task/${productId}`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            variant_ids: variantIds,
+            format: 'jpg',
+            files: [{
+              placement: 'front', // Assuming front placement
+              image_url: imageUrl,
+              position: {
+                area_width: printfile.width,
+                area_height: printfile.height,
+                width: printfile.width,
+                height: printfile.height,
+                top: 0,
+                left: 0
+              }
+            }]
+          })
+        }
+      );
+
+      const taskKey = taskResponse.result.task_key;
+
+      // 3. Poll for task completion
+      let mockupUrls: string[] = [];
+      let attempts = 0;
+      const maxAttempts = 10;
+      const delay = 2000; // 2 seconds between checks
+
+      while (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        const taskResult = await this.fetch<any>(`/mockup-generator/task?task_key=${taskKey}`);
+        
+        if (taskResult.result.status === 'completed') {
+          mockupUrls = taskResult.result.mockups.map((mockup: any) => mockup.mockup_url);
+          break;
+        } else if (taskResult.result.status === 'failed') {
+          throw new Error(`Mockup generation failed: ${taskResult.result.error || 'Unknown error'}`);
+        }
+        
+        attempts++;
+      }
+
+      if (attempts >= maxAttempts) {
+        throw new Error('Mockup generation timed out');
+      }
+
+      return mockupUrls;
+    } catch (error) {
+      console.error('Error generating mockups:', error);
+      throw error;
+    }
+  }
 } 

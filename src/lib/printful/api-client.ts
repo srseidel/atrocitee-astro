@@ -304,4 +304,49 @@ export class PrintfulClient {
     );
     return response.result;
   }
+
+  /**
+   * Get printfiles for a product (required for mockup generation)
+   */
+  async getPrintfiles(productId: number): Promise<any> {
+    const response = await this.request<any>(`/mockup-generator/printfiles/${productId}`);
+    return response.result;
+  }
+
+  /**
+   * Create a mockup generation task
+   */
+  async createMockupTask(productId: number, variantIds: number[], files: Array<{
+    placement: string;
+    image_url: string;
+    position?: {
+      area_width: number;
+      area_height: number;
+      width: number;
+      height: number;
+      top: number;
+      left: number;
+    };
+  }>) {
+    const response = await this.request<any>(
+      `/mockup-generator/create-task/${productId}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          variant_ids: variantIds,
+          format: 'jpg',
+          files
+        })
+      }
+    );
+    return response.result;
+  }
+
+  /**
+   * Get mockup generation task result
+   */
+  async getMockupTask(taskKey: string): Promise<any> {
+    const response = await this.request<any>(`/mockup-generator/task?task_key=${taskKey}`);
+    return response.result;
+  }
 } 
