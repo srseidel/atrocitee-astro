@@ -1,5 +1,5 @@
 import { createServerClient, createBrowserClient } from '@supabase/ssr';
-import { createClient } from '@supabase/supabase-js';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { env } from '@lib/config/env';
 
 import type { TypedSupabaseClient } from '../../types/supabase';
@@ -30,6 +30,14 @@ interface MockSupabaseClient {
     };
   };
 }
+
+// Create a client for static generation or build time - no cookies needed
+export const createClient = (): SupabaseClient => {
+  return createSupabaseClient(
+    supabaseUrl,
+    supabaseAnonKey
+  );
+};
 
 // Create a client for browser usage - with safety check for build time
 export const createBrowserSupabaseClient = (): SupabaseClient | MockSupabaseClient => {

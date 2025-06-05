@@ -1,445 +1,553 @@
 ---
-import { createServerSupabaseClient } from '@lib/supabase/client';
+import { createClient } from '@lib/supabase/client';
 import Layout from '@layouts/Layout.astro';
 import type { Database } from '@local-types/database/schema';
+
+// Enable static generation
+export const prerender = true;
 
 interface ProductVariant {
   id: string;
   name: string;
   sku: string;
   retail_price: number | null;
-  options: Record<string, string>;
+  options: Array<{id: string, value: any}>;
   in_stock: boolean;
   stock_level: number | null;
 }
 
+interface PublicCharity {
+  id: string;
+  name: string;
+  description: string | null;
+  website_url: string | null;
+  logo_url: string | null;
+  active: boolean;
+}
+
 type Product = Database['public']['Tables']['products']['Row'] & {
   product_variants: ProductVariant[];
-  charities?: Database['public']['Tables']['charities']['Row'] | null;
+  public_charities?: PublicCharity | null;
   atrocitee_category_id: number;
+  atrocitee_featured?: boolean;
+  atrocitee_base_price?: number;
+  atrocitee_donation_amount?: number;
 };
 
 type Category = Database['public']['Tables']['atrocitee_categories']['Row'];
 
-interface VariantOption {
-  name: string;
-  values: string[];
-}
+// Get all product slugs at build time
+export async function getStaticPaths() {
+  // Use a simple client without cookies for static generation
+  const supabase = createClient();
+  
+  console.log('Building static paths for products...');
+  
+  // Get all published products with their variants
+  const { data: products, error } = await supabase
+    .from('products')
+    .select(`
+      *,
+      product_variants (
+        id,
+        retail_price,
+        options,
+        in_stock,
+        stock_level,
+        name,
+        sku
+      ),
+      public_charities (
+        name,
+        description,
+        website_url,
+        logo_url,
+        active
+      ),
+      atrocitee_categories (
+        id,
+        name,
+        slug,
+        is_active
+      )
+    `)
+    .eq('published_status', true);
 
-// Type guard to check if a value is a Set<string>
-function isStringSet(value: unknown): value is Set<string> {
-  return value instanceof Set && Array.from(value).every(item => typeof item === 'string');
-}
-
-// Use server-side rendering for dynamic data
-export const prerender = false;
-
-// Get the product slug from the URL
-const { slug } = Astro.params;
-
-if (!slug) {
-  return Astro.redirect('/404');
-}
-
-// Get the product data
-const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
-
-// Get all categories for the sidebar
-const { data: categories } = await supabase
-  .from('atrocitee_categories')
-  .select('*')
-  .eq('is_active', true);
-
-// Get all products for counts
-const { data: allProducts } = await supabase
-  .from('products')
-  .select('*')
-  .eq('published_status', true);
-
-// Get featured products
-const featuredProducts = allProducts?.filter(p => p.atrocitee_featured) || [];
-
-// Get the product data
-const { data: product, error: productError } = await supabase
-  .from('products')
-  .select(`
-    *,
-    product_variants (
-      id,
-      retail_price,
-      options,
-      in_stock,
-      stock_level,
-      name,
-      sku
-    ),
-    charities (
-      name,
-      description,
-      website_url,
-      logo_url
-    )
-  `)
-  .eq('slug', slug)
-  .eq('published_status', true)
-  .single();
-
-if (productError || !product) {
-  return Astro.redirect('/404');
-}
-
-// Debug full variant data
-console.log('Full variant data:', JSON.stringify(product.product_variants, null, 2));
-
-// Extract size and color from variant names (e.g., "Atrocitee classic tee / Black / S")
-const variantsByOption = product.product_variants.reduce((acc: Record<string, Set<string>>, variant: ProductVariant) => {
-  // Parse the variant name which contains product name, color and size
-  const nameParts = variant.name?.split('/').map(part => part.trim());
-  if (nameParts?.length === 3) {
-    const [_productName, color, size] = nameParts;
-    
-    // Add color option
-    if (!acc['Color']) {
-      acc['Color'] = new Set<string>();
-    }
-    acc['Color'].add(color);
-
-    // Add size option
-    if (!acc['Size']) {
-      acc['Size'] = new Set<string>();
-    }
-    acc['Size'].add(size);
+  if (error) {
+    console.error('Error fetching products for static paths:', error);
+    return [];
   }
 
-  return acc;
-}, {} as Record<string, Set<string>>);
-
-// Debug the extracted options
-console.log('Extracted variant options:', {
-  colors: Array.from(variantsByOption['Color'] || []),
-  sizes: Array.from(variantsByOption['Size'] || [])
-});
-
-// Sort sizes in specific order
-const sizeOrder = ['S', 'M', 'L', 'XL', '2XL', '4XL'];
-function sortSizes(sizes: string[]): string[] {
-  return sizes.sort((a, b) => sizeOrder.indexOf(a) - sizeOrder.indexOf(b));
-}
-
-// Convert Sets to Arrays for template use
-const options: VariantOption[] = Object.entries(variantsByOption).map(([name, values]) => {
-  if (!isStringSet(values)) {
-    return { name, values: [] };
+  if (!products || products.length === 0) {
+    console.warn('No products found for static generation');
+    return [];
   }
-  const valuesArray = Array.from(values);
-  return {
-    name,
-    // Sort sizes in specific order, other options alphabetically
-    values: name === 'Size' ? sortSizes(valuesArray) : valuesArray.sort()
-  };
-});
 
-// Sort options to ensure consistent order (Size first, then Color)
-options.sort((a, b) => {
-  const order = ['Size', 'Color'];
-  return order.indexOf(a.name) - order.indexOf(b.name);
-});
+  console.log(`Generated static paths for ${products.length} products`);
+  
+  // Also fetch categories for each product page
+  const { data: categories } = await supabase
+    .from('atrocitee_categories')
+    .select('*')
+    .eq('is_active', true);
+  
+  // Get featured products
+  const featuredProducts = products.filter((p: Product) => p.atrocitee_featured) || [];
 
-// Find available variants for the current selection
-function findMatchingVariant(selectedOptions: Record<string, string>): ProductVariant | undefined {
-  return product.product_variants.find((variant: ProductVariant) => {
-    if (!variant.options || typeof variant.options !== 'object') return false;
-    const variantOptions = variant.options as Record<string, string>;
-    return Object.entries(selectedOptions).every(([key, value]) => 
-      variantOptions[key.toLowerCase()] === value
-    );
+  return products.map((product: Product) => {
+    console.log(`Creating static path for product: ${product.slug}`);
+    return {
+      params: { slug: product.slug },
+      props: { 
+        product,
+        categories: categories || [],
+        featuredProducts
+      }
+    };
   });
 }
 
-// Get initial variant (first available one)
-const initialVariant = product.product_variants[0];
+const { product, categories, featuredProducts } = Astro.props;
 
-// Initialize selected variant
-const selectedVariant = product.product_variants[0];
-const selectedOptions: Record<string, string> = {};
+// Process variants to extract color and size
+const processedVariants = product.product_variants.map(variant => {
+  // Extract color and size from options array
+  let color = "";
+  let size = "";
+  
+  if (Array.isArray(variant.options)) {
+    // Try to find color and size in the options array
+    const colorOption = variant.options.find(opt => opt.id === "color");
+    const sizeOption = variant.options.find(opt => opt.id === "size");
+    
+    color = colorOption?.value || "";
+    size = sizeOption?.value || "";
+    
+    // If color/size not found in options, try to extract from the name
+    if (!color || !size) {
+      const nameParts = variant.name.split('/').map(part => part.trim());
+      if (nameParts.length >= 3) {
+        color = color || nameParts[1];
+        size = size || nameParts[2];
+      }
+    }
+  }
+  
+  return {
+    ...variant,
+    color,
+    size,
+    displayName: `${color} - ${size}`
+  };
+});
+
+// Extract available colors and sizes
+const availableColors = [...new Set(processedVariants.map(v => v.color))].filter(Boolean);
+const availableSizes = [...new Set(processedVariants.map(v => v.size))].filter(Boolean);
+
+// Get initial variant
+const initialVariant = processedVariants[0];
+const initialColor = initialVariant?.color || 'Black';
+const initialSize = initialVariant?.size || 'M';
+
+// Get initial image paths
+const getImagePaths = (color: string, size: string) => {
+  // These hashes should match the ones generated during mockup download
+  const mainHash = '275c24597c2d';
+  const alternateHash = color.toLowerCase() === 'black' ? '716d47421c45' : '51c42fade7ca';
+  
+  // Format the mockup file path using consistent naming convention
+  const baseUrl = `/images/mockups/${product.slug}-${product.slug}-${color.toLowerCase()}-${size.toLowerCase()}-front`;
+
+  const paths = {
+    main: {
+      jpg: `${baseUrl}-${mainHash}.jpg`,
+      webp: `${baseUrl}-${mainHash}.webp`
+    },
+    alternate: {
+      jpg: `${baseUrl}-${alternateHash}.jpg`,
+      webp: `${baseUrl}-${alternateHash}.webp`
+    }
+  };
+  
+  console.log('Generated image paths:', JSON.stringify(paths, null, 2));
+  return paths;
+};
+
+const initialImagePaths = getImagePaths(initialColor, initialSize);
 
 // Debug logging
 console.log('Product loaded:', product.name);
-console.log('Variants:', product.product_variants.length);
+console.log('Product slug:', product.slug);
+console.log('Initial color:', initialColor);
+console.log('Initial size:', initialSize);
+console.log('Total variants:', product.product_variants.length);
+console.log('Available colors:', availableColors);
+console.log('Available sizes:', availableSizes);
+console.log('First processed variant:', JSON.stringify(processedVariants[0], null, 2));
 console.log('Categories:', categories?.length || 0);
 console.log('Featured products:', featuredProducts.length);
 ---
 
 <Layout title={product.name}>
-  {/* Hero section */}
-  <div class="relative">
-    <div class="absolute inset-0">
-      <img
-        class="w-full h-64 object-cover"
-        src="https://images.unsplash.com/photo-1525268771113-32d9e9021a97?ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80"
-        alt="Shop hero"
-      />
-      <div class="absolute inset-0 bg-gray-900 bg-opacity-50"></div>
-    </div>
-    <div class="relative max-w-7xl mx-auto py-24 px-4 sm:py-32 sm:px-6 lg:px-8">
-      <h1 class="text-4xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-6xl">
-        {product.name}
-      </h1>
-      <p class="mt-6 text-xl text-white max-w-3xl">
-        {product.description}
-      </p>
-    </div>
-  </div>
-
-  <div class="min-h-screen bg-gray-50">
-    <div class="flex">
-      {/* Category Sidebar - Admin Style */}
-      <div class="hidden lg:block lg:w-64 bg-white border-r border-gray-200">
-        <div class="flex-1 flex flex-col min-h-0">
-          <nav class="flex-1 space-y-1 pt-6" aria-label="Sidebar">
-            <div class="px-3 py-2">
-              <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Categories
-              </h3>
-            </div>
-            <a
-              href="/shop"
-              class:list={[
-                'group flex items-center px-3 py-2 text-sm font-medium rounded-md',
-                'text-gray-700 hover:bg-gray-50'
-              ]}
-            >
-              <span class="truncate">All Products</span>
-              {allProducts && (
-                <span class="ml-auto inline-block py-0.5 px-3 text-xs rounded-full bg-gray-100 text-gray-700">
-                  {allProducts.length}
-                </span>
-              )}
-            </a>
-            {categories?.map((category: Category) => {
-              const categoryProducts = allProducts?.filter(p => p.atrocitee_category_id === category.id) || [];
-              const isCurrentCategory = category.id === product.atrocitee_category_id;
-              return (
-                <a
-                  href={`/shop/${category.slug}`}
-                  class:list={[
-                    'group flex items-center px-3 py-2 text-sm font-medium rounded-md',
-                    isCurrentCategory ? 'bg-gray-200 text-gray-900' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                  ]}
-                >
-                  <span class="truncate">{category.name}</span>
-                  <span class="ml-auto inline-block py-0.5 px-3 text-xs rounded-full bg-gray-100 text-gray-700">
-                    {categoryProducts.length}
-                  </span>
-                </a>
-              );
-            })}
-
-            {/* Featured Filter */}
-            {featuredProducts.length > 0 && (
-              <div class="mt-8">
-                <div class="px-3 py-2">
-                  <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Featured
-                  </h3>
-                </div>
-                <a
-                  href="/shop#featured"
-                  class="group flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md"
-                >
-                  <span class="truncate">Featured Products</span>
-                  <span class="ml-auto inline-block py-0.5 px-3 text-xs rounded-full bg-gray-100 text-gray-700">
-                    {featuredProducts.length}
-                  </span>
-                </a>
-              </div>
-            )}
-          </nav>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div class="lg:grid lg:grid-cols-2 lg:gap-x-8 lg:items-start">
+      {/* Image gallery */}
+      <div class="flex flex-col">
+        {/* Main image */}
+        <div class="aspect-w-1 aspect-h-1 rounded-lg bg-gray-100 overflow-hidden" id="main-image-container">
+          <picture id="main-image">
+            <source srcset={initialImagePaths.main.webp} type="image/webp" />
+            <img
+              src={initialImagePaths.main.jpg}
+              alt={`${product.name} in ${initialColor}, size ${initialSize}`}
+              class="w-full h-full object-center object-cover"
+              onerror="this.src=this.getAttribute('data-fallback'); console.error('Image failed to load:', this.src);"
+              data-fallback={product.thumbnail_url || ''}
+            />
+          </picture>
+        </div>
+        
+        {/* Thumbnail gallery */}
+        <div class="mt-4 grid grid-cols-4 gap-2">
+          {/* Main view thumbnail */}
+          <div 
+            class="aspect-w-1 aspect-h-1 rounded-md bg-gray-100 overflow-hidden cursor-pointer border-2 border-indigo-600" 
+            data-view="main"
+            data-hash={initialImagePaths.main.jpg}
+          >
+            <picture>
+              <source srcset={initialImagePaths.main.webp} type="image/webp" />
+              <img
+                src={initialImagePaths.main.jpg}
+                alt={`${product.name} in ${initialColor}, size ${initialSize}`}
+                class="w-full h-full object-center object-cover"
+                onerror="this.src=this.getAttribute('data-fallback');"
+                data-fallback={product.thumbnail_url || ''}
+              />
+            </picture>
+          </div>
+          
+          {/* Alternate view thumbnail */}
+          <div 
+            class="aspect-w-1 aspect-h-1 rounded-md bg-gray-100 overflow-hidden cursor-pointer border-2 border-gray-200" 
+            data-view="alternate"
+            data-hash={initialImagePaths.alternate.jpg}
+          >
+            <picture>
+              <source srcset={initialImagePaths.alternate.webp} type="image/webp" />
+              <img
+                src={initialImagePaths.alternate.jpg}
+                alt={`Alternate view of ${product.name} in ${initialColor}, size ${initialSize}`}
+                class="w-full h-full object-center object-cover"
+                onerror="this.src=this.getAttribute('data-fallback');"
+                data-fallback={product.thumbnail_url || ''}
+              />
+            </picture>
+          </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div class="flex-1">
-        <main class="py-6">
-          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            {/* Back to category link */}
-            <div class="mb-8">
-              <a
-                href={product.atrocitee_category_id ? `/shop/${categories?.find(c => c.id === product.atrocitee_category_id)?.slug}` : '/shop'}
-                class="text-sm font-medium text-indigo-600 hover:text-indigo-500"
-              >
-                <span aria-hidden="true">&larr;</span> Back to {product.atrocitee_category_id ? categories?.find(c => c.id === product.atrocitee_category_id)?.name : 'Shop'}
-              </a>
+      {/* Product info */}
+      <div class="mt-10 px-4 sm:px-0 sm:mt-16 lg:mt-0">
+        <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">{product.name}</h1>
+        
+        <div class="mt-3">
+          <h2 class="sr-only">Product information</h2>
+          <p class="text-3xl text-gray-900" id="product-price">
+            ${initialVariant?.retail_price?.toFixed(2) || product.atrocitee_base_price?.toFixed(2)}
+          </p>
+        </div>
+
+        <div class="mt-6">
+          <h3 class="sr-only">Description</h3>
+          <div class="text-base text-gray-700 space-y-6">
+            <p>{product.description}</p>
+          </div>
+        </div>
+
+        {/* Color Selection */}
+        {availableColors.length > 0 && (
+          <div class="mt-8">
+            <h3 class="text-sm text-gray-900 font-medium">Color</h3>
+            <div class="grid grid-cols-4 gap-4 mt-4">
+              {availableColors.map((color) => (
+                <button
+                  type="button"
+                  class={`group relative border rounded-md py-3 px-4 flex items-center justify-center text-sm font-medium focus:outline-none sm:flex-1 ${
+                    color === initialColor 
+                      ? 'bg-indigo-600 border-transparent text-white option-selected' 
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                  data-option="color"
+                  data-value={color}
+                >
+                  {color}
+                </button>
+              ))}
             </div>
+          </div>
+        )}
 
-            {/* Product */}
-            <div class="lg:grid lg:grid-cols-2 lg:gap-x-8 lg:items-start">
-              {/* Image gallery */}
-              <div class="flex flex-col">
-                <div class="w-full aspect-w-1 aspect-h-1 bg-gray-200 rounded-lg overflow-hidden">
-                  <img
-                    src={product.thumbnail_url || 'https://via.placeholder.com/600'}
-                    alt={product.name}
-                    class="w-full h-full object-center object-cover"
-                  />
-                </div>
-              </div>
+        {/* Size Selection */}
+        {availableSizes.length > 0 && (
+          <div class="mt-8">
+            <h3 class="text-sm text-gray-900 font-medium">Size</h3>
+            <div class="grid grid-cols-4 gap-4 mt-4">
+              {availableSizes.map((size) => (
+                <button
+                  type="button"
+                  class={`group relative border rounded-md py-3 px-4 flex items-center justify-center text-sm font-medium focus:outline-none sm:flex-1 ${
+                    size === initialSize 
+                      ? 'bg-indigo-600 border-transparent text-white option-selected' 
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                  data-option="size"
+                  data-value={size}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
-              {/* Product info */}
-              <div class="mt-10 px-4 sm:px-0 sm:mt-16 lg:mt-0">
-                <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">{product.name}</h1>
-                <div class="mt-3">
-                  <h2 class="sr-only">Product information</h2>
-                  <p class="text-3xl text-gray-900" data-variant-price>
-                    ${selectedVariant?.retail_price?.toFixed(2) || product.atrocitee_base_price?.toFixed(2)}
-                  </p>
-                </div>
+        {/* Add to cart */}
+        <div class="mt-10">
+          <button
+            type="button"
+            id="add-to-cart"
+            class="w-full bg-indigo-600 border border-transparent rounded-md py-3 px-8 flex items-center justify-center text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            disabled={!initialVariant?.in_stock}
+          >
+            {initialVariant?.in_stock ? 'Add to cart' : 'Out of stock'}
+          </button>
+        </div>
 
-                <div class="mt-6">
-                  <h3 class="sr-only">Description</h3>
-                  <div class="text-base text-gray-700 space-y-6">
-                    <p>{product.description}</p>
-                  </div>
-                </div>
-
-                {/* Variant Selectors */}
-                <div class="mt-8">
-                  {options.map((option) => (
-                    <div class="mb-4">
-                      <h3 class="text-sm text-gray-900 font-medium">{option.name}</h3>
-                      <div class="grid grid-cols-4 gap-4 mt-4" data-option-group={option.name}>
-                        {option.values.map((value) => (
-                          <button
-                            type="button"
-                            class="group relative border rounded-md py-3 px-4 flex items-center justify-center text-sm font-medium hover:bg-gray-50 focus:outline-none sm:flex-1 bg-white border-gray-300 text-gray-900"
-                            data-value={value}
-                            onclick={`updateSelectedOption('${option.name}', '${value}')`}
-                          >
-                            <span>{value}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Add to cart */}
-                <div class="mt-10">
-                  <button
-                    type="button"
-                    class="w-full bg-indigo-600 border border-transparent rounded-md py-3 px-8 flex items-center justify-center text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                    data-add-to-cart
+        {/* Charity Information */}
+        {product.public_charities && (
+          <div class="mt-10 border-t border-gray-200 pt-10">
+            <h3 class="text-sm font-medium text-gray-900">Supporting Charity</h3>
+            <div class="mt-4 flex items-center">
+              {product.public_charities.logo_url && (
+                <img
+                  src={product.public_charities.logo_url}
+                  alt={product.public_charities.name}
+                  class="h-12 w-12 rounded-full"
+                />
+              )}
+              <div class="ml-4">
+                <h4 class="text-sm font-medium text-gray-900">{product.public_charities.name}</h4>
+                <p class="mt-1 text-sm text-gray-500">{product.public_charities.description}</p>
+                {product.public_charities.website_url && (
+                  <a
+                    href={product.public_charities.website_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="mt-2 text-sm text-indigo-600 hover:text-indigo-500"
                   >
-                    Add to cart
-                  </button>
-                </div>
-
-                {/* Charity information */}
-                {product.charities && (
-                  <div class="mt-8 border-t border-gray-200 pt-8">
-                    <h3 class="text-sm font-medium text-gray-900">Default Supported Charity</h3>
-                    <div class="mt-3 text-sm text-gray-500">
-                      <p>{product.charities.name}</p>
-                      <p class="mt-2 italic">Donation goes to the Default Supported Charity unless changed in your profile at checkout.</p>
-                      <a
-                        href={product.charities.website_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="block mt-4 text-indigo-600 hover:text-indigo-500"
-                      >
-                        Learn more about {product.charities.name} &rarr;
-                      </a>
-                    </div>
-                  </div>
+                    Learn more about {product.public_charities.name}
+                  </a>
                 )}
               </div>
             </div>
+            <p class="mt-4 text-sm text-gray-500">
+              ${product.atrocitee_donation_amount?.toFixed(2)} from each purchase goes to {product.public_charities.name}
+            </p>
           </div>
-        </main>
+        )}
       </div>
     </div>
   </div>
 </Layout>
 
-<script define:vars={{ variants: product.product_variants, initialPrice: selectedVariant?.retail_price || product.atrocitee_base_price }}>
-  /**
-   * @typedef {Object} Variant
-   * @property {string} name - The variant name (e.g., "Atrocitee classic tee / Black / S")
-   * @property {number|null} retail_price - The retail price of the variant
-   * @property {boolean} in_stock - Whether the variant is in stock
-   * @property {number|null} stock_level - The stock level of the variant
-   */
-
-  /** @type {Object.<string, string>} */
-  const selectedOptions = {};
-
-  /**
-   * Find matching variant based on selected options
-   * @param {Object} options - The currently selected options
-   * @returns {Object|undefined} - The matching variant or undefined
-   */
-  function findMatchingVariant(options) {
-    return variants.find(variant => {
-      const nameParts = variant.name?.split('/').map(part => part.trim());
-      if (!nameParts || nameParts.length !== 3) return false;
-      
-      const [_productName, color, size] = nameParts;
-      return options['Color'] === color && options['Size'] === size;
-    });
-  }
-
-  /**
-   * Update the UI based on the selected variant
-   * @param {Object|undefined} variant - The selected variant
-   */
-  function updateUI(variant) {
-    // Update price
-    const priceElement = document.querySelector('[data-variant-price]');
-    if (priceElement) {
-      const price = variant?.retail_price ?? initialPrice;
-      priceElement.textContent = `$${price.toFixed(2)}`;
-    }
-
-    // Update add to cart button state
-    const addToCartButton = document.querySelector('[data-add-to-cart]');
-    if (addToCartButton) {
-      const isAvailable = variant?.in_stock ?? true;
-      addToCartButton.disabled = !isAvailable;
-      addToCartButton.textContent = isAvailable ? 'Add to cart' : 'Out of stock';
-    }
-  }
-
-  // Function to update selected option
-  window.updateSelectedOption = function(optionName, value) {
-    // Update selected options
-    selectedOptions[optionName] = value;
-    
-    // Find matching variant
-    const matchingVariant = findMatchingVariant(selectedOptions);
-    
-    // Update UI
-    updateUI(matchingVariant);
-    
-    // Update button states
-    document.querySelectorAll(`[data-option-group="${optionName}"] button`).forEach(button => {
-      const isSelected = button.getAttribute('data-value') === value;
-      button.classList.toggle('bg-indigo-600', isSelected);
-      button.classList.toggle('text-white', isSelected);
-      button.classList.toggle('border-transparent', isSelected);
-      button.classList.toggle('border-gray-300', !isSelected);
-      button.classList.toggle('text-gray-900', !isSelected);
-      button.classList.toggle('bg-white', !isSelected);
-    });
+<script define:vars={{ product, variants: product.product_variants, processedVariants }}>
+  // Set initial selected options based on UI state
+  let selectedOptions = {
+    color: document.querySelector('[data-option="color"].option-selected')?.getAttribute('data-value') || 'Black',
+    size: document.querySelector('[data-option="size"].option-selected')?.getAttribute('data-value') || 'M'
   };
+  
+  let currentView = 'main';
+  
+  console.log('Initial client-side selected options:', selectedOptions);
 
-  // Initialize with first available options
-  window.addEventListener('DOMContentLoaded', () => {
-    // Get first available option for each type
-    const firstColor = document.querySelector('[data-option-group="Color"] button')?.getAttribute('data-value');
-    const firstSize = document.querySelector('[data-option-group="Size"] button')?.getAttribute('data-value');
+  // Generate image paths for a given color and size
+  function generateImagePaths(color, size) {
+    const mainHash = '275c24597c2d';
+    const alternateHash = color.toLowerCase() === 'black' ? '716d47421c45' : '51c42fade7ca';
+    const baseUrl = `/images/mockups/${product.slug}-${product.slug}-${color.toLowerCase()}-${size.toLowerCase()}-front`;
     
-    // Select initial options
-    if (firstColor) updateSelectedOption('Color', firstColor);
-    if (firstSize) updateSelectedOption('Size', firstSize);
+    return {
+      main: {
+        jpg: `${baseUrl}-${mainHash}.jpg`,
+        webp: `${baseUrl}-${mainHash}.webp`
+      },
+      alternate: {
+        jpg: `${baseUrl}-${alternateHash}.jpg`,
+        webp: `${baseUrl}-${alternateHash}.webp`
+      }
+    };
+  }
+
+  // Update the main image based on current view and options
+  function updateMainImage() {
+    const imagePaths = generateImagePaths(selectedOptions.color, selectedOptions.size);
+    const mainImageContainer = document.getElementById('main-image-container');
+    
+    if (mainImageContainer) {
+      const mainPicture = document.getElementById('main-image');
+      if (mainPicture) {
+        const viewType = currentView; // 'main' or 'alternate'
+        const imagePath = imagePaths[viewType];
+        
+        mainPicture.innerHTML = `
+          <source srcset="${imagePath.webp}" type="image/webp">
+          <img src="${imagePath.jpg}" 
+               alt="${product.name} in ${selectedOptions.color}, size ${selectedOptions.size}"
+               class="w-full h-full object-center object-cover"
+               onerror="this.src='${product.thumbnail_url || ''}'; console.error('Failed to load image:', this.src);">
+        `;
+      }
+    }
+  }
+  
+  // Update all thumbnails when color/size changes
+  function updateAllThumbnails() {
+    const imagePaths = generateImagePaths(selectedOptions.color, selectedOptions.size);
+    
+    // Update each thumbnail
+    document.querySelectorAll('[data-view]').forEach(thumbnail => {
+      const view = thumbnail.getAttribute('data-view');
+      if (view && (view === 'main' || view === 'alternate')) {
+        const imagePath = imagePaths[view];
+        
+        // Update the thumbnail image
+        const picture = thumbnail.querySelector('picture');
+        if (picture) {
+          picture.innerHTML = `
+            <source srcset="${imagePath.webp}" type="image/webp">
+            <img src="${imagePath.jpg}" 
+                 alt="${view === 'main' ? '' : 'Alternate view of '}${product.name} in ${selectedOptions.color}, size ${selectedOptions.size}"
+                 class="w-full h-full object-center object-cover"
+                 onerror="this.src='${product.thumbnail_url || ''}';">
+          `;
+        }
+        
+        // Update the data-hash attribute
+        thumbnail.setAttribute('data-hash', imagePath.jpg);
+        
+        // Update the selected state
+        if (view === currentView) {
+          thumbnail.classList.add('border-indigo-600');
+          thumbnail.classList.remove('border-gray-200');
+        } else {
+          thumbnail.classList.remove('border-indigo-600');
+          thumbnail.classList.add('border-gray-200');
+        }
+      }
+    });
+  }
+
+  function findMatchingVariant(color, size) {
+    // Use the processed variants that have color and size extracted
+    const variant = processedVariants.find(variant => 
+      variant.color === color && 
+      variant.size === size
+    );
+    
+    console.log(`Finding variant for ${color} size ${size}:`, variant ? {
+      id: variant.id,
+      sku: variant.sku,
+      price: variant.retail_price,
+      inStock: variant.in_stock
+    } : 'No matching variant found');
+    
+    return variant;
+  }
+
+  function updatePrice(variant) {
+    const priceElement = document.getElementById('product-price');
+    if (priceElement) {
+      const price = variant?.retail_price || product.atrocitee_base_price;
+      priceElement.textContent = `$${price.toFixed(2)}`;
+      console.log('Updated price to:', price);
+    }
+  }
+
+  function updateAddToCartButton(variant) {
+    const button = document.getElementById('add-to-cart');
+    if (button) {
+      button.disabled = !variant?.in_stock;
+      button.textContent = variant?.in_stock ? 'Add to cart' : 'Out of stock';
+      console.log('Updated button state:', variant?.in_stock ? 'In stock' : 'Out of stock');
+    }
+  }
+  
+  // Add click handlers for thumbnails
+  document.querySelectorAll('[data-view]').forEach(thumbnail => {
+    thumbnail.addEventListener('click', () => {
+      const view = thumbnail.getAttribute('data-view');
+      if (view) {
+        // Update current view
+        currentView = view;
+        
+        // Update main image
+        updateMainImage();
+        
+        // Update thumbnail selection states
+        document.querySelectorAll('[data-view]').forEach(thumb => {
+          if (thumb.getAttribute('data-view') === currentView) {
+            thumb.classList.add('border-indigo-600');
+            thumb.classList.remove('border-gray-200');
+          } else {
+            thumb.classList.remove('border-indigo-600');
+            thumb.classList.add('border-gray-200');
+          }
+        });
+      }
+    });
+  });
+
+  // Add click handlers to option buttons
+  document.querySelectorAll('[data-option]').forEach(button => {
+    button.addEventListener('click', (e) => {
+      const optionType = button.getAttribute('data-option');
+      const value = button.getAttribute('data-value');
+      
+      console.log(`Option selected: ${optionType} = ${value}`);
+      
+      if (optionType && value) {
+        // Update selected options
+        selectedOptions[optionType] = value;
+        console.log('Updated selected options:', selectedOptions);
+        
+        // Update button styles without rebuilding the DOM
+        document.querySelectorAll(`[data-option="${optionType}"]`).forEach(btn => {
+          if (btn.getAttribute('data-value') === value) {
+            btn.classList.add('bg-indigo-600', 'border-transparent', 'text-white', 'option-selected');
+            btn.classList.remove('bg-white', 'border-gray-300', 'text-gray-900');
+          } else {
+            btn.classList.remove('bg-indigo-600', 'border-transparent', 'text-white', 'option-selected');
+            btn.classList.add('bg-white', 'border-gray-300', 'text-gray-900');
+          }
+        });
+
+        // Update thumbnails and main image
+        updateAllThumbnails();
+        updateMainImage();
+
+        // Update price and availability
+        const variant = findMatchingVariant(selectedOptions.color, selectedOptions.size);
+        updatePrice(variant);
+        updateAddToCartButton(variant);
+      }
+    });
+  });
+
+  // Log simplified variant information
+  console.log('Available product options:');
+  processedVariants.forEach(v => {
+    console.log(`${v.color} - ${v.size}: $${v.retail_price} (${v.in_stock ? 'In Stock' : 'Out of Stock'})`);
   });
 </script> 

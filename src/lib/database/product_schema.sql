@@ -221,6 +221,26 @@ FOR DELETE
 TO authenticated
 USING (is_admin());
 
+-- Create a public view for charities that can be accessed during static site generation
+DROP VIEW IF EXISTS public_charities;
+CREATE OR REPLACE VIEW public_charities
+WITH (security_barrier)
+AS
+  SELECT 
+    id,
+    name,
+    description,
+    website_url,
+    logo_url,
+    active
+  FROM public.charities;
+
+-- Grant access to both authenticated and anonymous users
+GRANT SELECT ON public_charities TO authenticated, anon;
+
+-- Add a helpful comment
+COMMENT ON VIEW public_charities IS 'Public charity information for display on product pages';
+
 -- 4. Products Table
 CREATE TABLE products (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
