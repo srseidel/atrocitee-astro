@@ -8,7 +8,7 @@ import { getImage } from 'astro:assets';
 import type { ImageMetadata } from 'astro';
 
 // Import mockup images dynamically
-const mockupImages = import.meta.glob<{ default: ImageMetadata }>('/src/assets/mockups/*.jpg', {
+const mockupImages = import.meta.glob<{ default: ImageMetadata }>('/src/assets/mockups/*.{jpg,png,webp}', {
   import: 'default',
   eager: true
 });
@@ -20,14 +20,40 @@ const mockupImages = import.meta.glob<{ default: ImageMetadata }>('/src/assets/m
  */
 function parseMockupFilename(filename: string): Partial<ProductMockup> {
   // Remove path and extension
-  const basename = filename.split('/').pop()?.replace('.jpg', '') || '';
+  const basename = filename.split('/').pop()?.replace(/\.(jpg|png|webp)$/, '') || '';
   
   // Split the filename into components
   const parts = basename.split('-');
   const id = parts.pop() || '';
-  const view = parts.slice(-2).join('-') as ProductView;
-  const color = parts[parts.length - 3] as ProductColor;
-  const productType = parts.slice(0, -3).join('-');
+  
+  // Extract view by working backwards - the last two parts before id are the view
+  let viewParts = [];
+  let colorIndex = -1;
+  
+  // Find known view parts from the end (before the ID)
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i].toLowerCase();
+    if (['front', 'back', 'left', 'right', 'front-2', 'back-2'].includes(part) || 
+        part === 'front' && parts[i-1]?.toLowerCase() === 'left' ||
+        part === 'front' && parts[i-1]?.toLowerCase() === 'right') {
+      viewParts.unshift(part);
+      if (part === 'front' && (parts[i-1]?.toLowerCase() === 'left' || parts[i-1]?.toLowerCase() === 'right')) {
+        viewParts.unshift(parts[i-1].toLowerCase());
+        i--; // Skip the next part as we've already processed it
+      }
+      colorIndex = i - 1;
+      break;
+    }
+  }
+  
+  // Join view parts with hyphens
+  const view = viewParts.join('-') as ProductView;
+  
+  // The color should be the part before the view
+  const color = colorIndex >= 0 ? parts[colorIndex] as ProductColor : 'unknown';
+  
+  // The product type is everything up to the color
+  const productType = parts.slice(0, colorIndex).join('-');
 
   return {
     productType,
@@ -92,8 +118,17 @@ export async function getMockupSet(variant: ProductVariant): Promise<MockupSet |
         case 'back':
           mockupSet.back = mockup;
           break;
+        case 'left':
+          mockupSet.left = mockup;
+          break;
+        case 'right':
+          mockupSet.right = mockup;
+          break;
         case 'left-front':
           mockupSet.leftFront = mockup;
+          break;
+        case 'right-front':
+          mockupSet.rightFront = mockup;
           break;
         case 'front-and-back':
           mockupSet.frontAndBack = mockup;

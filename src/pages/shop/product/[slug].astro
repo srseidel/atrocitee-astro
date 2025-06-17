@@ -3,8 +3,8 @@ import { createClient } from '@lib/supabase/client';
 import Layout from '@layouts/Layout.astro';
 import type { Database } from '@local-types/database/schema';
 
-// Enable static generation
-export const prerender = true;
+// Use server-side rendering to ensure all products are accessible
+export const prerender = false;
 
 interface ProductVariant {
   id: string;
@@ -14,6 +14,7 @@ interface ProductVariant {
   options: Array<{id: string, value: any}>;
   in_stock: boolean;
   stock_level: number | null;
+  mockup_settings?: any;
 }
 
 interface PublicCharity {
@@ -36,145 +37,136 @@ type Product = Database['public']['Tables']['products']['Row'] & {
 
 type Category = Database['public']['Tables']['atrocitee_categories']['Row'];
 
-// Get all product slugs at build time
-export async function getStaticPaths() {
-  // Use a simple client without cookies for static generation
-  const supabase = createClient();
-  
-  console.log('Building static paths for products...');
-  
-  // Get all published products with their variants
-  const { data: products, error } = await supabase
-    .from('products')
-    .select(`
-      *,
-      product_variants (
-        id,
-        retail_price,
-        options,
-        in_stock,
-        stock_level,
-        name,
-        sku
-      ),
-      public_charities (
-        name,
-        description,
-        website_url,
-        logo_url,
-        active
-      ),
-      atrocitee_categories (
-        id,
-        name,
-        slug,
-        is_active
-      )
-    `)
-    .eq('published_status', true);
+// Get the slug from the URL
+const { slug } = Astro.params;
 
-  if (error) {
-    console.error('Error fetching products for static paths:', error);
-    return [];
-  }
+// Initialize Supabase client
+const supabase = createClient();
 
-  if (!products || products.length === 0) {
-    console.warn('No products found for static generation');
-    return [];
-  }
+// Fetch the product by slug
+const { data: product, error: productError } = await supabase
+  .from('products')
+  .select(`
+    *,
+    product_variants (
+      id,
+      retail_price,
+      options,
+      in_stock,
+      stock_level,
+      name,
+      sku,
+      mockup_settings
+    ),
+    public_charities (
+      name,
+      description,
+      website_url,
+      logo_url,
+      active
+    ),
+    atrocitee_categories (
+      id,
+      name,
+      slug,
+      is_active
+    )
+  `)
+  .eq('slug', slug)
+  .eq('published_status', true)
+  .single();
 
-  console.log(`Generated static paths for ${products.length} products`);
-  
-  // Also fetch categories for each product page
-  const { data: categories } = await supabase
-    .from('atrocitee_categories')
-    .select('*')
-    .eq('is_active', true);
-  
-  // Get featured products
-  const featuredProducts = products.filter((p: Product) => p.atrocitee_featured) || [];
-
-  return products.map((product: Product) => {
-    console.log(`Creating static path for product: ${product.slug}`);
-    return {
-      params: { slug: product.slug },
-      props: { 
-        product,
-        categories: categories || [],
-        featuredProducts
-      }
-    };
-  });
+// Handle product not found
+if (productError || !product) {
+  console.error(`Product not found for slug: ${slug}`, productError);
+  return Astro.redirect('/404');
 }
 
-const { product, categories, featuredProducts } = Astro.props;
+// Also fetch categories for the product page
+const { data: categories } = await supabase
+  .from('atrocitee_categories')
+  .select('*')
+  .eq('is_active', true);
+
+// Get featured products
+const { data: allProducts } = await supabase
+  .from('products')
+  .select('*')
+  .eq('published_status', true);
+
+const featuredProducts = allProducts?.filter((p: any) => p.atrocitee_featured) || [];
 
 // Process variants to extract color and size
-const processedVariants = product.product_variants.map(variant => {
+const processedVariants = product.product_variants.map((variant: ProductVariant) => {
   // Extract color and size from options array
   let color = "";
   let size = "";
   
   if (Array.isArray(variant.options)) {
     // Try to find color and size in the options array
-    const colorOption = variant.options.find(opt => opt.id === "color");
-    const sizeOption = variant.options.find(opt => opt.id === "size");
+    const colorOption = variant.options.find((opt: {id: string, value: any}) => opt.id === "color");
+    const sizeOption = variant.options.find((opt: {id: string, value: any}) => opt.id === "size");
     
     color = colorOption?.value || "";
     size = sizeOption?.value || "";
+  }
+  
+  // If color/size not found in options, extract from the name
+  if (!color || !size) {
+    const nameParts = variant.name.split('/').map((part: string) => part.trim());
     
-    // If color/size not found in options, try to extract from the name
-    if (!color || !size) {
-      const nameParts = variant.name.split('/').map(part => part.trim());
+    if (nameParts.length >= 2) {
+      // For products with both color and size (like t-shirts)
       if (nameParts.length >= 3) {
         color = color || nameParts[1];
         size = size || nameParts[2];
+      } 
+      // For products with only color (like hats)
+      else if (nameParts.length === 2) {
+        color = color || nameParts[1];
       }
     }
   }
+  
+  // Extract mockups if available
+  const mockups = variant.mockup_settings?.mockups || {};
+  const mockupViews = Object.keys(mockups).map((view: string) => ({
+    view,
+    filename: mockups[view as keyof typeof mockups]?.filename || '',
+    url: `/api/v1/admin/products/mockup?filename=${encodeURIComponent(mockups[view as keyof typeof mockups]?.filename || '')}`,
+  }));
   
   return {
     ...variant,
     color,
     size,
-    displayName: `${color} - ${size}`
+    displayName: size ? `${color} - ${size}` : color,
+    mockupViews
   };
 });
 
 // Extract available colors and sizes
-const availableColors = [...new Set(processedVariants.map(v => v.color))].filter(Boolean);
-const availableSizes = [...new Set(processedVariants.map(v => v.size))].filter(Boolean);
+const availableColors = [...new Set(processedVariants.map((v: any) => v.color))].filter(Boolean) as string[];
+const availableSizes = [...new Set(processedVariants.map((v: any) => v.size))].filter((size): size is string => Boolean(size)).sort((a, b) => {
+  // Common size order: XS, S, M, L, XL, 2XL, etc.
+  const sizeOrder: Record<string, number> = { 
+    "XS": 1, "S": 2, "M": 3, "L": 4, "XL": 5, "2XL": 6, "3XL": 7, "4XL": 8 
+  };
+  return (sizeOrder[a] || 99) - (sizeOrder[b] || 99);
+});
 
 // Get initial variant
 const initialVariant = processedVariants[0];
-const initialColor = initialVariant?.color || 'Black';
-const initialSize = initialVariant?.size || 'M';
+const initialColor = initialVariant?.color || availableColors[0] || 'Black';
+const initialSize = initialVariant?.size || availableSizes[0] || 'M';
 
-// Get initial image paths
-const getImagePaths = (color: string, size: string) => {
-  // These hashes should match the ones generated during mockup download
-  const mainHash = '275c24597c2d';
-  const alternateHash = color.toLowerCase() === 'black' ? '716d47421c45' : '51c42fade7ca';
-  
-  // Format the mockup file path using consistent naming convention
-  const baseUrl = `/images/mockups/${product.slug}-${product.slug}-${color.toLowerCase()}-${size.toLowerCase()}-front`;
-
-  const paths = {
-    main: {
-      jpg: `${baseUrl}-${mainHash}.jpg`,
-      webp: `${baseUrl}-${mainHash}.webp`
-    },
-    alternate: {
-      jpg: `${baseUrl}-${alternateHash}.jpg`,
-      webp: `${baseUrl}-${alternateHash}.webp`
-    }
-  };
-  
-  console.log('Generated image paths:', JSON.stringify(paths, null, 2));
-  return paths;
-};
-
-const initialImagePaths = getImagePaths(initialColor, initialSize);
+// Get all available views for the initial variant
+interface MockupView {
+  view: string;
+  filename: string;
+  url: string;
+}
+const initialViews: MockupView[] = initialVariant?.mockupViews || [];
 
 // Debug logging
 console.log('Product loaded:', product.name);
@@ -185,8 +177,28 @@ console.log('Total variants:', product.product_variants.length);
 console.log('Available colors:', availableColors);
 console.log('Available sizes:', availableSizes);
 console.log('First processed variant:', JSON.stringify(processedVariants[0], null, 2));
+console.log('Initial views:', initialViews);
 console.log('Categories:', categories?.length || 0);
 console.log('Featured products:', featuredProducts.length);
+
+// Map view IDs to more readable labels
+function getViewLabel(viewId: string): string {
+  const viewLabels: Record<string, string> = {
+    'front': 'Front',
+    'back': 'Back',
+    'left': 'Left',
+    'right': 'Right',
+    'left_front': 'Left Front',
+    'right_front': 'Right Front',
+    'front-2': 'Front Detail',
+    'back-2': 'Back Detail',
+    'front-and-back': 'Front & Back',
+    'flat': 'Flat',
+    'lifestyle': 'Lifestyle'
+  };
+  
+  return viewLabels[viewId] || viewId.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+}
 ---
 
 <Layout title={product.name}>
@@ -197,54 +209,46 @@ console.log('Featured products:', featuredProducts.length);
         {/* Main image */}
         <div class="aspect-w-1 aspect-h-1 rounded-lg bg-gray-100 overflow-hidden" id="main-image-container">
           <picture id="main-image">
-            <source srcset={initialImagePaths.main.webp} type="image/webp" />
-            <img
-              src={initialImagePaths.main.jpg}
-              alt={`${product.name} in ${initialColor}, size ${initialSize}`}
-              class="w-full h-full object-center object-cover"
-              onerror="this.src=this.getAttribute('data-fallback'); console.error('Image failed to load:', this.src);"
-              data-fallback={product.thumbnail_url || ''}
-            />
+            {initialViews.length > 0 ? (
+              <>
+                <img
+                  src={initialViews[0]?.url || product.thumbnail_url}
+                  alt={`${product.name} in ${initialColor}, size ${initialSize}`}
+                  class="w-full h-full object-center object-cover"
+                  onerror="this.onerror=null; this.src=this.getAttribute('data-fallback');"
+                  data-fallback={product.thumbnail_url || ''}
+                />
+              </>
+            ) : (
+              <img
+                src={product.thumbnail_url || ''}
+                alt={`${product.name} in ${initialColor}, size ${initialSize}`}
+                class="w-full h-full object-center object-cover"
+              />
+            )}
           </picture>
         </div>
         
         {/* Thumbnail gallery */}
-        <div class="mt-4 grid grid-cols-4 gap-2">
-          {/* Main view thumbnail */}
-          <div 
-            class="aspect-w-1 aspect-h-1 rounded-md bg-gray-100 overflow-hidden cursor-pointer border-2 border-indigo-600" 
-            data-view="main"
-            data-hash={initialImagePaths.main.jpg}
-          >
-            <picture>
-              <source srcset={initialImagePaths.main.webp} type="image/webp" />
+        <div class="mt-4 grid grid-cols-6 gap-2" id="view-thumbnails">
+          {initialViews.map((view: MockupView, index: number) => (
+            <div 
+              class={`aspect-w-1 aspect-h-1 rounded-md bg-gray-100 overflow-hidden cursor-pointer border-2 ${index === 0 ? 'border-indigo-600' : 'border-gray-200'}`} 
+              data-view={view.view}
+              data-url={view.url}
+            >
               <img
-                src={initialImagePaths.main.jpg}
-                alt={`${product.name} in ${initialColor}, size ${initialSize}`}
+                src={view.url}
+                alt={`${getViewLabel(view.view)} view of ${product.name} in ${initialColor}, size ${initialSize}`}
                 class="w-full h-full object-center object-cover"
-                onerror="this.src=this.getAttribute('data-fallback');"
-                data-fallback={product.thumbnail_url || ''}
+                loading={index > 0 ? "lazy" : "eager"}
+                onerror="this.onerror=null; this.closest('[data-view]').style.display='none';"
               />
-            </picture>
-          </div>
-          
-          {/* Alternate view thumbnail */}
-          <div 
-            class="aspect-w-1 aspect-h-1 rounded-md bg-gray-100 overflow-hidden cursor-pointer border-2 border-gray-200" 
-            data-view="alternate"
-            data-hash={initialImagePaths.alternate.jpg}
-          >
-            <picture>
-              <source srcset={initialImagePaths.alternate.webp} type="image/webp" />
-              <img
-                src={initialImagePaths.alternate.jpg}
-                alt={`Alternate view of ${product.name} in ${initialColor}, size ${initialSize}`}
-                class="w-full h-full object-center object-cover"
-                onerror="this.src=this.getAttribute('data-fallback');"
-                data-fallback={product.thumbnail_url || ''}
-              />
-            </picture>
-          </div>
+              <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 opacity-0 hover:opacity-100 transition-opacity">
+                <span class="text-white text-xs font-medium px-2 py-1 rounded bg-black bg-opacity-50">{getViewLabel(view.view)}</span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -318,9 +322,8 @@ console.log('Featured products:', featuredProducts.length);
             type="button"
             id="add-to-cart"
             class="w-full bg-indigo-600 border border-transparent rounded-md py-3 px-8 flex items-center justify-center text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            disabled={!initialVariant?.in_stock}
           >
-            {initialVariant?.in_stock ? 'Add to cart' : 'Out of stock'}
+            Add to cart
           </button>
         </div>
 
@@ -361,193 +364,129 @@ console.log('Featured products:', featuredProducts.length);
   </div>
 </Layout>
 
-<script define:vars={{ product, variants: product.product_variants, processedVariants }}>
-  // Set initial selected options based on UI state
-  let selectedOptions = {
-    color: document.querySelector('[data-option="color"].option-selected')?.getAttribute('data-value') || 'Black',
-    size: document.querySelector('[data-option="size"].option-selected')?.getAttribute('data-value') || 'M'
-  };
-  
-  let currentView = 'main';
-  
-  console.log('Initial client-side selected options:', selectedOptions);
-
-  // Generate image paths for a given color and size
-  function generateImagePaths(color, size) {
-    const mainHash = '275c24597c2d';
-    const alternateHash = color.toLowerCase() === 'black' ? '716d47421c45' : '51c42fade7ca';
-    const baseUrl = `/images/mockups/${product.slug}-${product.slug}-${color.toLowerCase()}-${size.toLowerCase()}-front`;
+<script is:inline define:vars={{ processedVariants, getViewLabel }}>
+  // Function to update product images based on selected variant
+  function updateProductImages(color, size) {
+    // Find the matching variant
+    const selectedVariant = processedVariants.find(v => v.color === color && (!size || v.size === size));
     
-    return {
-      main: {
-        jpg: `${baseUrl}-${mainHash}.jpg`,
-        webp: `${baseUrl}-${mainHash}.webp`
-      },
-      alternate: {
-        jpg: `${baseUrl}-${alternateHash}.jpg`,
-        webp: `${baseUrl}-${alternateHash}.webp`
-      }
-    };
-  }
-
-  // Update the main image based on current view and options
-  function updateMainImage() {
-    const imagePaths = generateImagePaths(selectedOptions.color, selectedOptions.size);
-    const mainImageContainer = document.getElementById('main-image-container');
-    
-    if (mainImageContainer) {
-      const mainPicture = document.getElementById('main-image');
-      if (mainPicture) {
-        const viewType = currentView; // 'main' or 'alternate'
-        const imagePath = imagePaths[viewType];
-        
-        mainPicture.innerHTML = `
-          <source srcset="${imagePath.webp}" type="image/webp">
-          <img src="${imagePath.jpg}" 
-               alt="${product.name} in ${selectedOptions.color}, size ${selectedOptions.size}"
-               class="w-full h-full object-center object-cover"
-               onerror="this.src='${product.thumbnail_url || ''}'; console.error('Failed to load image:', this.src);">
-        `;
-      }
-    }
-  }
-  
-  // Update all thumbnails when color/size changes
-  function updateAllThumbnails() {
-    const imagePaths = generateImagePaths(selectedOptions.color, selectedOptions.size);
-    
-    // Update each thumbnail
-    document.querySelectorAll('[data-view]').forEach(thumbnail => {
-      const view = thumbnail.getAttribute('data-view');
-      if (view && (view === 'main' || view === 'alternate')) {
-        const imagePath = imagePaths[view];
-        
-        // Update the thumbnail image
-        const picture = thumbnail.querySelector('picture');
-        if (picture) {
-          picture.innerHTML = `
-            <source srcset="${imagePath.webp}" type="image/webp">
-            <img src="${imagePath.jpg}" 
-                 alt="${view === 'main' ? '' : 'Alternate view of '}${product.name} in ${selectedOptions.color}, size ${selectedOptions.size}"
-                 class="w-full h-full object-center object-cover"
-                 onerror="this.src='${product.thumbnail_url || ''}';">
-          `;
-        }
-        
-        // Update the data-hash attribute
-        thumbnail.setAttribute('data-hash', imagePath.jpg);
-        
-        // Update the selected state
-        if (view === currentView) {
-          thumbnail.classList.add('border-indigo-600');
-          thumbnail.classList.remove('border-gray-200');
-        } else {
-          thumbnail.classList.remove('border-indigo-600');
-          thumbnail.classList.add('border-gray-200');
+    if (selectedVariant && selectedVariant.mockupViews) {
+      // Update main image
+      const mainImageContainer = document.getElementById('main-image');
+      if (mainImageContainer) {
+        const mainImg = mainImageContainer.querySelector('img');
+        if (mainImg && selectedVariant.mockupViews.length > 0) {
+          mainImg.src = selectedVariant.mockupViews[0].url;
+          mainImg.alt = `${selectedVariant.name} in ${color}${size ? `, size ${size}` : ''}`;
         }
       }
-    });
-  }
-
-  function findMatchingVariant(color, size) {
-    // Use the processed variants that have color and size extracted
-    const variant = processedVariants.find(variant => 
-      variant.color === color && 
-      variant.size === size
-    );
-    
-    console.log(`Finding variant for ${color} size ${size}:`, variant ? {
-      id: variant.id,
-      sku: variant.sku,
-      price: variant.retail_price,
-      inStock: variant.in_stock
-    } : 'No matching variant found');
-    
-    return variant;
-  }
-
-  function updatePrice(variant) {
-    const priceElement = document.getElementById('product-price');
-    if (priceElement) {
-      const price = variant?.retail_price || product.atrocitee_base_price;
-      priceElement.textContent = `$${price.toFixed(2)}`;
-      console.log('Updated price to:', price);
-    }
-  }
-
-  function updateAddToCartButton(variant) {
-    const button = document.getElementById('add-to-cart');
-    if (button) {
-      button.disabled = !variant?.in_stock;
-      button.textContent = variant?.in_stock ? 'Add to cart' : 'Out of stock';
-      console.log('Updated button state:', variant?.in_stock ? 'In stock' : 'Out of stock');
+      
+      // Update thumbnails
+      const thumbnailsContainer = document.getElementById('view-thumbnails');
+      if (thumbnailsContainer) {
+        thumbnailsContainer.innerHTML = selectedVariant.mockupViews.map((view, index) => `
+          <div 
+            class="aspect-w-1 aspect-h-1 rounded-md bg-gray-100 overflow-hidden cursor-pointer border-2 ${index === 0 ? 'border-indigo-600' : 'border-gray-200'}" 
+            data-view="${view.view}"
+            data-url="${view.url}"
+          >
+            <img
+              src="${view.url}"
+              alt="${getViewLabel(view.view)} view of ${selectedVariant.name} in ${color}${size ? `, size ${size}` : ''}"
+              class="w-full h-full object-center object-cover"
+              loading="${index > 0 ? 'lazy' : 'eager'}"
+              onerror="this.onerror=null; this.closest('[data-view]').style.display='none';"
+            />
+            <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 opacity-0 hover:opacity-100 transition-opacity">
+              <span class="text-white text-xs font-medium px-2 py-1 rounded bg-black bg-opacity-50">${getViewLabel(view.view)}</span>
+            </div>
+          </div>
+        `).join('');
+        
+        // Reattach click handlers for thumbnails
+        attachThumbnailHandlers();
+      }
+      
+      // Update price
+      const priceElement = document.getElementById('product-price');
+      if (priceElement && selectedVariant.retail_price) {
+        priceElement.textContent = `$${selectedVariant.retail_price.toFixed(2)}`;
+      }
     }
   }
   
-  // Add click handlers for thumbnails
-  document.querySelectorAll('[data-view]').forEach(thumbnail => {
-    thumbnail.addEventListener('click', () => {
-      const view = thumbnail.getAttribute('data-view');
-      if (view) {
-        // Update current view
-        currentView = view;
-        
+  // Function to attach click handlers to thumbnails
+  function attachThumbnailHandlers() {
+    document.querySelectorAll('#view-thumbnails [data-view]').forEach(thumbnail => {
+      thumbnail.addEventListener('click', () => {
         // Update main image
-        updateMainImage();
+        const mainImg = document.querySelector('#main-image img');
+        if (mainImg) {
+          mainImg.src = thumbnail.getAttribute('data-url') || '';
+        }
         
-        // Update thumbnail selection states
-        document.querySelectorAll('[data-view]').forEach(thumb => {
-          if (thumb.getAttribute('data-view') === currentView) {
-            thumb.classList.add('border-indigo-600');
-            thumb.classList.remove('border-gray-200');
-          } else {
-            thumb.classList.remove('border-indigo-600');
-            thumb.classList.add('border-gray-200');
-          }
+        // Update thumbnail selection
+        document.querySelectorAll('#view-thumbnails [data-view]').forEach(thumb => {
+          thumb.classList.remove('border-indigo-600');
+          thumb.classList.add('border-gray-200');
         });
-      }
+        thumbnail.classList.remove('border-gray-200');
+        thumbnail.classList.add('border-indigo-600');
+      });
     });
-  });
-
-  // Add click handlers to option buttons
-  document.querySelectorAll('[data-option]').forEach(button => {
-    button.addEventListener('click', (e) => {
-      const optionType = button.getAttribute('data-option');
-      const value = button.getAttribute('data-value');
-      
-      console.log(`Option selected: ${optionType} = ${value}`);
-      
-      if (optionType && value) {
-        // Update selected options
-        selectedOptions[optionType] = value;
-        console.log('Updated selected options:', selectedOptions);
+  }
+  
+  // Initialize when DOM is loaded
+  document.addEventListener('DOMContentLoaded', () => {
+    // Attach initial thumbnail handlers
+    attachThumbnailHandlers();
+    
+    // Handle color selection
+    document.querySelectorAll('[data-option="color"]').forEach(button => {
+      button.addEventListener('click', (e) => {
+        const target = e.currentTarget;
+        const color = target.getAttribute('data-value');
+        const currentSize = document.querySelector('[data-option="size"].option-selected')?.getAttribute('data-value');
         
-        // Update button styles without rebuilding the DOM
-        document.querySelectorAll(`[data-option="${optionType}"]`).forEach(btn => {
-          if (btn.getAttribute('data-value') === value) {
-            btn.classList.add('bg-indigo-600', 'border-transparent', 'text-white', 'option-selected');
-            btn.classList.remove('bg-white', 'border-gray-300', 'text-gray-900');
-          } else {
+        if (color) {
+          // Update selection UI
+          document.querySelectorAll('[data-option="color"]').forEach(btn => {
             btn.classList.remove('bg-indigo-600', 'border-transparent', 'text-white', 'option-selected');
             btn.classList.add('bg-white', 'border-gray-300', 'text-gray-900');
+          });
+          target.classList.remove('bg-white', 'border-gray-300', 'text-gray-900');
+          target.classList.add('bg-indigo-600', 'border-transparent', 'text-white', 'option-selected');
+          
+          // Update images
+          updateProductImages(color, currentSize || '');
+        }
+      });
+    });
+    
+    // Handle size selection
+    document.querySelectorAll('[data-option="size"]').forEach(button => {
+      button.addEventListener('click', (e) => {
+        const target = e.currentTarget;
+        const size = target.getAttribute('data-value');
+        const currentColor = document.querySelector('[data-option="color"].option-selected')?.getAttribute('data-value');
+        
+        if (size) {
+          // Update selection UI
+          document.querySelectorAll('[data-option="size"]').forEach(btn => {
+            btn.classList.remove('bg-indigo-600', 'border-transparent', 'text-white', 'option-selected');
+            btn.classList.add('bg-white', 'border-gray-300', 'text-gray-900');
+          });
+          target.classList.remove('bg-white', 'border-gray-300', 'text-gray-900');
+          target.classList.add('bg-indigo-600', 'border-transparent', 'text-white', 'option-selected');
+          
+          // Update images
+          if (currentColor) {
+            updateProductImages(currentColor, size);
           }
-        });
-
-        // Update thumbnails and main image
-        updateAllThumbnails();
-        updateMainImage();
-
-        // Update price and availability
-        const variant = findMatchingVariant(selectedOptions.color, selectedOptions.size);
-        updatePrice(variant);
-        updateAddToCartButton(variant);
-      }
+        }
+      });
     });
   });
+</script>
 
-  // Log simplified variant information
-  console.log('Available product options:');
-  processedVariants.forEach(v => {
-    console.log(`${v.color} - ${v.size}: $${v.retail_price} (${v.in_stock ? 'In Stock' : 'Out of Stock'})`);
-  });
-</script> 
+<div id="product-data" data-variants={JSON.stringify(processedVariants)} style="display: none;"></div> 

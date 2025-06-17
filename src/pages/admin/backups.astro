@@ -36,7 +36,10 @@ export const prerender = false;
 // Authentication is now handled by middleware in src/middleware.ts
 
 // Get user data for the page
-const supabase = createServerSupabaseClient({ cookies: Astro.cookies });
+const supabase = createServerSupabaseClient({ 
+  cookies: Astro.cookies,
+  request: Astro.request
+});
 const { data: userData } = await supabase.auth.getUser();
 const user = userData?.user;
 

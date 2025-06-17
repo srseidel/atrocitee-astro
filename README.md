@@ -151,6 +151,48 @@ const displayName = CATEGORY_DISPLAY_NAMES[CORE_CATEGORIES.POLITICAL]; // 'Polit
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
+## Printful Mockup Generator API
+
+The application integrates with Printful's Mockup Generator API to create product mockups.
+
+### Generating Mockups
+
+To generate mockups for a product variant:
+
+1. Go to the product variant page in the admin dashboard
+2. Select the views you want to generate (front, back, etc.)
+3. Click the "Generate Mockups" button
+4. After the mockups are generated, use the "Download Mockups" button to save them to your server
+
+### API Structure
+
+The Printful Mockup Generator API works in two steps:
+
+1. Create a mockup generation task:
+   ```typescript
+   const task = await printfulService.createMockupGenerationTask(
+     productId,
+     variantId,
+     {
+       position: 'front',
+       variantExternalId: 'external-id-123',
+       format: 'jpg'
+     }
+   );
+   ```
+
+2. Check the task status and retrieve mockups:
+   ```typescript
+   const taskStatus = await printfulService.getMockupGenerationTask(task.task_key);
+   
+   if (taskStatus.status === 'completed') {
+     // Process the mockups
+     const mockupUrls = taskStatus.mockups.map(mockup => mockup.mockup_url);
+   }
+   ```
+
+See the [Printful API Documentation](https://developers.printful.com/docs/#tag/Mockup-Generator-API) for more details.
+
 ```sh
 npm create astro@latest -- --template basics
 ```

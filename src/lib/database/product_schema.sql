@@ -2,6 +2,7 @@
 -- This file contains product-related tables that can be safely dropped and recreated
 
 -- Drop existing tables if they exist (in correct order to handle dependencies)
+DROP TABLE IF EXISTS printful_mockup_tasks CASCADE;
 DROP TABLE IF EXISTS printful_product_changes CASCADE;
 DROP TABLE IF EXISTS printful_sync_history CASCADE;
 DROP TABLE IF EXISTS product_variants CASCADE;
@@ -310,10 +311,10 @@ CREATE TABLE product_variants (
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   
   -- Printful specific fields
-  printful_id BIGINT UNIQUE,
-  printful_external_id TEXT,
-  printful_product_id BIGINT,
-  printful_synced BOOLEAN DEFAULT FALSE,
+  printful_id BIGINT UNIQUE, -- Printful's ID for this specific variant
+  printful_external_id TEXT, -- External reference ID used in Printful system
+  printful_product_id BIGINT, -- ID of the parent product in Printful's system
+  printful_synced BOOLEAN DEFAULT FALSE, -- Whether variant is synced with Printful
   
   -- Variant metadata
   name TEXT NOT NULL,
@@ -324,6 +325,7 @@ CREATE TABLE product_variants (
   -- Variant details
   options JSONB DEFAULT '{}',
   files JSONB DEFAULT '{}',
+  mockup_settings JSONB DEFAULT '{}',
   
   -- Inventory
   in_stock BOOLEAN DEFAULT TRUE,
@@ -339,7 +341,11 @@ CREATE INDEX IF NOT EXISTS idx_product_variants_printful_id ON product_variants(
 CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON product_variants(product_id);
 
 -- Add comment to track the changes
-COMMENT ON TABLE product_variants IS 'Updated 2024-03-23: Aligned schema with Printful API structure';
+COMMENT ON TABLE product_variants IS 'Updated 2024-05-26: Added mockup_settings column for storing mockup configuration';
+COMMENT ON COLUMN product_variants.mockup_settings IS 'Added 2024-05-26: Stores mockup generation settings like selected views';
+COMMENT ON COLUMN product_variants.printful_id IS 'Printful''s ID for this specific variant - used in variant_ids field for mockup generation';
+COMMENT ON COLUMN product_variants.printful_product_id IS 'ID of the parent product in Printful''s system - used as id field for mockup generation';
+COMMENT ON COLUMN product_variants.printful_external_id IS 'External reference ID used in Printful system for external tracking';
 
 -- 6. Product Tags Junction Table
 CREATE TABLE product_tags (
@@ -421,6 +427,30 @@ CREATE TABLE printful_product_changes (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
+-- 12. Printful Mockup Tasks Table
+CREATE TABLE printful_mockup_tasks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_variant_id UUID NOT NULL REFERENCES product_variants(id) ON DELETE CASCADE,
+  task_id VARCHAR(255) NOT NULL,
+  view_type VARCHAR(50) NOT NULL,
+  status VARCHAR(50) NOT NULL,
+  result JSONB,
+  error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Add indexes for better performance with mockup tasks
+CREATE INDEX IF NOT EXISTS idx_printful_mockup_tasks_product_variant_id 
+  ON printful_mockup_tasks(product_variant_id);
+CREATE INDEX IF NOT EXISTS idx_printful_mockup_tasks_task_id 
+  ON printful_mockup_tasks(task_id);
+CREATE INDEX IF NOT EXISTS idx_printful_mockup_tasks_status 
+  ON printful_mockup_tasks(status);
+
+-- Add comment to track the changes
+COMMENT ON TABLE printful_mockup_tasks IS 'Added 2024-05-25: Table for tracking Printful mockup generation tasks';
+
 -- Add timestamps trigger for all tables
 CREATE TRIGGER update_categories_timestamp
 BEFORE UPDATE ON categories
@@ -464,6 +494,10 @@ FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 
 CREATE TRIGGER update_printful_product_changes_timestamp
 BEFORE UPDATE ON printful_product_changes
+FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
+
+CREATE TRIGGER update_printful_mockup_tasks_timestamp
+BEFORE UPDATE ON printful_mockup_tasks
 FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 
 -- Enable RLS for product_variants
@@ -527,6 +561,19 @@ DROP POLICY IF EXISTS "Admin full access to product changes" ON printful_product
 
 -- Create RLS policies for printful_product_changes
 CREATE POLICY "Admin users can manage product changes" ON printful_product_changes
+  FOR ALL
+  TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin());
+
+-- Enable RLS for printful_mockup_tasks
+ALTER TABLE printful_mockup_tasks ENABLE ROW LEVEL SECURITY;
+
+-- Drop old policies
+DROP POLICY IF EXISTS "Admin full access to mockup tasks" ON printful_mockup_tasks;
+
+-- Create RLS policies for printful_mockup_tasks
+CREATE POLICY "Admin users can manage mockup tasks" ON printful_mockup_tasks
   FOR ALL
   TO authenticated
   USING (is_admin())
@@ -651,6 +698,7 @@ GRANT ALL ON order_items TO authenticated;
 GRANT ALL ON backup_status TO authenticated;
 GRANT ALL ON printful_sync_history TO authenticated;
 GRANT ALL ON printful_product_changes TO authenticated;
+GRANT ALL ON printful_mockup_tasks TO authenticated;
 
 -- Enable RLS for all tables
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;

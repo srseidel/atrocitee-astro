@@ -1,94 +1,148 @@
+import fetch from 'node-fetch';
 import fs from 'fs';
 import path from 'path';
-import { createHash } from 'crypto';
+import { promisify } from 'util';
+import { pipeline } from 'stream';
+import { optimizeImage } from './optimize-images';
+
+const streamPipeline = promisify(pipeline);
+
+interface MockupFile {
+  type: string;
+  url: string;
+  preview_url: string;
+  generated?: boolean;
+  mockup_task_id?: string;
+}
+
+interface DownloadedFile {
+  type: string;
+  viewType: string;
+  originalUrl: string;
+  localPath: string;
+  optimizedPath: string;
+}
 
 /**
- * Downloads a mockup image from Printful and saves it locally
+ * Map Printful file types to our view types
  */
-export async function downloadMockupImage(url: string, productSlug: string, variant: string, view: string): Promise<string> {
-  try {
-    // Create a hash of the URL to ensure unique filenames
-    const hash = createHash('md5').update(url).digest('hex').slice(0, 12);
-    
-    // Create filename in format: product-slug-variant-view-hash.jpg
-    const filename = `${productSlug}-${variant}-${view}-${hash}.jpg`;
-    const filepath = path.join(process.cwd(), 'src', 'assets', 'mockups', filename);
-    
-    // Download the image
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to download image: ${response.statusText}`);
-    }
-    
-    // Ensure directory exists
-    const dir = path.dirname(filepath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    
-    // Save the image
-    const buffer = await response.arrayBuffer();
-    fs.writeFileSync(filepath, Buffer.from(buffer));
-    
-    // Return the filename for reference
-    return filename;
-  } catch (error) {
-    console.error('Error downloading mockup:', error);
-    throw error;
+function mapFileTypeToViewType(fileType: string): string {
+  // First check for directly generated mockup types
+  // These are the types we specified when generating mockups
+  switch (fileType) {
+    case 'front':
+      return 'front';
+    case 'back':
+      return 'back';
+    case 'left_front':
+    case 'left':
+      return 'left';
+    case 'right_front':
+    case 'right':
+      return 'right';
+    case 'flat':
+      return 'flat';
+    case 'lifestyle':
+      return 'lifestyle';
+  }
+  
+  // Fall back to the original mapping for Printful sync API files
+  switch (fileType) {
+    case 'front':
+    case 'front_dtf': 
+    case 'front_outside':
+    case 'preview':
+      return 'front';
+    case 'back':
+    case 'back_dtf':
+    case 'back_outside':
+      return 'back';
+    case 'side':
+      return 'side';
+    case 'lifestyle1':
+    case 'lifestyle2':
+      return 'lifestyle';
+    default:
+      // If we don't have a specific mapping, use the original type
+      // This ensures we don't lose any files
+      return fileType;
   }
 }
 
 /**
- * Downloads all mockups for a product variant
+ * Download mockup images for a specific variant
  */
 export async function downloadVariantMockups(
   productSlug: string,
   variantName: string,
-  files: Array<{ type: string; url: string; preview_url: string }>
-): Promise<Array<{ type: string; filename: string }>> {
-  const results = [];
+  files: MockupFile[]
+): Promise<DownloadedFile[]> {
+  console.log(`Downloading mockups for ${productSlug} - ${variantName}`);
   
+  // Create variant-friendly name (remove spaces, special chars)
+  const variantSlug = variantName.toLowerCase()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  
+  // Create the directory structure
+  const baseDir = path.join(process.cwd(), 'public', 'images', 'products', productSlug);
+  fs.mkdirSync(baseDir, { recursive: true });
+  
+  const mockupFiles: DownloadedFile[] = [];
+  
+  // Process each file
   for (const file of files) {
     try {
-      // Get the URL to download - prefer preview_url if available
-      const downloadUrl = file.preview_url || file.url;
-      if (!downloadUrl) {
-        console.warn(`No URL available for file type ${file.type}`);
+      // Skip non-mockup files
+      if (!file.url) {
+        console.log(`Skipping file with no URL: ${file.type}`);
         continue;
       }
-
-      // Map Printful file types to our view types
-      let viewType = file.type;
-      if (file.type === 'preview') {
-        viewType = 'front'; // Default preview images to front view
-      } else if (file.type.includes('front')) {
-        viewType = 'front';
-      } else if (file.type.includes('back')) {
-        viewType = 'back';
+      
+      // Map file type to view type
+      const viewType = mapFileTypeToViewType(file.type);
+      
+      // Create filename based on view type and variant
+      const fileName = `${productSlug}-${variantSlug}-${viewType}.jpg`;
+      const filePath = path.join(baseDir, fileName);
+      
+      console.log(`Downloading ${file.type} (${viewType}) from ${file.url}`);
+      
+      // Download the file
+      const response = await fetch(file.url);
+      
+      if (!response.ok) {
+        console.error(`Failed to download mockup: ${response.status} ${response.statusText}`);
+        continue;
       }
       
-      // Clean up variant name for filename
-      const cleanVariantName = variantName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '');
-
-      const filename = await downloadMockupImage(
-        downloadUrl,
-        productSlug,
-        cleanVariantName,
-        viewType
-      );
+      if (!response.body) {
+        console.error('No response body');
+        continue;
+      }
       
-      results.push({
-        type: viewType,
-        filename
+      // Save the file
+      await streamPipeline(response.body, fs.createWriteStream(filePath));
+      console.log(`Downloaded to ${filePath}`);
+      
+      // Optimize the image
+      const optimizedPath = await optimizeImage(filePath, {
+        quality: 80,
+        width: 1200
+      });
+      
+      mockupFiles.push({
+        type: file.type,
+        viewType,
+        originalUrl: file.url,
+        localPath: filePath,
+        optimizedPath
       });
     } catch (error) {
-      console.error(`Failed to download mockup for ${productSlug} ${variantName}:`, error);
+      console.error(`Error downloading mockup for ${file.type}:`, error);
     }
   }
   
-  return results;
+  return mockupFiles;
 } 
