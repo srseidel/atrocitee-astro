@@ -53,8 +53,12 @@ let errorCount = 0;
 // Process images one at a time to avoid overwhelming the system
 async function processImages() {
   for (const file of imageFiles) {
+    // Handle both simple filenames and paths with directories
     const sourcePath = path.join(sourceDir, file);
     const fileExt = path.extname(file).toLowerCase();
+    
+    // Extract directory part and filename separately
+    const dirPart = path.dirname(file) !== '.' ? path.dirname(file) : '';
     const fileName = path.basename(file, fileExt);
     
     try {
@@ -67,8 +71,15 @@ async function processImages() {
       const metadata = await image.metadata();
       console.log(`Image dimensions: ${metadata.width}x${metadata.height}, format: ${metadata.format}`);
       
+      // Create subdirectory in destination if needed
+      const outputDir = dirPart ? path.join(destDir, dirPart) : destDir;
+      if (dirPart && !existsSync(outputDir)) {
+        mkdirSync(outputDir, { recursive: true });
+        console.log(`Created directory: ${outputDir}`);
+      }
+      
       // Preserve the original file extension for the output file
-      const outputPath = path.join(destDir, `${fileName}${fileExt}`);
+      const outputPath = path.join(outputDir, `${fileName}${fileExt}`);
       
       // Apply optimization based on file type
       if (fileExt === '.jpg' || fileExt === '.jpeg') {
@@ -99,7 +110,7 @@ async function processImages() {
           nearLossless: false
         };
         
-        const webpOutputPath = path.join(destDir, `${fileName}.webp`);
+        const webpOutputPath = path.join(outputDir, `${fileName}.webp`);
         await image
           .webp(webpOptions)
           .toFile(webpOutputPath);

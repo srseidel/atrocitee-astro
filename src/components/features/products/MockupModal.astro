@@ -1,0 +1,1025 @@
+---
+interface Props {
+  productSlug: string;
+  variant?: {
+    id: string;
+    name: string;
+    color?: string;
+    size?: string;
+    mockup_settings?: {
+      selected_views?: string[];
+    };
+  };
+}
+
+const { productSlug, variant } = Astro.props;
+
+const viewOptions = [
+  { id: 'front', label: 'Front View' },
+  { id: 'back', label: 'Back View' },
+  { id: 'left', label: 'Left Side' },
+  { id: 'right', label: 'Right Side' },
+  { id: 'left-front', label: 'Left Front' },
+  { id: 'right-front', label: 'Right Front' },
+  { id: 'flat', label: 'Flat Layout' },
+  { id: 'lifestyle', label: 'Lifestyle Shot' }
+] as const;
+---
+
+<div class="mockup-modal">
+  {/* View Selection */}
+  {variant && (
+    <div class="mb-4">
+      <div class="grid grid-cols-3 gap-2">
+        {viewOptions.map(view => (
+          <label class="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              name={`mockup-view-${variant.id}-${view.id}`}
+              value={view.id}
+              class="rounded text-blue-600"
+              checked={variant.mockup_settings?.selected_views?.includes(view.id)}
+              data-variant-id={variant.id}
+              data-view={view.id}
+            />
+            <span>{view.label}</span>
+          </label>
+        ))}
+      </div>
+      <button
+        id={`generate-mockups-${variant.id}`}
+        class="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+      >
+        Generate Mockups
+      </button>
+      <div class="mockup-progress-container mt-4" data-variant-id={variant.id}></div>
+    </div>
+  )}
+
+  {/* Modal Container */}
+  <div id="mockup-modal" class="fixed inset-0 bg-black/50 items-center justify-center z-50 p-4 opacity-0 pointer-events-none transition-opacity duration-200 flex">
+    <div class="w-full max-w-6xl h-[90vh] flex flex-col bg-white rounded-lg shadow-lg overflow-hidden">
+      {/* Header */}
+      <div class="border-b border-gray-200 px-6 py-4 flex-shrink-0">
+        <div class="flex justify-between items-center">
+          <div>
+            <h2 class="text-2xl font-semibold text-gray-900" id="variant-name">Loading...</h2>
+            <p class="text-sm text-gray-600 mt-1" id="variant-details"></p>
+          </div>
+          <button 
+            id="remove-all-btn"
+            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+          >
+            Remove All
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div class="p-6 space-y-6 flex-grow overflow-y-auto">
+        {/* Current Mockups */}
+        <div class="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+          <div class="bg-gray-100 px-4 py-3 border-b border-gray-200">
+            <h3 class="text-lg font-medium text-gray-900">Current Mockups</h3>
+          </div>
+          <div class="p-4">
+            <div id="current-mockups"></div>
+          </div>
+        </div>
+
+        {/* Available Mockups */}
+        <div class="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+          <div class="bg-gray-100 px-4 py-3 border-b border-gray-200">
+            <h3 class="text-lg font-medium text-gray-900">Available Mockups</h3>
+          </div>
+          <div class="p-4">
+            <div id="available-mockups"></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex-shrink-0">
+        <div class="flex justify-end space-x-3">
+          <button
+            id="cancel-btn"
+            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Cancel
+          </button>
+          <button
+            id="save-btn"
+            class="inline-flex items-center px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Save & Process
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    /* Ensure modal content doesn't overflow viewport */
+    .modal-content {
+      max-height: calc(100vh - 4rem);
+    }
+  </style>
+</div>
+
+<script>
+  // Types only - no DOM manipulation
+  interface Mockup {
+    filename: string;
+    view: string;
+    url: string;
+  }
+
+  interface MockupProgress {
+    status: 'initializing' | 'processing' | 'rate-limited' | 'completed' | 'error';
+    completed: number;
+    total: number;
+    currentView?: string;
+    message?: string;
+  }
+
+  // View options for mockup assignment
+  const VIEW_OPTIONS = {
+    'front': 'Front View',
+    'back': 'Back View',
+    'left': 'Left Side',
+    'right': 'Right Side',
+    'left-front': 'Left Front',
+    'right-front': 'Right Front',
+    'flat': 'Flat Layout',
+    'lifestyle': 'Lifestyle Shot'
+  } as const;
+
+  // Selected mockups tracking
+  const selectedMockups = new Set<string>();
+  let activeVariantId = '';
+  let activeProductSlug = '';
+
+  // Suggest view based on filename
+  function suggestView(filename: string): keyof typeof VIEW_OPTIONS {
+    const lowerFilename = filename.toLowerCase();
+    
+    // Match against viewOptions ids
+    if (lowerFilename.includes('--back') || lowerFilename.includes('-back')) return 'back';
+    if (lowerFilename.includes('--front') && lowerFilename.includes('--left') || 
+        lowerFilename.includes('-front') && lowerFilename.includes('-left') ||
+        lowerFilename.includes('--left-front') || 
+        lowerFilename.includes('-left-front') ||
+        lowerFilename.includes('--left_front') || 
+        lowerFilename.includes('-left_front')) return 'left-front';
+    if (lowerFilename.includes('--front') && lowerFilename.includes('--right') || 
+        lowerFilename.includes('-front') && lowerFilename.includes('-right') ||
+        lowerFilename.includes('--right-front') || 
+        lowerFilename.includes('-right-front') ||
+        lowerFilename.includes('--right_front') || 
+        lowerFilename.includes('-right_front')) return 'right-front';
+    if (lowerFilename.includes('--left') || lowerFilename.includes('-left')) return 'left';
+    if (lowerFilename.includes('--right') || lowerFilename.includes('-right')) return 'right';
+    if (lowerFilename.includes('--flat') || lowerFilename.includes('-flat')) return 'flat';
+    if (lowerFilename.includes('--lifestyle') || lowerFilename.includes('-lifestyle')) return 'lifestyle';
+    
+    // Default to front view
+    return 'front';
+  }
+
+  // Create a custom event-based approach instead of direct DOM manipulation
+  class MockupManager {
+    constructor() {
+      this.initialize();
+    }
+
+    initialize() {
+      // Initialize modal controls with event delegation
+      document.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        
+        // More detailed logging for debugging
+        console.log('Click detected on element:', target.tagName, target.id, target.className);
+        
+        // Check if the clicked element is a button or has a parent button
+        const button = target.closest('button');
+        if (!button) {
+          console.log('No button found in click path');
+          return;
+        }
+        
+        console.log('Button clicked:', button.id, button.textContent?.trim());
+        
+        const buttonId = button.id;
+        
+        if (buttonId === 'cancel-btn') {
+          console.log('Cancel button clicked, hiding modal');
+          this.hideModal();
+        } else if (buttonId === 'save-btn') {
+          console.log('Save button clicked, processing mockups');
+          this.saveAndProcess();
+        } else if (buttonId === 'remove-all-btn') {
+          console.log('Remove all button clicked');
+          this.removeAllMockups();
+        } else if (buttonId.startsWith('generate-mockups-')) {
+          const variantId = buttonId.replace('generate-mockups-', '');
+          this.handleMockupGeneration(button as HTMLButtonElement, variantId);
+        } else {
+          console.log('Unhandled button ID:', buttonId);
+        }
+      });
+
+      // Add a direct event listener to the cancel button
+      const cancelBtn = document.getElementById('cancel-btn');
+      if (cancelBtn) {
+        console.log('Found cancel button, adding direct event listener');
+        cancelBtn.addEventListener('click', (e) => {
+          console.log('Cancel button direct event triggered');
+          e.preventDefault();
+          e.stopPropagation();
+          this.hideModal();
+        });
+      } else {
+        console.log('Cancel button not found during initialization');
+      }
+      
+      // Also add direct listener to the modal close button if it exists
+      const closeBtn = document.querySelector('.modal-close');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+          console.log('Close button clicked');
+          this.hideModal();
+        });
+      }
+      
+      // Add keyboard event listener for Escape key
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          console.log('Escape key pressed, hiding modal');
+          this.hideModal();
+        }
+      });
+
+      // Handle mockup selection with event delegation
+      document.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        const mockupElement = target.closest('[data-mockup]');
+        
+        if (mockupElement) {
+          const filename = mockupElement.getAttribute('data-mockup');
+          if (filename) {
+            this.toggleMockupSelection(filename, mockupElement);
+          }
+        }
+      });
+
+      // Expose modal API
+      window.mockupModal = {
+        show: async (variantId: string, productSlug: string) => {
+          console.log(`Showing modal for variant ${variantId} and product ${productSlug}`);
+          activeVariantId = variantId;
+          activeProductSlug = productSlug;
+          
+          const modal = document.getElementById('mockup-modal');
+          if (modal) {
+            // Remove hiding classes
+            modal.classList.remove('opacity-0');
+            modal.classList.remove('pointer-events-none');
+            
+            // Also use direct style manipulation
+            modal.style.opacity = '1';
+            modal.style.pointerEvents = 'auto';
+            
+            console.log('Modal should now be visible');
+          } else {
+            console.error('Modal element not found when trying to show it');
+          }
+          
+          await this.loadMockups(variantId, productSlug);
+        },
+        hide: () => {
+          console.log('Modal hide method called from API');
+          this.hideModal();
+        }
+      };
+    }
+
+    toggleMockupSelection(filename: string, element: Element) {
+      if (selectedMockups.has(filename)) {
+        selectedMockups.delete(filename);
+        element.classList.remove('ring-2', 'ring-blue-500');
+      } else {
+        selectedMockups.add(filename);
+        element.classList.add('ring-2', 'ring-blue-500');
+      }
+
+      // Update UI based on selection
+      this.updateSelectionUI();
+    }
+
+    updateSelectionUI() {
+      const selectedCount = selectedMockups.size;
+      
+      // Update count display
+      const countElement = document.getElementById('selected-count');
+      if (countElement) {
+        countElement.textContent = selectedCount.toString();
+      }
+      
+      // Update assign button state
+      const assignSelectedBtn = document.getElementById('assign-selected-btn') as HTMLButtonElement | null;
+      if (assignSelectedBtn) {
+        assignSelectedBtn.disabled = selectedCount === 0;
+      }
+      
+      // Update clear selection button state
+      const clearSelectionBtn = document.getElementById('clear-selection-btn') as HTMLButtonElement | null;
+      if (clearSelectionBtn) {
+        clearSelectionBtn.disabled = selectedCount === 0;
+      }
+    }
+
+    async handleMockupGeneration(button: HTMLButtonElement, variantId: string) {
+      if (!variantId) {
+        console.error('No variant ID found');
+        alert('Error: Could not process variant - missing ID');
+        return;
+      }
+      
+      const selectedViews: string[] = [];
+      document.querySelectorAll(`input[type="checkbox"][data-variant-id="${variantId}"]:checked`).forEach(checkbox => {
+        const view = checkbox.getAttribute('data-view');
+        if (view) selectedViews.push(view);
+      });
+      
+      if (selectedViews.length === 0) {
+        alert('Please select at least one view to generate');
+        return;
+      }
+      
+      const originalText = button.textContent || 'Generate';
+      
+      try {
+        button.disabled = true;
+        button.textContent = 'Generating...';
+        
+        // Create progress container
+        const progressContainer = document.querySelector(`.mockup-progress-container[data-variant-id="${variantId}"]`);
+        if (progressContainer) {
+          progressContainer.innerHTML = `
+            <div class="mb-1 flex justify-between">
+              <span class="text-sm font-medium progress-label">Generating mockups...</span>
+              <span class="text-sm text-gray-500 progress-count">0/${selectedViews.length}</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+              <div class="bg-blue-600 h-2.5 rounded-full progress-bar" style="width: 0%"></div>
+            </div>
+            <div class="mt-1">
+              <span class="text-xs text-gray-500 progress-status">Initializing...</span>
+            </div>
+          `;
+        }
+        
+        // Use EventSource for progress updates
+        const eventSource = new EventSource(`/api/v1/admin/products/mockup?variantId=${variantId}&action=progress`);
+        
+        eventSource.onmessage = (event) => {
+          try {
+            const progress = JSON.parse(event.data) as MockupProgress;
+            this.updateProgressUI(progressContainer, progress);
+            
+            if (progress.status === 'completed' || progress.status === 'error') {
+              eventSource.close();
+            }
+          } catch (error) {
+            console.error('Error parsing SSE data:', error);
+          }
+        };
+        
+        eventSource.onerror = () => {
+          console.error('SSE connection error');
+          eventSource.close();
+        };
+        
+        // Send request to generate mockups
+        const response = await fetch('/api/v1/admin/products/mockup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ variantId, views: selectedViews })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          eventSource.close();
+          throw new Error(data.message || 'Failed to generate mockups');
+        }
+        
+        if (data.success) {
+          setTimeout(() => {
+            alert(data.message || 'Mockup generation started! Check back in a few minutes.');
+          }, 500);
+        }
+        
+      } catch (error) {
+        console.error('Error generating mockups:', error);
+        alert(error instanceof Error ? error.message : 'Failed to generate mockups');
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    }
+
+    updateProgressUI(container: Element | null, progress: MockupProgress): void {
+      if (!container) return;
+      
+      const progressBar = container.querySelector('.progress-bar');
+      const progressCount = container.querySelector('.progress-count');
+      const progressStatus = container.querySelector('.progress-status');
+      
+      const percent = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
+      
+      if (progressBar instanceof HTMLElement) {
+        progressBar.style.width = `${percent}%`;
+      }
+      
+      if (progressCount) {
+        progressCount.textContent = `${progress.completed}/${progress.total}`;
+      }
+      
+      if (progressStatus) {
+        if (progress.message) {
+          progressStatus.textContent = progress.message;
+        } else if (progress.status === 'rate-limited') {
+          progressStatus.textContent = 'Rate limited. Waiting before continuing...';
+        } else if (progress.status === 'completed') {
+          progressStatus.textContent = 'All mockup tasks submitted!';
+        } else if (progress.status === 'error') {
+          progressStatus.textContent = 'Error: ' + (progress.message || 'Failed to generate mockups');
+        } else {
+          progressStatus.textContent = `Processing ${progress.currentView || ''}...`;
+        }
+      }
+    }
+
+    async loadMockups(variantId: string, productSlug: string) {
+      activeVariantId = variantId;
+      activeProductSlug = productSlug;
+      
+      try {
+        console.log(`Loading mockups for variant ${variantId} and product ${productSlug}`);
+        
+        // Show loading state
+        const currentContainer = document.getElementById('current-mockups');
+        const availableContainer = document.getElementById('available-mockups');
+        
+        if (currentContainer) {
+          currentContainer.innerHTML = '<div class="p-4 text-center"><span class="inline-block animate-spin mr-2">⟳</span> Loading current mockups...</div>';
+        }
+        
+        if (availableContainer) {
+          availableContainer.innerHTML = '<div class="p-4 text-center"><span class="inline-block animate-spin mr-2">⟳</span> Loading available mockups...</div>';
+        }
+        
+        // Fetch mockup data
+        const [variantResponse, availableResponse] = await Promise.all([
+          fetch(`/api/v1/admin/products/mockup?action=info&variantId=${variantId}`),
+          fetch(`/api/v1/admin/products/mockup?action=available&product=${productSlug}`)
+        ]);
+
+        if (!variantResponse.ok) {
+          console.error('Failed to load variant data:', await variantResponse.text());
+          throw new Error(`Failed to load variant data: ${variantResponse.status}`);
+        }
+
+        if (!availableResponse.ok) {
+          console.error('Failed to load available mockups:', await availableResponse.text());
+          throw new Error(`Failed to load available mockups: ${availableResponse.status}`);
+        }
+
+        const variantData = await variantResponse.json();
+        const availableData = await availableResponse.json();
+
+        console.log('Variant data:', variantData);
+        console.log('Available mockups:', availableData);
+        
+        // Extract mockups from variant data
+        let currentMockups: Mockup[] = [];
+        
+        // Handle both old and new mockup data formats
+        if (variantData.mockups && Array.isArray(variantData.mockups)) {
+          // Direct array format from API
+          console.log('Using mockups array directly from API');
+          currentMockups = variantData.mockups;
+        } else if (variantData.variant && variantData.variant.mockup_settings && variantData.variant.mockup_settings.views) {
+          // New format with views array
+          console.log('Using views array from mockup_settings');
+          currentMockups = variantData.variant.mockup_settings.views.map((view: any) => ({
+            filename: view.filename,
+            view: view.view,
+            url: view.url || `/api/v1/admin/products/mockup?filename=${encodeURIComponent(view.filename)}`
+          }));
+        } else if (variantData.variant && variantData.variant.mockup_settings && variantData.variant.mockup_settings.mockups) {
+          // Legacy format with mockups object
+          console.log('Using legacy mockups object format');
+          const mockups = variantData.variant.mockup_settings.mockups;
+          currentMockups = Object.entries(mockups).map(([view, details]: [string, any]) => ({
+            view,
+            filename: details.filename,
+            url: `/api/v1/admin/products/mockup?filename=${encodeURIComponent(details.filename)}`
+          }));
+        }
+        
+        console.log('Current mockups (processed):', currentMockups);
+
+        // Update variant info
+        const variantName = document.getElementById('variant-name');
+        const variantDetails = document.getElementById('variant-details');
+        
+        if (variantName) {
+          // Use the variant name from the API response
+          variantName.textContent = variantData.variant.name || 'Unknown Product';
+        }
+        if (variantDetails) {
+          // Show color and size if available
+          const details = [];
+          if (variantData.variant.color) details.push(variantData.variant.color);
+          if (variantData.variant.size) details.push(variantData.variant.size);
+          variantDetails.textContent = details.length > 0 ? details.join(' - ') : `ID: ${variantId}`;
+        }
+
+        // Update mockups
+        this.updateMockupLists(currentMockups, availableData.mockups || []);
+      } catch (error) {
+        console.error('Error loading mockups:', error);
+        alert('Failed to load mockups: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      }
+    }
+
+    updateMockupLists(currentMockups: Mockup[], availableMockups: Mockup[]) {
+      const currentContainer = document.getElementById('current-mockups');
+      const availableContainer = document.getElementById('available-mockups');
+
+      // Helper function to get display name for a view
+      const getViewDisplayName = (view: string): string => {
+        // Normalize view name by replacing underscores with hyphens
+        const normalizedView = view.replace(/_/g, '-');
+        
+        // Try direct lookup with normalized view
+        if (normalizedView in VIEW_OPTIONS) {
+          return VIEW_OPTIONS[normalizedView as keyof typeof VIEW_OPTIONS];
+        }
+        
+        // Fallback to capitalized view name
+        return normalizedView.charAt(0).toUpperCase() + normalizedView.slice(1).replace(/[_-]/g, ' ');
+      };
+
+      if (currentContainer) {
+        let html = '';
+        if (currentMockups.length === 0) {
+          html = '<p class="text-gray-500 italic">No mockups assigned yet</p>';
+        } else {
+          html = '<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">';
+          for (const mockup of currentMockups) {
+            html += `
+              <div class="border rounded p-3">
+                <div class="aspect-square w-full h-32 overflow-hidden">
+                  <img src="${mockup.url}" alt="${mockup.filename}" class="object-contain w-full h-full" />
+                </div>
+                <p class="text-xs text-gray-600 truncate mt-2" title="${mockup.filename}">${mockup.filename}</p>
+                <p class="text-xs font-medium">${getViewDisplayName(mockup.view)}</p>
+                <button
+                  data-action="remove-mockup"
+                  data-filename="${mockup.filename}"
+                  data-view="${mockup.view}"
+                  class="text-red-500 hover:text-red-600 text-xs mt-1"
+                >
+                  Remove
+                </button>
+              </div>
+            `;
+          }
+          html += '</div>';
+        }
+        currentContainer.innerHTML = html;
+      }
+
+      if (availableContainer) {
+        let html = `
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-2 sm:space-y-0">
+            <div>
+              <span class="text-sm font-medium mr-2">Select mockups to assign</span>
+            </div>
+            <div>
+              <button
+                id="assign-selected-btn"
+                data-action="assign-selected"
+                class="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled
+              >
+                Assign Selected (<span id="selected-count">0</span>)
+              </button>
+              <button
+                id="clear-selection-btn"
+                class="inline-flex items-center ml-2 px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled
+              >
+                Clear Selection
+              </button>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">`;
+            
+        for (const mockup of availableMockups) {
+          const suggestedView = suggestView(mockup.filename);
+          
+          html += `
+            <div 
+              class="border rounded p-3 cursor-pointer hover:bg-gray-50 transition-colors"
+              data-mockup="${mockup.filename}"
+            >
+              <div class="aspect-square w-full h-32 overflow-hidden">
+                <img src="${mockup.url}" alt="${mockup.filename}" class="object-contain w-full h-full" />
+              </div>
+              <p class="text-xs text-gray-600 truncate mt-2" title="${mockup.filename}">${mockup.filename}</p>
+              <div class="mt-1">
+                <select class="text-xs w-full border rounded p-1 mockup-view-selector" data-filename="${mockup.filename}">
+                  ${Object.entries(VIEW_OPTIONS).map(([value, label]) => 
+                    `<option value="${value}" ${value === suggestedView ? 'selected' : ''}>${label}</option>`
+                  ).join('')}
+                </select>
+              </div>
+            </div>
+          `;
+        }
+            
+        html += `</div>`;
+        availableContainer.innerHTML = html;
+        
+        // Initialize the selected count
+        document.getElementById('selected-count')!.textContent = '0';
+        
+        // Add event listener for clear selection button
+        const clearSelectionBtn = document.getElementById('clear-selection-btn');
+        if (clearSelectionBtn) {
+          clearSelectionBtn.addEventListener('click', () => {
+            selectedMockups.clear();
+            document.querySelectorAll('[data-mockup]').forEach(el => {
+              el.classList.remove('ring-2', 'ring-blue-500');
+            });
+            this.updateSelectionUI();
+          });
+        }
+      }
+
+      // Add event listeners for mockup removal buttons using event delegation
+      document.addEventListener('click', async (e) => {
+        const target = e.target as HTMLElement;
+        const removeButton = target.closest('[data-action="remove-mockup"]');
+        
+        if (removeButton) {
+          const filename = removeButton.getAttribute('data-filename');
+          const view = removeButton.getAttribute('data-view');
+          
+          if (filename && view) {
+            await this.removeMockup(filename, view);
+          }
+        }
+      });
+
+      // Add event listener for assign selected button
+      document.addEventListener('click', async (e) => {
+        const target = e.target as HTMLElement;
+        const assignButton = target.closest('[data-action="assign-selected"]');
+        
+        if (assignButton) {
+          await this.assignSelectedMockups();
+        }
+      });
+    }
+
+    async assignSelectedMockups() {
+      if (selectedMockups.size === 0) return;
+
+      try {
+        // Show loading state
+        const assignBtn = document.getElementById('assign-selected-btn') as HTMLButtonElement | null;
+        if (assignBtn) {
+          assignBtn.disabled = true;
+          const originalText = assignBtn.innerHTML;
+          assignBtn.innerHTML = 'Assigning...';
+        }
+
+        console.log(`Starting batch assignment of ${selectedMockups.size} mockups`);
+        
+        // Process mockups one at a time with a delay between each
+        const mockupFiles = Array.from(selectedMockups);
+        for (let i = 0; i < mockupFiles.length; i++) {
+          const filename = mockupFiles[i];
+          
+          // Find the view selector for this mockup
+          const selector = document.querySelector(`.mockup-view-selector[data-filename="${filename}"]`) as HTMLSelectElement | null;
+          const view = selector ? selector.value : 'front'; // Default to front if not found
+          
+          console.log(`Assigning mockup ${i+1}/${mockupFiles.length}: ${filename} as ${view}`);
+          
+          // Assign the mockup
+          await this.assignMockup(filename, view);
+          
+          // Small delay between assignments to avoid race conditions
+          if (i < mockupFiles.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+        
+        console.log('All assignments completed');
+        
+        // Small delay to ensure server processing completes
+        console.log('Waiting for server processing...');
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Increased to 2 seconds
+        
+        // Clear selection
+        selectedMockups.clear();
+        
+        // Force refresh the mockup lists
+        console.log('Refreshing mockup lists...');
+        
+        // First, manually check the current mockups
+        await this.debugCheckCurrentMockups();
+        
+        // Then reload the UI
+        await this.loadMockups(activeVariantId, activeProductSlug);
+        
+        // Reset button state
+        if (assignBtn) {
+          assignBtn.innerHTML = 'Assign Selected (<span id="selected-count">0</span>)';
+          assignBtn.disabled = true;
+        }
+        
+        console.log('Assignment process complete');
+      } catch (error) {
+        console.error('Failed to assign mockups:', error);
+        alert('Failed to assign one or more mockups. Please try again.');
+      }
+    }
+    
+    async debugCheckCurrentMockups() {
+      try {
+        console.log('DEBUG: Manually checking current mockups');
+        const response = await fetch(`/api/v1/admin/products/mockup?action=info&variantId=${activeVariantId}`);
+        const data = await response.json();
+        
+        console.log('DEBUG: Raw variant data:', data);
+        
+        if (data.variant && data.variant.mockup_settings) {
+          console.log('DEBUG: Mockup settings:', data.variant.mockup_settings);
+          
+          if (data.variant.mockup_settings.views && data.variant.mockup_settings.views.length > 0) {
+            console.log('DEBUG: Views found:', data.variant.mockup_settings.views);
+          } else {
+            console.log('DEBUG: No views found in mockup_settings');
+          }
+        } else if (data.mockups) {
+          console.log('DEBUG: Legacy mockups format:', data.mockups);
+        } else {
+          console.log('DEBUG: No mockup data found');
+        }
+      } catch (error) {
+        console.error('DEBUG: Error checking mockups:', error);
+      }
+    }
+
+    async assignMockup(filename: string, view: string) {
+      try {
+        console.log(`Assigning mockup ${filename} as ${view} for variant ${activeVariantId}`);
+        
+        const response = await fetch('/api/v1/admin/products/mockup?action=assign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mockupFile: filename,
+            variantId: activeVariantId,
+            productSlug: activeProductSlug,
+            view
+          })
+        });
+
+        const responseData = await response.json();
+        console.log('Assignment response:', responseData);
+
+        if (!response.ok) {
+          throw new Error(responseData.message || `Failed to assign mockup: ${response.status}`);
+        }
+        
+        // If the response includes the updated mockup settings, we can use it directly
+        if (responseData.mockupSettings && responseData.mockupSettings.views) {
+          console.log('Using mockup settings from response:', responseData.mockupSettings);
+          // We could update the UI directly here if needed
+        }
+        
+        return responseData;
+      } catch (error) {
+        console.error('Error assigning mockup:', error);
+        throw error;
+      }
+    }
+
+    async removeMockup(filename: string, view: string) {
+      try {
+        const response = await fetch('/api/v1/admin/products/mockup?action=remove', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            variantId: activeVariantId,
+            view,
+            mockupFilename: filename
+          })
+        });
+
+        if (!response.ok) throw new Error('Failed to remove mockup');
+        await this.loadMockups(activeVariantId, activeProductSlug);
+      } catch (error) {
+        console.error('Error removing mockup:', error);
+        alert('Failed to remove mockup');
+      }
+    }
+
+    async removeAllMockups() {
+      if (!confirm('Are you sure you want to remove all mockups?')) return;
+      
+      try {
+        console.log('Removing all mockups for variant:', activeVariantId);
+        
+        // Disable the remove all button while processing
+        const removeAllBtn = document.getElementById('remove-all-btn') as HTMLButtonElement | null;
+        if (removeAllBtn) {
+          removeAllBtn.disabled = true;
+          removeAllBtn.textContent = 'Removing...';
+        }
+        
+        const response = await fetch('/api/v1/admin/products/mockup?action=remove', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            variantId: activeVariantId,
+            removeAll: true
+          })
+        });
+
+        const responseData = await response.json();
+        console.log('Remove all response:', responseData);
+
+        if (!response.ok) {
+          throw new Error(responseData.message || 'Failed to remove all mockups');
+        }
+        
+        // Reload mockups after successful removal
+        await this.loadMockups(activeVariantId, activeProductSlug);
+        
+        console.log('All mockups removed successfully');
+      } catch (error) {
+        console.error('Error removing all mockups:', error);
+        alert('Failed to remove all mockups: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      } finally {
+        // Re-enable the remove all button
+        const removeAllBtn = document.getElementById('remove-all-btn') as HTMLButtonElement | null;
+        if (removeAllBtn) {
+          removeAllBtn.disabled = false;
+          removeAllBtn.textContent = 'Remove All';
+        }
+      }
+    }
+
+    async saveAndProcess() {
+      const saveBtn = document.getElementById('save-btn') as HTMLButtonElement | null;
+      if (!saveBtn) return;
+
+      try {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Processing...';
+
+        // First, get the current mockups for this variant
+        console.log('Getting current mockups for processing...');
+        const infoResponse = await fetch(`/api/v1/admin/products/mockup?action=info&variantId=${activeVariantId}`);
+        
+        if (!infoResponse.ok) {
+          throw new Error('Failed to get current mockups');
+        }
+        
+        const infoData = await infoResponse.json();
+        console.log('Current mockups data:', infoData);
+        
+        // Extract mockup filenames from the response
+        let mockupFiles: string[] = [];
+        
+        if (infoData.mockups && Array.isArray(infoData.mockups)) {
+          mockupFiles = infoData.mockups.map((m: any) => m.filename);
+        } else if (infoData.variant?.mockup_settings?.views && Array.isArray(infoData.variant.mockup_settings.views)) {
+          mockupFiles = infoData.variant.mockup_settings.views.map((v: any) => v.filename);
+        }
+        
+        console.log('Mockup files to process:', mockupFiles);
+        
+        if (mockupFiles.length === 0) {
+          alert('No mockups to process. Please assign mockups first.');
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save & Process';
+          return;
+        }
+
+        // Send the process request with the mockup files
+        const response = await fetch('/api/v1/admin/products/mockup?action=process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productSlug: activeProductSlug,
+            variantId: activeVariantId,
+            mockupFiles: mockupFiles
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || 'Failed to process mockups');
+        }
+
+        const data = await response.json();
+        console.log('Process response:', data);
+        alert(`Mockups processed successfully! ${data.details?.processedCount || 0} files processed.`);
+        this.hideModal();
+      } catch (error) {
+        console.error('Error processing mockups:', error);
+        alert('Failed to process mockups: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      } finally {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save & Process';
+        }
+      }
+    }
+
+    hideModal() {
+      console.log('hideModal method called');
+      
+      try {
+        const modal = document.getElementById('mockup-modal');
+        console.log('Modal element found:', !!modal);
+        
+        if (modal) {
+          console.log('Current modal classes:', modal.className);
+          
+          // Use multiple approaches to ensure the modal is hidden
+          modal.classList.add('opacity-0');
+          modal.classList.add('pointer-events-none');
+          
+          // Also use direct style manipulation as a fallback
+          modal.style.opacity = '0';
+          modal.style.pointerEvents = 'none';
+          
+          console.log('Added opacity-0 and pointer-events-none classes');
+          console.log('Updated modal classes:', modal.className);
+          
+          // Reset any state if needed
+          selectedMockups.clear();
+          console.log('Cleared selected mockups');
+          
+          // Reset buttons if needed
+          const saveBtn = document.getElementById('save-btn') as HTMLButtonElement | null;
+          if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save & Process';
+            console.log('Reset save button');
+          }
+          
+          const removeAllBtn = document.getElementById('remove-all-btn') as HTMLButtonElement | null;
+          if (removeAllBtn) {
+            removeAllBtn.disabled = false;
+            removeAllBtn.textContent = 'Remove All';
+            console.log('Reset remove all button');
+          }
+          
+          // Dispatch a custom event to notify that the modal was closed
+          modal.dispatchEvent(new CustomEvent('modalClosed'));
+        } else {
+          console.error('Modal element not found');
+        }
+      } catch (error) {
+        console.error('Error in hideModal method:', error);
+      }
+    }
+  }
+
+  // Initialize the mockup manager
+  document.addEventListener('DOMContentLoaded', () => {
+    new MockupManager();
+  });
+
+  // Add window interface extension
+  declare global {
+    interface Window {
+      mockupModal: {
+        show: (variantId: string, productSlug: string) => Promise<void>;
+        hide: () => void;
+      };
+    }
+  }
+</script> 

@@ -18,7 +18,7 @@ const mockupImages = import.meta.glob<{ default: ImageMetadata }>('/src/assets/m
  * @param filename The full filename of the mockup image
  * @returns Object containing the parsed components
  */
-function parseMockupFilename(filename: string): Partial<ProductMockup> {
+export function parseMockupFilename(filename: string): Partial<ProductMockup> {
   // Remove path and extension
   const basename = filename.split('/').pop()?.replace(/\.(jpg|png|webp)$/, '') || '';
   
@@ -161,4 +161,27 @@ export async function getMockupSet(variant: ProductVariant): Promise<MockupSet |
 export async function getPrimaryMockup(variant: ProductVariant): Promise<ProductMockup | null> {
   const mockupSet = await getMockupSet(variant);
   return mockupSet?.front || null;
+}
+
+/**
+ * Get a human-readable label for a view type
+ * @param viewId The view identifier
+ * @returns A formatted label for the view
+ */
+export function getViewLabel(viewId: string): string {
+  const viewLabels: Record<string, string> = {
+    'front': 'Front',
+    'back': 'Back',
+    'left': 'Left',
+    'right': 'Right',
+    'left_front': 'Left Front',
+    'right_front': 'Right Front',
+    'front-2': 'Front Detail',
+    'back-2': 'Back Detail',
+    'front-and-back': 'Front & Back',
+    'flat': 'Flat',
+    'lifestyle': 'Lifestyle'
+  };
+  
+  return viewLabels[viewId] || viewId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 } 

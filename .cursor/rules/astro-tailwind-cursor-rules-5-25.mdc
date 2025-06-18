@@ -29,6 +29,77 @@ You are an expert in JavaScript, TypeScript, and Astro framework for scalable we
   - Use Astro's component props for data passing.
   - Leverage Astro's built-in components like <Markdown /> when appropriate.
 
+## DOM Manipulation and Client-Side Interactivity
+
+### ❌ Never Use Direct DOM Manipulation
+- Never use `document.getElementById()`, `querySelector()`, or similar DOM methods
+- Never manually add/remove classes with `classList`
+- Never directly manipulate element content with `innerHTML` or `textContent`
+- Never manually create elements with `document.createElement()`
+- Never manually attach event listeners with `addEventListener`
+
+### ✅ Instead Use Framework Components
+- Use React/Vue/Svelte components with proper state management for interactive UI
+- Use framework-specific event handling (e.g., `onClick` in React)
+- Use framework-specific state management (e.g., `useState` in React)
+- Use proper client directives for hydration:
+  ```astro
+  <InteractiveComponent client:load />
+  <LazyComponent client:visible />
+  ```
+
+### Component State Management
+- Keep state in framework components, not in global scope
+- Use proper prop passing instead of global variables
+- Use framework-specific context providers if state needs to be shared
+- Never rely on window-level variables except for essential third-party integrations
+
+### Event Handling
+- Use framework-specific event handlers:
+  ```tsx
+  // ✅ Good: React event handling
+  function Button() {
+    const [isActive, setIsActive] = useState(false);
+    return <button onClick={() => setIsActive(!isActive)}>Toggle</button>;
+  }
+  ```
+  ```astro
+  <!-- ❌ Bad: Direct DOM manipulation -->
+  <button id="myButton">Toggle</button>
+  <script>
+    document.getElementById('myButton').addEventListener('click', () => {});
+  </script>
+  ```
+
+### Modal and Dialog Patterns
+- Use framework components for modals and dialogs
+- Manage visibility through component state
+- Use proper accessibility attributes through component props
+- Example:
+  ```tsx
+  // ✅ Good: React modal component
+  function Modal({ isOpen, onClose, children }) {
+    if (!isOpen) return null;
+    return (
+      <div role="dialog" aria-modal="true">
+        {children}
+        <button onClick={onClose}>Close</button>
+      </div>
+    );
+  }
+  ```
+  ```astro
+  <!-- ❌ Bad: DOM-based modal -->
+  <div id="modal" class="hidden">
+    <button onclick="closeModal()">Close</button>
+  </div>
+  <script>
+    function closeModal() {
+      document.getElementById('modal').classList.add('hidden');
+    }
+  </script>
+  ```
+
   Astro File Structure Requirements
   - ALWAYS use the following structure for .astro files:
     ```astro
@@ -95,6 +166,71 @@ You are an expert in JavaScript, TypeScript, and Astro framework for scalable we
 
   Styling with Tailwind CSS
   - Integrate Tailwind CSS with Astro @astrojs/tailwind
+
+  ### Design System Integration
+
+#### Color Usage
+- Use the defined color palette from `tailwind.config.js`:
+  ```typescript
+  primary: {
+    DEFAULT: '#0594CB',
+    light: '#55acee',
+    dark: '#0077b5'
+  }
+  secondary: {
+    DEFAULT: '#FF4088',
+    light: '#ff6ba8',
+    dark: '#cc3366'
+  }
+  ```
+- Use semantic color names (primary, secondary, accent) over raw color values
+- Use neutral colors for text and backgrounds
+- Follow dark mode patterns with dark: prefix
+
+#### Typography
+- Use the defined font families:
+  - `font-base` for body text
+  - `font-heading` for headings
+  - `font-mono` for code
+  - `font-small-caps` for specialized text
+- Follow the type scale using Tailwind's text-{size} utilities
+- Use proper font weights with font-{weight} utilities
+
+### Layout Patterns
+
+#### Container Usage
+- Use the `container` class for consistent page widths
+- Follow the defined breakpoints:
+  ```typescript
+  screens: {
+    sm: '640px',
+    md: '768px',
+    lg: '1024px',
+    xl: '1200px'
+  }
+  ```
+- Apply consistent padding with container class modifiers
+
+### Dark Mode Implementation
+- Use dark: prefix consistently
+- Follow the project's dark mode color scheme
+- Test components in both modes
+- Use semantic color variables
+
+```html
+<div class="
+  bg-white 
+  dark:bg-neutral-900 
+  text-neutral-900 
+  dark:text-neutral-100
+">
+```
+
+### Class Organization
+- Group related utilities together
+- Order utilities consistently
+- Use appropriate spacing for readability
+- Follow project-specific ordering conventions
 
   Tailwind CSS Best Practices
   - Use Tailwind utility classes extensively in your Astro components.

@@ -1,0 +1,205 @@
+---
+interface Props {
+  variants: string;
+}
+
+const { variants } = Astro.props;
+---
+
+<script define:vars={{ variants }}>
+  // Parse variants from JSON string
+  const productVariants = JSON.parse(variants);
+  
+  // Track current selection
+  let currentColor = '';
+  let currentSize = '';
+  let currentVariant = null;
+  let currentView = '';
+
+  // Initialize on page load
+  document.addEventListener('DOMContentLoaded', () => {
+    initializeProductPage();
+  });
+
+  function initializeProductPage() {
+    // Set up color selector
+    const colorButtons = document.querySelectorAll('[data-color]');
+    colorButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        const color = button.getAttribute('data-color');
+        if (color) {
+          selectColor(color);
+        }
+      });
+    });
+
+    // Set up size selector
+    const sizeButtons = document.querySelectorAll('[data-size]');
+    sizeButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        const size = button.getAttribute('data-size');
+        if (size) {
+          selectSize(size);
+        }
+      });
+    });
+
+    // Set up view selector
+    const viewButtons = document.querySelectorAll('[data-view]');
+    viewButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        const view = button.getAttribute('data-view');
+        if (view) {
+          selectView(view);
+        }
+      });
+    });
+
+    // Initialize with first variant
+    if (productVariants && productVariants.length > 0) {
+      const firstVariant = productVariants[0];
+      currentColor = firstVariant.options.color || '';
+      currentSize = firstVariant.options.size || '';
+      updateUI();
+    }
+  }
+
+  function selectColor(color) {
+    currentColor = color;
+    updateUI();
+    
+    // Update active state on color buttons
+    document.querySelectorAll('[data-color]').forEach(btn => {
+      if (btn.getAttribute('data-color') === color) {
+        btn.classList.add('ring-2', 'ring-primary');
+      } else {
+        btn.classList.remove('ring-2', 'ring-primary');
+      }
+    });
+  }
+
+  function selectSize(size) {
+    currentSize = size;
+    updateUI();
+    
+    // Update active state on size buttons
+    document.querySelectorAll('[data-size]').forEach(btn => {
+      if (btn.getAttribute('data-size') === size) {
+        btn.classList.add('bg-primary', 'text-white');
+        btn.classList.remove('bg-gray-200', 'text-gray-900');
+      } else {
+        btn.classList.remove('bg-primary', 'text-white');
+        btn.classList.add('bg-gray-200', 'text-gray-900');
+      }
+    });
+  }
+
+  function selectView(view) {
+    currentView = view;
+    updateImage();
+    
+    // Update active state on view buttons
+    document.querySelectorAll('[data-view]').forEach(btn => {
+      if (btn.getAttribute('data-view') === view) {
+        btn.classList.add('border-primary');
+        btn.classList.remove('border-transparent');
+      } else {
+        btn.classList.remove('border-primary');
+        btn.classList.add('border-transparent');
+      }
+    });
+  }
+
+  function updateUI() {
+    // Find the matching variant based on color and size
+    currentVariant = productVariants.find(variant => 
+      variant.options.color === currentColor && 
+      variant.options.size === currentSize
+    );
+
+    if (!currentVariant) {
+      // If no exact match, try to find a variant with matching color
+      currentVariant = productVariants.find(variant => 
+        variant.options.color === currentColor
+      );
+    }
+
+    if (!currentVariant) {
+      // Fallback to first variant
+      currentVariant = productVariants[0];
+    }
+
+    if (currentVariant) {
+      // Update price
+      const priceElement = document.getElementById('product-price');
+      if (priceElement && currentVariant.retail_price) {
+        priceElement.textContent = `$${currentVariant.retail_price.toFixed(2)}`;
+      }
+
+      // Update variant ID for add-to-cart form
+      const variantInput = document.getElementById('variant-id');
+      if (variantInput) {
+        variantInput.value = currentVariant.id;
+      }
+
+      // Update available views
+      updateAvailableViews();
+
+      // Select first view if current view is not available
+      if (currentVariant.mockupViews && currentVariant.mockupViews.length > 0) {
+        const viewExists = currentVariant.mockupViews.some(v => v.view === currentView);
+        if (!viewExists) {
+          currentView = currentVariant.mockupViews[0].view;
+        }
+        updateImage();
+      }
+    }
+  }
+
+  function updateAvailableViews() {
+    const viewsContainer = document.getElementById('product-views');
+    if (!viewsContainer || !currentVariant || !currentVariant.mockupViews) return;
+
+    // Hide all view buttons first
+    document.querySelectorAll('[data-view]').forEach(btn => {
+      btn.style.display = 'none';
+    });
+
+    // Show only available views for current variant
+    currentVariant.mockupViews.forEach(mockupView => {
+      const viewButton = document.querySelector(`[data-view="${mockupView.view}"]`);
+      if (viewButton) {
+        viewButton.style.display = 'block';
+        
+        // Update thumbnail if available
+        const img = viewButton.querySelector('img');
+        if (img) {
+          img.src = mockupView.url;
+          img.srcset = mockupView.webpUrl;
+        }
+      }
+    });
+  }
+
+  function updateImage() {
+    if (!currentVariant || !currentVariant.mockupViews) return;
+    
+    const mockupView = currentVariant.mockupViews.find(v => v.view === currentView);
+    if (!mockupView) return;
+    
+    const mainImage = document.getElementById('main-image');
+    if (!mainImage) return;
+    
+    const imgElement = mainImage.querySelector('img');
+    const sourceElement = mainImage.querySelector('source');
+    
+    if (imgElement) {
+      imgElement.src = mockupView.url;
+      imgElement.alt = `${currentVariant.name} - ${mockupView.label}`;
+    }
+    
+    if (sourceElement) {
+      sourceElement.srcset = mockupView.webpUrl;
+    }
+  }
+</script> 

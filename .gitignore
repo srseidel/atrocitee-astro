@@ -4,6 +4,10 @@ dist/
 # generated types
 .astro/
 
+#Mockup Images that are not optimized for production
+src/assets/mockups/
+src/assets/mockups-new/
+
 # dependencies
 node_modules/
 

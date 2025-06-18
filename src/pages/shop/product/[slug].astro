@@ -2,19 +2,61 @@
 import { createClient } from '@lib/supabase/client';
 import Layout from '@layouts/Layout.astro';
 import type { Database } from '@local-types/database/schema';
+import { generateMockupFilename } from '@lib/mockups/utils';
+import { parseMockupFilename, getViewLabel } from '@utils/helpers/mockups';
 
-// Use server-side rendering to ensure all products are accessible
-export const prerender = false;
+// Enable static generation for this page
+export const prerender = true;
+
+// Get all product slugs at build time
+export async function getStaticPaths() {
+  const supabase = createClient();
+  
+  // Fetch all published products
+  const { data: products, error } = await supabase
+    .from('products')
+    .select('slug')
+    .eq('published_status', true);
+    
+  if (error) {
+    console.error('Error fetching products for static paths:', error);
+    return [];
+  }
+  
+  // Return array of objects with params for each product
+  return products.map(product => ({
+    params: { slug: product.slug }
+  }));
+}
+
+interface MockupView {
+  view: string;
+  label: string;
+  filename: string;
+  url: string;
+  webpUrl: string;
+}
 
 interface ProductVariant {
   id: string;
   name: string;
   sku: string;
   retail_price: number | null;
-  options: Array<{id: string, value: any}>;
+  options: {
+    color?: string;
+    size?: string;
+    [key: string]: any;
+  };
   in_stock: boolean;
   stock_level: number | null;
-  mockup_settings?: any;
+  mockup_settings?: {
+    views: Array<{
+      view: string;
+      filename: string;
+      url: string;
+      webpUrl: string;
+    }>;
+  };
 }
 
 interface PublicCharity {
@@ -35,10 +77,12 @@ type Product = Database['public']['Tables']['products']['Row'] & {
   atrocitee_donation_amount?: number;
 };
 
-type Category = Database['public']['Tables']['atrocitee_categories']['Row'];
-
 // Get the slug from the URL
 const { slug } = Astro.params;
+
+if (!slug) {
+  return Astro.redirect('/404');
+}
 
 // Initialize Supabase client
 const supabase = createClient();
@@ -78,77 +122,46 @@ const { data: product, error: productError } = await supabase
 
 // Handle product not found
 if (productError || !product) {
-  console.error(`Product not found for slug: ${slug}`, productError);
   return Astro.redirect('/404');
 }
 
-// Also fetch categories for the product page
-const { data: categories } = await supabase
-  .from('atrocitee_categories')
-  .select('*')
-  .eq('is_active', true);
-
-// Get featured products
-const { data: allProducts } = await supabase
-  .from('products')
-  .select('*')
-  .eq('published_status', true);
-
-const featuredProducts = allProducts?.filter((p: any) => p.atrocitee_featured) || [];
-
-// Process variants to extract color and size
+// Process variants for the client-side
 const processedVariants = product.product_variants.map((variant: ProductVariant) => {
-  // Extract color and size from options array
-  let color = "";
-  let size = "";
-  
-  if (Array.isArray(variant.options)) {
-    // Try to find color and size in the options array
-    const colorOption = variant.options.find((opt: {id: string, value: any}) => opt.id === "color");
-    const sizeOption = variant.options.find((opt: {id: string, value: any}) => opt.id === "size");
-    
-    color = colorOption?.value || "";
-    size = sizeOption?.value || "";
-  }
-  
-  // If color/size not found in options, extract from the name
-  if (!color || !size) {
-    const nameParts = variant.name.split('/').map((part: string) => part.trim());
-    
-    if (nameParts.length >= 2) {
-      // For products with both color and size (like t-shirts)
-      if (nameParts.length >= 3) {
-        color = color || nameParts[1];
-        size = size || nameParts[2];
-      } 
-      // For products with only color (like hats)
-      else if (nameParts.length === 2) {
-        color = color || nameParts[1];
-      }
-    }
-  }
-  
-  // Extract mockups if available
-  const mockups = variant.mockup_settings?.mockups || {};
-  const mockupViews = Object.keys(mockups).map((view: string) => ({
-    view,
-    filename: mockups[view as keyof typeof mockups]?.filename || '',
-    url: `/api/v1/admin/products/mockup?filename=${encodeURIComponent(mockups[view as keyof typeof mockups]?.filename || '')}`,
-  }));
-  
+  // Get mockup views from mockup_settings
+  const mockupViews = variant.mockup_settings?.views?.map(view => {
+    // Generate the standardized filename
+    const filename = generateMockupFilename(
+      product.slug,
+      variant.options.color || 'unknown',
+      variant.options.size || '',
+      view.view
+    ).replace('.png', ''); // Remove extension as we'll add it for each format
+
+    // Get the human-readable view label
+    const viewLabel = getViewLabel(view.view);
+
+    return {
+      view: view.view,
+      label: viewLabel,
+      filename,
+      url: `/images/mockups/${product.slug}/${filename}.png`,
+      webpUrl: `/images/mockups/${product.slug}/${filename}.webp`
+    };
+  }) || [];
+
   return {
-    ...variant,
-    color,
-    size,
-    displayName: size ? `${color} - ${size}` : color,
+    id: variant.id,
+    retail_price: variant.retail_price,
+    options: variant.options,
+    name: variant.name,
+    sku: variant.sku,
     mockupViews
   };
 });
 
 // Extract available colors and sizes
-const availableColors = [...new Set(processedVariants.map((v: any) => v.color))].filter(Boolean) as string[];
-const availableSizes = [...new Set(processedVariants.map((v: any) => v.size))].filter((size): size is string => Boolean(size)).sort((a, b) => {
-  // Common size order: XS, S, M, L, XL, 2XL, etc.
+const availableColors = [...new Set(processedVariants.map((v: ProductVariant) => v.options.color))].filter(Boolean) as string[];
+const availableSizes = [...new Set(processedVariants.map((v: ProductVariant) => v.options.size))].filter((size): size is string => Boolean(size)).sort((a: string, b: string) => {
   const sizeOrder: Record<string, number> = { 
     "XS": 1, "S": 2, "M": 3, "L": 4, "XL": 5, "2XL": 6, "3XL": 7, "4XL": 8 
   };
@@ -157,102 +170,66 @@ const availableSizes = [...new Set(processedVariants.map((v: any) => v.size))].f
 
 // Get initial variant
 const initialVariant = processedVariants[0];
-const initialColor = initialVariant?.color || availableColors[0] || 'Black';
-const initialSize = initialVariant?.size || availableSizes[0] || 'M';
+const initialColor = initialVariant?.options.color || availableColors[0] || 'Black';
+const initialSize = initialVariant?.options.size || availableSizes[0] || 'M';
 
 // Get all available views for the initial variant
-interface MockupView {
-  view: string;
-  filename: string;
-  url: string;
-}
-const initialViews: MockupView[] = initialVariant?.mockupViews || [];
-
-// Debug logging
-console.log('Product loaded:', product.name);
-console.log('Product slug:', product.slug);
-console.log('Initial color:', initialColor);
-console.log('Initial size:', initialSize);
-console.log('Total variants:', product.product_variants.length);
-console.log('Available colors:', availableColors);
-console.log('Available sizes:', availableSizes);
-console.log('First processed variant:', JSON.stringify(processedVariants[0], null, 2));
-console.log('Initial views:', initialViews);
-console.log('Categories:', categories?.length || 0);
-console.log('Featured products:', featuredProducts.length);
-
-// Map view IDs to more readable labels
-function getViewLabel(viewId: string): string {
-  const viewLabels: Record<string, string> = {
-    'front': 'Front',
-    'back': 'Back',
-    'left': 'Left',
-    'right': 'Right',
-    'left_front': 'Left Front',
-    'right_front': 'Right Front',
-    'front-2': 'Front Detail',
-    'back-2': 'Back Detail',
-    'front-and-back': 'Front & Back',
-    'flat': 'Flat',
-    'lifestyle': 'Lifestyle'
-  };
-  
-  return viewLabels[viewId] || viewId.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
-}
+const initialViews = initialVariant?.mockupViews || [];
 ---
 
 <Layout title={product.name}>
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
     <div class="lg:grid lg:grid-cols-2 lg:gap-x-8 lg:items-start">
-      {/* Image gallery */}
       <div class="flex flex-col">
-        {/* Main image */}
         <div class="aspect-w-1 aspect-h-1 rounded-lg bg-gray-100 overflow-hidden" id="main-image-container">
-          <picture id="main-image">
-            {initialViews.length > 0 ? (
-              <>
-                <img
-                  src={initialViews[0]?.url || product.thumbnail_url}
-                  alt={`${product.name} in ${initialColor}, size ${initialSize}`}
-                  class="w-full h-full object-center object-cover"
-                  onerror="this.onerror=null; this.src=this.getAttribute('data-fallback');"
-                  data-fallback={product.thumbnail_url || ''}
-                />
-              </>
-            ) : (
+          {initialViews.length > 0 ? (
+            <picture id="main-image">
+              <source srcset={initialViews[0].webpUrl} type="image/webp" />
               <img
-                src={product.thumbnail_url || ''}
+                src={initialViews[0].url || product.thumbnail_url}
                 alt={`${product.name} in ${initialColor}, size ${initialSize}`}
                 class="w-full h-full object-center object-cover"
+                onerror="this.onerror=null; this.src=this.getAttribute('data-fallback');"
+                data-fallback={product.thumbnail_url || ''}
               />
-            )}
-          </picture>
+            </picture>
+          ) : (
+            <img
+              src={product.thumbnail_url || ''}
+              alt={`${product.name} in ${initialColor}, size ${initialSize}`}
+              class="w-full h-full object-center object-cover"
+            />
+          )}
         </div>
         
-        {/* Thumbnail gallery */}
         <div class="mt-4 grid grid-cols-6 gap-2" id="view-thumbnails">
           {initialViews.map((view: MockupView, index: number) => (
             <div 
               class={`aspect-w-1 aspect-h-1 rounded-md bg-gray-100 overflow-hidden cursor-pointer border-2 ${index === 0 ? 'border-indigo-600' : 'border-gray-200'}`} 
               data-view={view.view}
               data-url={view.url}
+              data-webp-url={view.webpUrl}
             >
-              <img
-                src={view.url}
-                alt={`${getViewLabel(view.view)} view of ${product.name} in ${initialColor}, size ${initialSize}`}
-                class="w-full h-full object-center object-cover"
-                loading={index > 0 ? "lazy" : "eager"}
-                onerror="this.onerror=null; this.closest('[data-view]').style.display='none';"
-              />
+              <picture>
+                <source srcset={view.webpUrl} type="image/webp" />
+                <img
+                  src={view.url}
+                  alt={`${view.label} view of ${product.name} in ${initialColor}, size ${initialSize}`}
+                  class="w-full h-full object-center object-cover"
+                  loading={index > 0 ? "lazy" : "eager"}
+                  onerror="this.onerror=null; this.closest('[data-view]').style.display='none';"
+                />
+              </picture>
               <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 opacity-0 hover:opacity-100 transition-opacity">
-                <span class="text-white text-xs font-medium px-2 py-1 rounded bg-black bg-opacity-50">{getViewLabel(view.view)}</span>
+                <span class="text-white text-xs font-medium px-2 py-1 rounded bg-black bg-opacity-50">
+                  {view.label}
+                </span>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Product info */}
       <div class="mt-10 px-4 sm:px-0 sm:mt-16 lg:mt-0">
         <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">{product.name}</h1>
         
@@ -270,12 +247,11 @@ function getViewLabel(viewId: string): string {
           </div>
         </div>
 
-        {/* Color Selection */}
         {availableColors.length > 0 && (
           <div class="mt-8">
             <h3 class="text-sm text-gray-900 font-medium">Color</h3>
             <div class="grid grid-cols-4 gap-4 mt-4">
-              {availableColors.map((color) => (
+              {availableColors.map((color: string) => (
                 <button
                   type="button"
                   class={`group relative border rounded-md py-3 px-4 flex items-center justify-center text-sm font-medium focus:outline-none sm:flex-1 ${
@@ -293,12 +269,11 @@ function getViewLabel(viewId: string): string {
           </div>
         )}
 
-        {/* Size Selection */}
         {availableSizes.length > 0 && (
           <div class="mt-8">
             <h3 class="text-sm text-gray-900 font-medium">Size</h3>
             <div class="grid grid-cols-4 gap-4 mt-4">
-              {availableSizes.map((size) => (
+              {availableSizes.map((size: string) => (
                 <button
                   type="button"
                   class={`group relative border rounded-md py-3 px-4 flex items-center justify-center text-sm font-medium focus:outline-none sm:flex-1 ${
@@ -316,18 +291,15 @@ function getViewLabel(viewId: string): string {
           </div>
         )}
 
-        {/* Add to cart */}
         <div class="mt-10">
           <button
             type="button"
-            id="add-to-cart"
-            class="w-full bg-indigo-600 border border-transparent rounded-md py-3 px-8 flex items-center justify-center text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            class="w-full bg-indigo-600 border border-transparent rounded-md py-3 px-8 flex items-center justify-center text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-50 focus:ring-indigo-500"
           >
             Add to cart
           </button>
         </div>
 
-        {/* Charity Information */}
         {product.public_charities && (
           <div class="mt-10 border-t border-gray-200 pt-10">
             <h3 class="text-sm font-medium text-gray-900">Supporting Charity</h3>
@@ -362,131 +334,197 @@ function getViewLabel(viewId: string): string {
       </div>
     </div>
   </div>
+
+  <div id="product-data" data-variants={JSON.stringify(processedVariants)} style="display: none;" />
 </Layout>
 
-<script is:inline define:vars={{ processedVariants, getViewLabel }}>
-  // Function to update product images based on selected variant
-  function updateProductImages(color, size) {
-    // Find the matching variant
-    const selectedVariant = processedVariants.find(v => v.color === color && (!size || v.size === size));
-    
-    if (selectedVariant && selectedVariant.mockupViews) {
-      // Update main image
-      const mainImageContainer = document.getElementById('main-image');
-      if (mainImageContainer) {
-        const mainImg = mainImageContainer.querySelector('img');
-        if (mainImg && selectedVariant.mockupViews.length > 0) {
-          mainImg.src = selectedVariant.mockupViews[0].url;
-          mainImg.alt = `${selectedVariant.name} in ${color}${size ? `, size ${size}` : ''}`;
+<script define:vars={{ processedVariants, initialColor, initialSize, initialViews }}>
+  // Track current selection
+  let currentColor = initialColor;
+  let currentSize = initialSize;
+  let currentVariant = null;
+  let currentView = initialViews.length > 0 ? initialViews[0].view : '';
+
+  // Initialize on page load
+  document.addEventListener('DOMContentLoaded', () => {
+    initializeProductPage();
+  });
+
+  function initializeProductPage() {
+    // Set up color selector
+    const colorButtons = document.querySelectorAll('[data-color]');
+    colorButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        const color = button.getAttribute('data-color');
+        if (color) {
+          selectColor(color);
         }
+      });
+    });
+
+    // Set up size selector
+    const sizeButtons = document.querySelectorAll('[data-size]');
+    sizeButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        const size = button.getAttribute('data-size');
+        if (size) {
+          selectSize(size);
+        }
+      });
+    });
+
+    // Set up view selector
+    const viewButtons = document.querySelectorAll('[data-view]');
+    viewButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        const view = button.getAttribute('data-view');
+        if (view) {
+          selectView(view);
+        }
+      });
+    });
+
+    // Initialize with first variant
+    updateUI();
+  }
+
+  function selectColor(color) {
+    currentColor = color;
+    updateUI();
+    
+    // Update active state on color buttons
+    document.querySelectorAll('[data-color]').forEach(btn => {
+      if (btn.getAttribute('data-color') === color) {
+        btn.classList.add('ring-2', 'ring-primary');
+      } else {
+        btn.classList.remove('ring-2', 'ring-primary');
       }
-      
-      // Update thumbnails
-      const thumbnailsContainer = document.getElementById('view-thumbnails');
-      if (thumbnailsContainer) {
-        thumbnailsContainer.innerHTML = selectedVariant.mockupViews.map((view, index) => `
-          <div 
-            class="aspect-w-1 aspect-h-1 rounded-md bg-gray-100 overflow-hidden cursor-pointer border-2 ${index === 0 ? 'border-indigo-600' : 'border-gray-200'}" 
-            data-view="${view.view}"
-            data-url="${view.url}"
-          >
-            <img
-              src="${view.url}"
-              alt="${getViewLabel(view.view)} view of ${selectedVariant.name} in ${color}${size ? `, size ${size}` : ''}"
-              class="w-full h-full object-center object-cover"
-              loading="${index > 0 ? 'lazy' : 'eager'}"
-              onerror="this.onerror=null; this.closest('[data-view]').style.display='none';"
-            />
-            <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 opacity-0 hover:opacity-100 transition-opacity">
-              <span class="text-white text-xs font-medium px-2 py-1 rounded bg-black bg-opacity-50">${getViewLabel(view.view)}</span>
-            </div>
-          </div>
-        `).join('');
-        
-        // Reattach click handlers for thumbnails
-        attachThumbnailHandlers();
+    });
+  }
+
+  function selectSize(size) {
+    currentSize = size;
+    updateUI();
+    
+    // Update active state on size buttons
+    document.querySelectorAll('[data-size]').forEach(btn => {
+      if (btn.getAttribute('data-size') === size) {
+        btn.classList.add('bg-primary', 'text-white');
+        btn.classList.remove('bg-gray-200', 'text-gray-900');
+      } else {
+        btn.classList.remove('bg-primary', 'text-white');
+        btn.classList.add('bg-gray-200', 'text-gray-900');
       }
-      
+    });
+  }
+
+  function selectView(view) {
+    currentView = view;
+    updateImage();
+    
+    // Update active state on view buttons
+    document.querySelectorAll('[data-view]').forEach(btn => {
+      if (btn.getAttribute('data-view') === view) {
+        btn.classList.add('border-primary');
+        btn.classList.remove('border-transparent');
+      } else {
+        btn.classList.remove('border-primary');
+        btn.classList.add('border-transparent');
+      }
+    });
+  }
+
+  function updateUI() {
+    // Find the matching variant based on color and size
+    currentVariant = processedVariants.find(variant => 
+      variant.options.color === currentColor && 
+      variant.options.size === currentSize
+    );
+
+    if (!currentVariant) {
+      // If no exact match, try to find a variant with matching color
+      currentVariant = processedVariants.find(variant => 
+        variant.options.color === currentColor
+      );
+    }
+
+    if (!currentVariant) {
+      // Fallback to first variant
+      currentVariant = processedVariants[0];
+    }
+
+    if (currentVariant) {
       // Update price
       const priceElement = document.getElementById('product-price');
-      if (priceElement && selectedVariant.retail_price) {
-        priceElement.textContent = `$${selectedVariant.retail_price.toFixed(2)}`;
+      if (priceElement && currentVariant.retail_price) {
+        priceElement.textContent = `$${currentVariant.retail_price.toFixed(2)}`;
+      }
+
+      // Update variant ID for add-to-cart form
+      const variantInput = document.getElementById('variant-id');
+      if (variantInput) {
+        variantInput.value = currentVariant.id;
+      }
+
+      // Update available views
+      updateAvailableViews();
+
+      // Select first view if current view is not available
+      if (currentVariant.mockupViews && currentVariant.mockupViews.length > 0) {
+        const viewExists = currentVariant.mockupViews.some(v => v.view === currentView);
+        if (!viewExists) {
+          currentView = currentVariant.mockupViews[0].view;
+        }
+        updateImage();
       }
     }
   }
-  
-  // Function to attach click handlers to thumbnails
-  function attachThumbnailHandlers() {
-    document.querySelectorAll('#view-thumbnails [data-view]').forEach(thumbnail => {
-      thumbnail.addEventListener('click', () => {
-        // Update main image
-        const mainImg = document.querySelector('#main-image img');
-        if (mainImg) {
-          mainImg.src = thumbnail.getAttribute('data-url') || '';
-        }
+
+  function updateAvailableViews() {
+    const viewsContainer = document.getElementById('product-views');
+    if (!viewsContainer || !currentVariant || !currentVariant.mockupViews) return;
+
+    // Hide all view buttons first
+    document.querySelectorAll('[data-view]').forEach(btn => {
+      btn.style.display = 'none';
+    });
+
+    // Show only available views for current variant
+    currentVariant.mockupViews.forEach(mockupView => {
+      const viewButton = document.querySelector(`[data-view="${mockupView.view}"]`);
+      if (viewButton) {
+        viewButton.style.display = 'block';
         
-        // Update thumbnail selection
-        document.querySelectorAll('#view-thumbnails [data-view]').forEach(thumb => {
-          thumb.classList.remove('border-indigo-600');
-          thumb.classList.add('border-gray-200');
-        });
-        thumbnail.classList.remove('border-gray-200');
-        thumbnail.classList.add('border-indigo-600');
-      });
+        // Update thumbnail if available
+        const img = viewButton.querySelector('img');
+        if (img) {
+          img.src = mockupView.url;
+          img.srcset = mockupView.webpUrl;
+        }
+      }
     });
   }
-  
-  // Initialize when DOM is loaded
-  document.addEventListener('DOMContentLoaded', () => {
-    // Attach initial thumbnail handlers
-    attachThumbnailHandlers();
-    
-    // Handle color selection
-    document.querySelectorAll('[data-option="color"]').forEach(button => {
-      button.addEventListener('click', (e) => {
-        const target = e.currentTarget;
-        const color = target.getAttribute('data-value');
-        const currentSize = document.querySelector('[data-option="size"].option-selected')?.getAttribute('data-value');
-        
-        if (color) {
-          // Update selection UI
-          document.querySelectorAll('[data-option="color"]').forEach(btn => {
-            btn.classList.remove('bg-indigo-600', 'border-transparent', 'text-white', 'option-selected');
-            btn.classList.add('bg-white', 'border-gray-300', 'text-gray-900');
-          });
-          target.classList.remove('bg-white', 'border-gray-300', 'text-gray-900');
-          target.classList.add('bg-indigo-600', 'border-transparent', 'text-white', 'option-selected');
-          
-          // Update images
-          updateProductImages(color, currentSize || '');
-        }
-      });
-    });
-    
-    // Handle size selection
-    document.querySelectorAll('[data-option="size"]').forEach(button => {
-      button.addEventListener('click', (e) => {
-        const target = e.currentTarget;
-        const size = target.getAttribute('data-value');
-        const currentColor = document.querySelector('[data-option="color"].option-selected')?.getAttribute('data-value');
-        
-        if (size) {
-          // Update selection UI
-          document.querySelectorAll('[data-option="size"]').forEach(btn => {
-            btn.classList.remove('bg-indigo-600', 'border-transparent', 'text-white', 'option-selected');
-            btn.classList.add('bg-white', 'border-gray-300', 'text-gray-900');
-          });
-          target.classList.remove('bg-white', 'border-gray-300', 'text-gray-900');
-          target.classList.add('bg-indigo-600', 'border-transparent', 'text-white', 'option-selected');
-          
-          // Update images
-          if (currentColor) {
-            updateProductImages(currentColor, size);
-          }
-        }
-      });
-    });
-  });
-</script>
 
-<div id="product-data" data-variants={JSON.stringify(processedVariants)} style="display: none;"></div> 
+  function updateImage() {
+    if (!currentVariant || !currentVariant.mockupViews) return;
+    
+    const mockupView = currentVariant.mockupViews.find(v => v.view === currentView);
+    if (!mockupView) return;
+    
+    const mainImage = document.getElementById('main-image');
+    if (!mainImage) return;
+    
+    const imgElement = mainImage.querySelector('img');
+    const sourceElement = mainImage.querySelector('source');
+    
+    if (imgElement) {
+      imgElement.src = mockupView.url;
+      imgElement.alt = `${currentVariant.name} - ${mockupView.label}`;
+    }
+    
+    if (sourceElement) {
+      sourceElement.srcset = mockupView.webpUrl;
+    }
+  }
+</script>
+---

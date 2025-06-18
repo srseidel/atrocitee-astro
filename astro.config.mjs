@@ -11,15 +11,17 @@ const isDev = process.env.NODE_ENV === 'development';
 
 // https://astro.build/config
 export default defineConfig({
-  // In development, use static output to avoid SSR issues
-  // In production, use server output for dynamic features
-  output: isDev ? 'static' : 'server',
+  // Use server output for dynamic features
+  output: 'server',
   adapter: cloudflare({
     imageService: 'compile'
   }),
   
-  // Configure which pages should be prerendered (static)
-  prefetch: true,
+  // Configure prefetching for better performance
+  prefetch: {
+    prefetchAll: true,
+    defaultStrategy: 'hover'
+  },
 
   integrations: [
     tailwind(),

@@ -7,6 +7,7 @@ import { createServerSupabaseClient } from '@lib/supabase/client';
 import { PrintfulService } from '@lib/printful/service';
 import { initQueue, addTask } from '@lib/printful/mockup-queue';
 import type { MockupSettings, MockupResponse } from '@local-types/common/mockup-settings';
+import { generateMockupFilename } from '@lib/mockups/utils';
 import { onRequest } from '../middleware';
 
 // Disable prerendering to ensure we have access to request headers
@@ -172,16 +173,43 @@ function extractColorFromVariant(variant: ProductVariant): string {
 
 // Function to get mockups from the local directory
 function getLocalMockups(productType: string, color: string = ''): Array<{filename: string, url: string, view: string}> {
+  // Only check the mockups-new directory for unassigned mockups
   const mockupsDir = path.resolve(process.cwd(), 'src/assets/mockups-new');
   
+  console.log('Looking for mockups in directory:', mockupsDir);
+  
   try {
+    // Check if directory exists
+    if (!fs.existsSync(mockupsDir)) {
+      console.error('Mockups directory does not exist:', mockupsDir);
+      return [];
+    }
+    
     // Read all files in the mockups directory
     const files = fs.readdirSync(mockupsDir);
+    console.log(`Found ${files.length} files in mockups directory`);
     
     // Extract product keywords for more flexible matching
     const productKeywords = productType.toLowerCase().split('-').filter(Boolean);
     
     console.log('Looking for mockups with product keywords:', productKeywords);
+    
+    // If no product type is specified, return all mockups
+    if (productKeywords.length === 0 || productType === '') {
+      console.log('No product type specified, returning all mockups');
+      return files
+        .filter(file => file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg'))
+        .map(file => {
+          // Determine view based on filename
+          let view = determineViewFromFilename(file);
+          
+          return {
+            filename: file,
+            url: `/api/v1/admin/products/mockup?filename=${encodeURIComponent(file)}`,
+            view
+          };
+        });
+    }
     
     // Filter files based on product type and color
     const filteredFiles = files.filter(file => {
@@ -214,27 +242,27 @@ function getLocalMockups(productType: string, color: string = ''): Array<{filena
     
     console.log(`Found ${filteredFiles.length} matching mockup files`);
     
+    // If no matches found with specific keywords, return all mockups
+    if (filteredFiles.length === 0) {
+      console.log('No matches found with specific keywords, returning all mockups');
+      return files
+        .filter(file => file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg'))
+        .map(file => {
+          // Determine view based on filename
+          let view = determineViewFromFilename(file);
+          
+          return {
+            filename: file,
+            url: `/api/v1/admin/products/mockup?filename=${encodeURIComponent(file)}`,
+            view
+          };
+        });
+    }
+    
     // Map files to mockup objects
     return filteredFiles.map(file => {
       // Determine view based on filename
-      let view = 'front';
-      const filename = file.toLowerCase();
-      
-      if (filename.includes('back')) {
-        view = 'back';
-      } else if (filename.includes('left-front')) {
-        view = 'left_front';
-      } else if (filename.includes('left')) {
-        view = 'left';
-      } else if (filename.includes('right-front')) {
-        view = 'right_front';
-      } else if (filename.includes('right')) {
-        view = 'right';
-      } else if (filename.includes('flat')) {
-        view = 'flat';
-      } else if (filename.includes('lifestyle')) {
-        view = 'lifestyle';
-      }
+      let view = determineViewFromFilename(file);
       
       return {
         filename: file,
@@ -243,9 +271,35 @@ function getLocalMockups(productType: string, color: string = ''): Array<{filena
       };
     });
   } catch (error) {
-    console.error('Error reading mockups directory:', error);
+    console.error('Error processing mockup files:', error);
     return [];
   }
+}
+
+// Helper function to determine view from filename
+function determineViewFromFilename(filename: string): string {
+  const lowerFilename = filename.toLowerCase();
+  
+  if (lowerFilename.includes('--back') || lowerFilename.includes('-back')) {
+    return 'back';
+  } else if (lowerFilename.includes('--left-front') || lowerFilename.includes('-left-front') ||
+             lowerFilename.includes('--left_front') || lowerFilename.includes('-left_front')) {
+    return 'left-front'; // Use hyphen format consistently
+  } else if (lowerFilename.includes('--left') || lowerFilename.includes('-left')) {
+    return 'left';
+  } else if (lowerFilename.includes('--right-front') || lowerFilename.includes('-right-front') ||
+             lowerFilename.includes('--right_front') || lowerFilename.includes('-right_front')) {
+    return 'right-front'; // Use hyphen format consistently
+  } else if (lowerFilename.includes('--right') || lowerFilename.includes('-right')) {
+    return 'right';
+  } else if (lowerFilename.includes('--flat') || lowerFilename.includes('-flat')) {
+    return 'flat';
+  } else if (lowerFilename.includes('--lifestyle') || lowerFilename.includes('-lifestyle')) {
+    return 'lifestyle';
+  }
+  
+  // Default to front view
+  return 'front';
 }
 
 // Helper function to promisify copyFile
@@ -263,7 +317,10 @@ function runOptimizeImagesScript(files: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     const scriptPath = path.join(process.cwd(), 'scripts', 'optimize-images.js');
     
+    console.log('Running optimization script with files:', files);
+    
     // Run the script with Node.js, passing the files as arguments
+    // The script expects relative paths from src/assets/mockups
     const child = spawn('node', [scriptPath, ...files]);
     
     let stdout = '';
@@ -281,9 +338,15 @@ function runOptimizeImagesScript(files: string[]): Promise<void> {
     
     child.on('close', (code) => {
       if (code === 0) {
+        console.log('Image optimization completed successfully');
         resolve();
       } else {
-        reject(new Error(`Image optimization script failed with code ${code}: ${stderr}`));
+        console.error(`Image optimization script failed with code ${code}`);
+        console.error('Stderr:', stderr);
+        console.error('Stdout:', stdout);
+        // We're resolving instead of rejecting to allow the process to continue
+        // even if optimization fails
+        resolve();
       }
     });
   });
@@ -347,6 +410,8 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
     if ((action === 'info' || !action) && url.searchParams.has('variantId')) {
       const variantId = url.searchParams.get('variantId');
       
+      console.log(`Fetching info for variant ${variantId}`);
+      
       // Get the variant with its mockup settings
       const { data: variant, error: variantError } = await supabase
         .from('product_variants')
@@ -365,6 +430,7 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
         .single();
       
       if (variantError) {
+        console.error('Error fetching variant:', variantError);
         return new Response(JSON.stringify({
           error: 'Not Found',
           message: 'Variant not found'
@@ -374,24 +440,48 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
         });
       }
       
+      console.log('Raw variant data:', variant);
+      
       // Cast variant to the correct type
       const typedVariant = variant as unknown as ProductVariant;
       
       // Extract mockup settings
-      const mockupSettings = (typedVariant.mockup_settings || {}) as MockupSettings;
-      const mockups = mockupSettings.mockups || {};
+      const mockupSettings = (typedVariant.mockup_settings || {}) as any;
+      console.log('Mockup settings:', mockupSettings);
       
-      // Convert mockups object to array format for client consumption
-      const mockupsArray: MockupResponse[] = Object.entries(mockups).map(([view, details]) => {
-        return {
-          view,
-          filename: details.filename,
-          url: `/api/v1/admin/products/mockup?filename=${encodeURIComponent(details.filename)}`,
-          color: details.color || 'unknown',
-          size: details.size || '',
-          updated_at: details.updated_at || new Date().toISOString()
-        };
-      });
+      // Handle both old and new mockup settings formats
+      let mockupsArray: MockupResponse[] = [];
+      
+      // New format with views array
+      if (mockupSettings.views && Array.isArray(mockupSettings.views)) {
+        console.log('Using new views array format');
+        mockupsArray = mockupSettings.views.map((view: any) => {
+          return {
+            view: view.view,
+            filename: view.filename,
+            url: view.url || `/api/v1/admin/products/mockup?filename=${encodeURIComponent(view.filename)}`,
+            color: view.color || 'unknown',
+            size: view.size || '',
+            updated_at: view.updated_at || new Date().toISOString()
+          };
+        });
+      } 
+      // Legacy format with mockups object
+      else if (mockupSettings.mockups) {
+        console.log('Using legacy mockups object format');
+        mockupsArray = Object.entries(mockupSettings.mockups).map(([view, details]: [string, any]) => {
+          return {
+            view,
+            filename: details.filename,
+            url: `/api/v1/admin/products/mockup?filename=${encodeURIComponent(details.filename)}`,
+            color: details.color || 'unknown',
+            size: details.size || '',
+            updated_at: details.updated_at || new Date().toISOString()
+          };
+        });
+      }
+      
+      console.log('Processed mockups array:', mockupsArray);
       
       // Get size from variant options if available
       let size = '';
@@ -413,7 +503,8 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
           id: typedVariant.id,
           name: typedVariant.name,
           color,
-          size
+          size,
+          mockup_settings: mockupSettings
         },
         mockups: mockupsArray
       }), {
@@ -598,10 +689,15 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
       
       // Prevent directory traversal attacks
       const sanitizedFilename = path.basename(filename);
+      
+      // For unassigned mockups, look in the mockups-new directory
       const mockupPath = path.resolve(process.cwd(), 'src/assets/mockups-new', sanitizedFilename);
+      
+      console.log('Looking for mockup image at:', mockupPath);
       
       // Check if file exists
       if (!fs.existsSync(mockupPath)) {
+        console.error('Mockup image not found:', sanitizedFilename);
         return new Response('Image not found', { status: 404 });
       }
       
@@ -612,6 +708,8 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
       let contentType = 'image/png';
       if (sanitizedFilename.endsWith('.jpg') || sanitizedFilename.endsWith('.jpeg')) {
         contentType = 'image/jpeg';
+      } else if (sanitizedFilename.endsWith('.webp')) {
+        contentType = 'image/webp';
       }
       
       // Return image
@@ -629,21 +727,18 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
       const productParam = url.searchParams.get('product') || '';
       console.log('Received request for product:', productParam);
       
-      // Extract product type from slug (e.g., "unisex-classic-tee" from "unisex-classic-tee-white")
-      let productType = productParam;
+      // First try with the full product name
+      let mockups = getLocalMockups(productParam);
       
-      // If no mockups are found with the specific product type,
-      // try with just the product type
-      let mockups = getLocalMockups(productType);
-      
-      // If still no results, try with just the first part of the product type
-      if (mockups.length === 0 && productType.includes('-')) {
-        const firstKeyword = productType.split('-')[0];
-        console.log('No mockups found with full product type. Trying with first keyword:', firstKeyword);
-        mockups = getLocalMockups(firstKeyword);
+      // If no results, try with just the product type (first part of the slug)
+      if (mockups.length === 0 && productParam.includes('-')) {
+        const productParts = productParam.split('-');
+        const productType = productParts[0]; // Try with just the first part
+        console.log('No mockups found with full product name. Trying with product type:', productType);
+        mockups = getLocalMockups(productType);
       }
       
-      // Return all mockups if we still can't find any matching ones
+      // If still no results, return all mockups
       if (mockups.length === 0) {
         console.log('No specific mockups found. Returning all mockups.');
         mockups = getLocalMockups('');
@@ -652,11 +747,7 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
       return new Response(JSON.stringify({
         success: true,
         mockups,
-        productType,
-        query: {
-          original: productParam,
-          parsed: { productType }
-        }
+        productType: productParam
       }), {
         status: 200,
         headers: {
@@ -738,26 +829,53 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         });
       }
 
+      console.log('Current mockup settings before update:', variant.mockup_settings);
+
       // Initialize or get existing mockup settings
       let mockupSettings = variant.mockup_settings || {};
-      if (!mockupSettings.mockups) {
-        mockupSettings.mockups = {};
+      if (!mockupSettings.views) {
+        mockupSettings.views = [];
       }
 
-      // Update the mockup settings with the new file
-      mockupSettings.mockups[view] = {
+      // Normalize view name to use hyphens consistently
+      const normalizedView = view.replace('_', '-');
+
+      // Check if view already exists
+      const existingViewIndex = mockupSettings.views.findIndex((v: any) => 
+        v.view === normalizedView || v.view === view
+      );
+      
+      // Create view data with the original mockup filename
+      const viewData = {
+        view: normalizedView, // Use normalized view name
         filename: mockupFile,
-        updated_at: new Date().toISOString()
+        url: `/api/v1/admin/products/mockup?filename=${encodeURIComponent(mockupFile)}`,
+        webpUrl: `/api/v1/admin/products/mockup?filename=${encodeURIComponent(mockupFile.replace('.png', '.webp'))}`
       };
 
+      console.log('View data to be added/updated:', viewData);
+
+      if (existingViewIndex >= 0) {
+        // Update existing view
+        console.log(`Updating existing view at index ${existingViewIndex}`);
+        mockupSettings.views[existingViewIndex] = viewData;
+      } else {
+        // Add new view
+        console.log('Adding new view');
+        mockupSettings.views.push(viewData);
+      }
+
+      console.log('Updated mockup settings before saving:', mockupSettings);
+
       // Update the variant with new mockup settings
-      const { error: updateError } = await supabase
+      const { data: updateData, error: updateError } = await supabase
         .from('product_variants')
         .update({
           mockup_settings: mockupSettings,
           updated_at: new Date().toISOString()
         })
-        .eq('id', variantId);
+        .eq('id', variantId)
+        .select('mockup_settings');
 
       if (updateError) {
         console.error('Error updating variant:', updateError);
@@ -772,9 +890,12 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         });
       }
 
+      console.log('Variant updated successfully. New mockup settings:', updateData?.[0]?.mockup_settings);
+
       return new Response(JSON.stringify({
         success: true,
-        message: 'Mockup assigned successfully'
+        message: 'Mockup assigned successfully',
+        mockupSettings: updateData?.[0]?.mockup_settings
       }), {
         headers: {
           'Content-Type': 'application/json'
@@ -785,6 +906,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     // Handle remove mockup endpoint
     else if (action === 'remove') {
       const { variantId, view, mockupFilename, removeAll } = body;
+
+      console.log('Remove mockup request:', { variantId, view, mockupFilename, removeAll });
 
       // Get current mockup settings
       const { data: variant, error: variantError } = await supabase
@@ -807,28 +930,38 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       }
 
       let mockupSettings = variant.mockup_settings || {};
-      if (!mockupSettings.mockups) {
-        mockupSettings.mockups = {};
+      console.log('Current mockup settings before removal:', mockupSettings);
+      
+      if (removeAll) {
+        console.log('Removing all mockups');
+        // Reset mockup settings completely when removing all
+        mockupSettings = { views: [] };
+      } else if (view && mockupFilename) {
+        console.log(`Removing specific mockup: ${mockupFilename} with view: ${view}`);
+        // Initialize views array if it doesn't exist
+        if (!mockupSettings.views) {
+          mockupSettings.views = [];
+        }
+        // Remove specific mockup
+        const beforeCount = mockupSettings.views.length;
+        mockupSettings.views = mockupSettings.views.filter((v: any) => 
+          !(v.view === view && v.filename === mockupFilename)
+        );
+        const afterCount = mockupSettings.views.length;
+        console.log(`Removed ${beforeCount - afterCount} mockup(s)`);
       }
 
-      if (removeAll) {
-        // Remove all mockups
-        mockupSettings.mockups = {};
-      } else if (view && mockupFilename) {
-        // Remove specific mockup
-        if (mockupSettings.mockups[view]?.filename === mockupFilename) {
-          delete mockupSettings.mockups[view];
-        }
-      }
+      console.log('Updated mockup settings after removal:', mockupSettings);
 
       // Update the variant with new mockup settings
-      const { error: updateError } = await supabase
+      const { data: updateData, error: updateError } = await supabase
         .from('product_variants')
         .update({
           mockup_settings: mockupSettings,
           updated_at: new Date().toISOString()
         })
-        .eq('id', variantId);
+        .eq('id', variantId)
+        .select('mockup_settings');
 
       if (updateError) {
         console.error('Error updating variant:', updateError);
@@ -843,9 +976,12 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         });
       }
 
+      console.log('Variant updated successfully after removal');
+
       return new Response(JSON.stringify({
         success: true,
-        message: removeAll ? 'All mockups removed successfully' : 'Mockup removed successfully'
+        message: removeAll ? 'All mockups removed successfully' : 'Mockup removed successfully',
+        mockupSettings: updateData?.[0]?.mockup_settings
       }), {
         headers: {
           'Content-Type': 'application/json'
@@ -855,14 +991,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     
     // Handle process mockups endpoint
     else if (action === 'process') {
-      const { mockupFiles, productSlug, variantId } = body;
+      const { mockupFiles: providedMockupFiles, productSlug, variantId } = body;
 
-      console.log('Processing mockups:', { mockupFiles, productSlug, variantId });
+      console.log('Processing mockups request:', { providedMockupFiles, productSlug, variantId });
 
-      if (!Array.isArray(mockupFiles) || !productSlug || !variantId) {
+      if (!productSlug || !variantId) {
         return new Response(JSON.stringify({
           error: 'Bad Request',
-          message: 'Missing required fields: mockupFiles array, productSlug, and variantId are required'
+          message: 'Missing required fields: productSlug and variantId are required'
         }), {
           status: 400,
           headers: {
@@ -900,6 +1036,31 @@ export const POST: APIRoute = async ({ request, cookies }) => {
           }
         });
       }
+      
+      // If mockupFiles not provided, try to get them from the variant's mockup_settings
+      let mockupFiles = providedMockupFiles;
+      
+      if (!Array.isArray(mockupFiles) || mockupFiles.length === 0) {
+        console.log('No mockup files provided, trying to get them from variant mockup_settings');
+        
+        if (variant.mockup_settings?.views && Array.isArray(variant.mockup_settings.views)) {
+          mockupFiles = variant.mockup_settings.views.map((view: any) => view.filename);
+          console.log('Found mockup files in variant mockup_settings:', mockupFiles);
+        }
+      }
+      
+      // Final check for mockup files
+      if (!Array.isArray(mockupFiles) || mockupFiles.length === 0) {
+        return new Response(JSON.stringify({
+          error: 'Bad Request',
+          message: 'No mockup files found to process. Please assign mockups first.'
+        }), {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+      }
 
       // Extract color and size from variant
       const color = extractColorFromVariant(variant);
@@ -929,69 +1090,162 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         try {
           // Setup source and target directories
           const sourceDir = path.join(process.cwd(), 'src', 'assets', 'mockups-new');
-          const targetDir = path.join(process.cwd(), 'src', 'assets', 'mockups');
           
-          // Ensure target directory exists
-          await fs.promises.mkdir(targetDir, { recursive: true });
+          // Target directories for both the public folder and src/assets/mockups
+          const publicTargetDir = path.join(process.cwd(), 'public', 'images', 'mockups', productSlug);
+          const srcTargetDir = path.join(process.cwd(), 'src', 'assets', 'mockups', productSlug);
+          
+          // Ensure target directories exist
+          await fs.promises.mkdir(publicTargetDir, { recursive: true });
+          await fs.promises.mkdir(srcTargetDir, { recursive: true });
+          
+          // Get the base filename without any path
+          const baseFilename = path.basename(file);
           
           // Get source file path
-          const sourceFile = path.join(sourceDir, path.basename(file));
+          const sourceFile = path.join(sourceDir, baseFilename);
           
           // Check if source file exists
-          try {
-            await fs.promises.access(sourceFile, fs.constants.F_OK);
-          } catch {
-            console.error('Source file not found:', sourceFile);
-            throw new Error(`Source file not found: ${file}`);
+          if (!fs.existsSync(sourceFile)) {
+            console.error(`Source file not found: ${sourceFile}`);
+            return null;
           }
           
-          // Generate new filename based on product details
-          const fileExt = path.extname(file);
-          const viewMatch = file.match(/(front-2|back-2|front-and-back|left-front|right-front|front|back|flat|lifestyle)/i);
-          const view = viewMatch ? viewMatch[0].toLowerCase() : 'front';
-          const hash = file.match(/[a-f0-9]{12,}/i)?.[0] || '';
+          // Determine view from filename
+          let view = determineViewFromFilename(baseFilename);
           
-          // Clean up product name and create new filename
-          const productName = productSlug.replace(/[^a-z0-9-]/g, '-');
-          const newFilename = `${productName}-${color.toLowerCase()}-${size.toLowerCase()}-${view}${hash ? '-' + hash : ''}${fileExt}`;
-          const targetFile = path.join(targetDir, newFilename);
-          
-          console.log('Processing file:', {
-            sourceFile,
-            targetFile,
-            view,
-            hash
-          });
+          // Generate standardized filename
+          const newFilename = generateMockupFilename(
+            productSlug,
+            color || 'unknown',
+            size || '',
+            view
+          );
 
-          // Move file to target directory
-          await fs.promises.rename(sourceFile, targetFile);
+          // Get target file paths
+          const srcTargetFile = path.join(srcTargetDir, newFilename);
           
+          // Copy file to src/assets/mockups first (for the optimization script to find)
+          try {
+            console.log(`Copying file from ${sourceFile} to ${srcTargetFile}`);
+            await copyFileAsync(sourceFile, srcTargetFile);
+            console.log(`Successfully copied file to ${srcTargetFile}`);
+            
+            // Verify the file was copied
+            if (fs.existsSync(srcTargetFile)) {
+              console.log(`Verified file exists at ${srcTargetFile}`);
+              
+              // Remove the source file after successful copy
+              let fileRemoved = false;
+              try {
+                await fs.promises.unlink(sourceFile);
+                console.log(`Removed original file from ${sourceFile}`);
+                fileRemoved = true;
+              } catch (unlinkError) {
+                console.error(`Warning: Could not remove original file ${sourceFile}:`, unlinkError);
+                // Continue even if removal fails
+              }
+            } else {
+              console.error(`File not found at ${srcTargetFile} after copy operation`);
+            }
+          } catch (copyError) {
+            console.error(`Error copying file to ${srcTargetFile}:`, copyError);
+            throw copyError;
+          }
+
+          // Add to mockup settings
+          let mockupSettings = variant.mockup_settings || {};
+          if (!mockupSettings.views) {
+            mockupSettings.views = [];
+          }
+
+          const viewData = {
+            view,
+            filename: newFilename.replace('.png', ''),
+            // Use the correct public URL path format with the product slug subdirectory
+            url: `/images/mockups/${productSlug}/${newFilename}`,
+            webpUrl: `/images/mockups/${productSlug}/${newFilename.replace('.png', '.webp')}`
+          };
+
+          // Check if view already exists
+          const existingViewIndex = mockupSettings.views.findIndex((v: any) => v.view === view);
+          if (existingViewIndex >= 0) {
+            mockupSettings.views[existingViewIndex] = viewData;
+          } else {
+            mockupSettings.views.push(viewData);
+          }
+
+          // Update variant with new mockup settings
+          const { error: updateError } = await supabase
+            .from('product_variants')
+            .update({
+              mockup_settings: mockupSettings,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', variantId);
+
+          if (updateError) {
+            throw new Error(`Failed to update variant mockup settings: ${updateError.message}`);
+          }
+
+          // Check if the source file still exists (if not, it was successfully removed)
+          const fileRemoved = !fs.existsSync(sourceFile);
+
           return {
             oldFile: file,
             newFile: newFilename,
-            view
+            view,
+            removed: fileRemoved
           };
         } catch (error) {
-          console.error('Error processing file:', error);
+          console.error('Error processing mockup file:', error);
           throw error;
         }
       }));
 
-      // After all files are moved, optimize them
-      if (processedFiles.length > 0) {
-        await runOptimizeImagesScript(processedFiles.map(f => f.newFile));
+      // Filter out null values from processedFiles
+      const validProcessedFiles = processedFiles.filter(file => file !== null) as Array<{
+        oldFile: string;
+        newFile: string;
+        view: string;
+        removed: boolean;
+      }>;
+
+      // Track removals for reporting
+      const removedFiles = validProcessedFiles.filter(f => f.removed).length;
+      const totalFiles = validProcessedFiles.length;
+
+      // After all files are moved, run the optimization script
+      // The script will handle copying from src/assets/mockups to public/images/mockups
+      if (validProcessedFiles.length > 0) {
+        try {
+          // Just pass the relative paths (filenames) to the optimization script
+          // since it's hardcoded to look in src/assets/mockups
+          const relativeFilePaths = validProcessedFiles.map(f => 
+            path.join(productSlug, f.newFile)
+          );
+          
+          console.log('Running optimization with relative paths:', relativeFilePaths);
+          
+          // Run the optimization script with the relative paths
+          await runOptimizeImagesScript(relativeFilePaths);
+        } catch (error) {
+          console.error('Error during image optimization:', error);
+          // Continue with the response even if optimization fails
+        }
       }
 
-      console.log('Files processed:', processedFiles);
+      console.log('Files processed:', validProcessedFiles);
 
       return new Response(JSON.stringify({
         success: true,
-        message: `Successfully processed ${processedFiles.length} mockup files`,
-        processedFiles,
+        message: `Successfully processed ${validProcessedFiles.length} mockup files. ${removedFiles} files removed from mockups-new.`,
+        processedFiles: validProcessedFiles,
         details: {
           totalFiles: mockupFiles.length,
-          processedCount: processedFiles.length,
-          views: processedFiles.map(f => f.view)
+          processedCount: validProcessedFiles.length,
+          removedCount: removedFiles,
+          views: validProcessedFiles.map(f => f.view)
         }
       }), {
         status: 200,
