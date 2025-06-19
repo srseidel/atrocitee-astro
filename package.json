@@ -7,6 +7,9 @@
     "start": "astro dev",
     "optimize-images": "node scripts/optimize-images.js",
     "build": "npm run optimize-images && astro build",
+    "build-dev": "NODE_ENV=development ASTRO_DISABLE_PRERENDERING=true astro build",
+    "build-quick": "NODE_ENV=development ASTRO_DISABLE_PRERENDERING=true astro build",
+    "build-no-prerender": "ASTRO_DISABLE_PRERENDERING=true npm run optimize-images && ASTRO_DISABLE_PRERENDERING=true astro build",
     "cloudflare-build": "npm run optimize-images && PUBLIC_SUPABASE_URL=https://placeholder-for-build.supabase.co PUBLIC_SUPABASE_ANON_KEY=placeholder-for-build astro build",
     "preview": "astro preview",
     "astro": "astro",
@@ -15,10 +18,11 @@
     "check-printful": "node scripts/check-printful-mockups.js",
     "get-printful-ids": "node scripts/get-printful-ids.js",
     "test-download": "node scripts/test-download-mockup.js",
-    "setup-env": "node scripts/setup-env.js"
+    "setup-env": "node scripts/setup-env.js",
+    "move-mockups": "node scripts/move-mockups.js"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "^12.5.2",
+    "@astrojs/cloudflare": "^12.5.5",
     "@astrojs/react": "^4.2.7",
     "@astrojs/tailwind": "^6.0.2",
     "@astrojs/vercel": "^8.1.4",
@@ -27,7 +31,7 @@
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.4",
     "@tailwindcss/vite": "^4.1.5",
-    "astro": "^5.7.11",
+    "astro": "^5.9.4",
     "dotenv": "^16.5.0",
     "printful": "^0.1.1",
     "react": "^18.2.0",

@@ -20,8 +20,10 @@
     "dist",
     "node_modules",
     "ai-logs",
+    "scripts",
     "src/components/features/products/MockupGenerator.astro",
-    "src/components/features/products/MockupViewSelector.astro"
+    "src/components/features/products/MockupViewSelector.astro",
+    "src/pages/shop/[category].astro"
   ],
   "compilerOptions": {
     "jsx": "react-jsx",

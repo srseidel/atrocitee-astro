@@ -1,4 +1,36 @@
 /**
+ * Type definitions for mockup settings and responses
+ */
+
+export interface MockupSettings {
+  selected_views?: string[];
+  product_id?: string;
+  variant_id?: string;
+  color?: string;
+  size?: string;
+  placement?: string;
+  artwork_url?: string;
+  mockup_positions?: string[];
+}
+
+export interface MockupResponse {
+  success: boolean;
+  message?: string;
+  data?: {
+    files?: Array<{
+      url: string;
+      filename: string;
+      view: string;
+    }>;
+    task_id?: string;
+  };
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+/**
  * Types for product mockup settings
  */
 

@@ -1,10 +1,7 @@
-// Use dynamic imports for Node.js modules
-// These will only be loaded when the functions that use them are called
-// This prevents issues during build time
-let fs: any;
-let path: any;
-let fileURLToPath: any;
-let fsPromises: any;
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { promises as fsPromises } from 'fs';
 
 // Define constants
 const MOCKUPS_NEW_DIR = 'src/assets/mockups-new';
@@ -17,12 +14,6 @@ const MOCKUPS_DIR = 'src/assets/mockups';
  */
 export async function findPotentialMockups(productName: string): Promise<string[]> {
   try {
-    // Dynamically import fs promises
-    if (!fsPromises) {
-      const fs = await import('fs');
-      fsPromises = fs.promises;
-    }
-    
     // Get all files in mockups-new directory
     const files = await fsPromises.readdir(MOCKUPS_NEW_DIR);
     
@@ -30,7 +21,7 @@ export async function findPotentialMockups(productName: string): Promise<string[
     const searchTerms = productName.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
     
     // Filter files that might match this product
-    return files.filter((file: string) => {
+    return files.filter(file => {
       const filename = file.toLowerCase();
       // Check if the filename contains all search terms
       return searchTerms.every(term => filename.includes(term));
@@ -46,13 +37,15 @@ export async function findPotentialMockups(productName: string): Promise<string[
  * @param filename The filename to parse
  * @returns Object with parsed information
  */
-export function parseMockupFilename(filename: string): {
+export function parsePrintfulFilename(filename: string): {
   productType: string;
   color: string;
   view: string;
   hash?: string;
-} | null {
-  if (!filename) return null;
+} {
+  // Example filenames:
+  // unisex-classic-tee-white-front-684ca4d685cae.png
+  // under-armour-dad-hat-black-front-684cafd737818.png
   
   // Remove file extension
   const nameWithoutExt = filename.replace(/\.[^.]+$/, '');
@@ -124,12 +117,6 @@ export function generateMockupFilename(
  */
 async function ensureDirectoryExists(dirPath: string): Promise<void> {
   try {
-    // Dynamically import fs promises if not already loaded
-    if (!fsPromises) {
-      const fs = await import('fs');
-      fsPromises = fs.promises;
-    }
-    
     await fsPromises.access(dirPath);
   } catch {
     await fsPromises.mkdir(dirPath, { recursive: true });
@@ -154,15 +141,6 @@ export async function assignMockupToVariant(
   color: string,
   size: string
 ): Promise<string> {
-  // Dynamically import modules if not already loaded
-  if (!path) {
-    path = await import('path');
-  }
-  if (!fsPromises) {
-    const fs = await import('fs');
-    fsPromises = fs.promises;
-  }
-  
   // Generate new filename
   const newFilename = generateMockupFilename(productSlug, color, size, view);
   
@@ -191,15 +169,6 @@ export async function assignMockupToVariant(
  * @returns Array of mockup filenames
  */
 export async function getProductMockups(productSlug: string): Promise<string[]> {
-  // Dynamically import modules if not already loaded
-  if (!path) {
-    path = await import('path');
-  }
-  if (!fsPromises) {
-    const fs = await import('fs');
-    fsPromises = fs.promises;
-  }
-  
   const productDir = path.join(MOCKUPS_DIR, productSlug);
   
   try {
@@ -259,15 +228,6 @@ export async function removeMockupFromVariant(
   mockupFilename: string
 ): Promise<boolean> {
   try {
-    // Dynamically import modules if not already loaded
-    if (!path) {
-      path = await import('path');
-    }
-    if (!fsPromises) {
-      const fs = await import('fs');
-      fsPromises = fs.promises;
-    }
-    
     const mockupPath = path.join(MOCKUPS_DIR, productSlug, mockupFilename);
     await fsPromises.unlink(mockupPath);
     return true;
@@ -283,41 +243,9 @@ export async function removeMockupFromVariant(
  */
 export async function getUnassignedMockups(): Promise<string[]> {
   try {
-    // Dynamically import modules if not already loaded
-    if (!fsPromises) {
-      const fs = await import('fs');
-      fsPromises = fs.promises;
-    }
-    
     return await fsPromises.readdir(MOCKUPS_NEW_DIR);
   } catch (error) {
     console.error('Error getting unassigned mockups:', error);
     return [];
   }
-}
-
-/**
- * Get a human-readable label for a view type
- * @param view The view type (e.g., 'front', 'back')
- * @returns Human-readable label
- */
-export function getViewLabel(view: string): string {
-  const viewMap: Record<string, string> = {
-    'front': 'Front View',
-    'back': 'Back View',
-    'left': 'Left Side',
-    'right': 'Right Side',
-    'detail': 'Detail View',
-    'lifestyle': 'Lifestyle',
-    'product-details': 'Product Details',
-    'left-front': 'Left Front',
-    'right-front': 'Right Front',
-    'mockup': 'Mockup',
-    'inside': 'Inside',
-    'outside': 'Outside',
-    'top': 'Top View',
-    'bottom': 'Bottom View'
-  };
-  
-  return viewMap[view.toLowerCase()] || view.charAt(0).toUpperCase() + view.slice(1);
 } 

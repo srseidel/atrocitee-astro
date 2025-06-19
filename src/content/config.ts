@@ -11,19 +11,6 @@ const aboutCollection = defineCollection({
   }),
 });
 
-// Categories collection schema
-const categoriesCollection = defineCollection({
-  type: 'content',
-  schema: z.object({
-    name: z.string(),
-    description: z.string().optional(),
-    slug: z.string(),
-    image: z.string().optional(),
-    isActive: z.boolean().optional().default(true),
-    order: z.number().optional(),
-  }),
-});
-
 // Products collection schema
 const productsCollection = defineCollection({
   type: 'content',
@@ -61,5 +48,4 @@ const productsCollection = defineCollection({
 export const collections = {
   'about': aboutCollection,
   'products': productsCollection,
-  'categories': categoriesCollection,
 }; 

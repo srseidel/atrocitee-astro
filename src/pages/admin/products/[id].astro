@@ -1,4 +1,6 @@
 ---
+// @ts-nocheck - Disable TypeScript checking for Astro-specific attributes
+
 // Server-side rendering for auth
 export const prerender = false;
 
@@ -563,10 +565,9 @@ if (Astro.request.method === 'POST') {
         </div>
       </div>
     )}
-
-    <MockupModal productSlug={product.slug} />
-  </div>
-</AdminLayout>
+        <MockupModal productSlug={product.slug} />
+    </div>
+  </AdminLayout>
 
 <script define:vars={{ productId: product.id, productSlug: product.slug }}>
   // Auto-generate slug from name
@@ -647,20 +648,10 @@ if (Astro.request.method === 'POST') {
 
   // Wait for the DOM to be fully loaded before accessing elements
   document.addEventListener('DOMContentLoaded', () => {
-    // Get DOM elements
-    const mockupModal = document.getElementById('mockupManagementModal');
-    const closeModalBtn = document.getElementById('closeModal');
-    const cancelModalBtn = document.getElementById('cancelModal');
-    
     // Current active variant for the modal
     let activeVariantId = null;
     let activeProductSlug = null;
-    let activeColor = null;
-    let activeSize = null;
     
-    // Track available mockups
-    let availableMockups = [];
-
     // Load mockups for all variants on page load
     document.querySelectorAll('.variant-mockups-grid').forEach(grid => {
       const variantId = grid.getAttribute('data-variant-id');
@@ -675,125 +666,16 @@ if (Astro.request.method === 'POST') {
         const variantId = e.currentTarget.getAttribute('data-variant-id');
         if (!variantId) return;
         
-        // Use the React component's API
-        if (window.mockupModal) {
-          window.mockupModal.show(variantId, productSlug);
+        console.log('Opening mockup modal for variant:', variantId);
+        
+        // Use the new showMockupModal function
+        if (window.showMockupModal) {
+          window.showMockupModal(variantId, productSlug);
+        } else {
+          console.error('showMockupModal function not found');
+          alert('Error: Mockup modal functionality not available');
         }
       });
-    });
-    
-    // Close modal when clicking close buttons
-    [closeModalBtn, cancelModalBtn].forEach(btn => {
-      btn?.addEventListener('click', () => {
-        if (mockupModal) {
-          mockupModal.classList.add('hidden');
-          mockupModal.classList.remove('flex');
-        }
-      });
-    });
-    
-    // Save & Close button - Process mockups and close modal
-    const saveAndCloseModalBtn = document.getElementById('saveAndCloseModal');
-    saveAndCloseModalBtn?.addEventListener('click', async () => {
-      // Get all assigned mockup filenames
-      const assignedMockups = [];
-      document.querySelectorAll('#modalCurrentMockups [data-filename]').forEach(el => {
-        const filename = el.getAttribute('data-filename');
-        if (filename) {
-          assignedMockups.push(filename);
-        }
-      });
-
-      // Get current variant and product info
-      const currentVariantId = activeVariantId;
-      const currentProductSlug = productSlug; // Use the global productSlug from define:vars
-
-      console.log('Processing mockups:', {
-        assignedMockups,
-        currentVariantId,
-        currentProductSlug
-      });
-      
-      if (!currentVariantId || !currentProductSlug) {
-        console.error('Missing required data:', { currentVariantId, currentProductSlug });
-        alert('Error: Missing variant or product information. Please try closing and reopening the modal.');
-        return;
-      }
-
-      if (assignedMockups.length === 0) {
-        if (confirm('No mockups are assigned. Close anyway?')) {
-          mockupModal.classList.add('hidden');
-          mockupModal.classList.remove('flex');
-        }
-        return;
-      }
-      
-      // Show processing message
-      saveAndCloseModalBtn.disabled = true;
-      saveAndCloseModalBtn.textContent = 'Processing...';
-      
-      try {
-        // Call the API to process mockups
-        const response = await fetch('/api/v1/admin/products/mockup?action=process', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            mockupFiles: assignedMockups,
-            productSlug: currentProductSlug,
-            variantId: currentVariantId
-          })
-        });
-
-        // Log the response for debugging
-        console.log('Process mockups response:', {
-          status: response.status,
-          ok: response.ok
-        });
-        
-        // Check if the response is OK
-        if (!response.ok) {
-          const contentType = response.headers.get('content-type');
-          let errorMessage = `Error ${response.status}: ${response.statusText}`;
-          
-          if (contentType && contentType.includes('application/json')) {
-            // If it's JSON, parse the error message
-            const errorData = await response.json();
-            errorMessage = errorData.message || errorMessage;
-          }
-          
-          throw new Error(errorMessage);
-        }
-        
-        const data = await response.json();
-        console.log('Process mockups success:', data);
-        
-        // Show success message
-        alert(`Mockups processed successfully! ${data.details?.processedCount || 0} files processed.`);
-        
-        // Close the modal
-        mockupModal.classList.add('hidden');
-        mockupModal.classList.remove('flex');
-
-        // Refresh the main page display
-        loadMockups(currentVariantId);
-      } catch (error) {
-        console.error('Error processing mockups:', error);
-        alert(`Error processing mockups: ${error.message}`);
-      } finally {
-        // Reset button state
-        saveAndCloseModalBtn.disabled = false;
-        saveAndCloseModalBtn.textContent = 'Save & Close';
-      }
-    });
-    
-    // Close modal when clicking outside
-    mockupModal?.addEventListener('click', (e) => {
-      if (e.target === mockupModal) {
-        mockupModal.classList.add('hidden');
-        mockupModal.classList.remove('flex');
-      }
     });
     
     // Function to load mockups for a variant
@@ -802,7 +684,7 @@ if (Astro.request.method === 'POST') {
         activeVariantId = variantId;
         
         // Handle variant mockups response
-        const response = await fetch(`/api/v1/admin/products/mockup?variantId=${variantId}`);
+        const response = await fetch(`/api/v1/admin/products/mockup?action=info&variantId=${variantId}`);
         const data = await response.json();
         
         if (!response.ok) {

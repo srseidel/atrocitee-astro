@@ -1,70 +1,14 @@
-// @ts-nocheck - Disable TypeScript checking for this file
-
 import type { APIRoute } from 'astro';
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawn } from 'child_process';
+import { copyFile, existsSync, mkdirSync } from 'fs';
 import { createServerSupabaseClient } from '@lib/supabase/client';
-import type { MockupSettings, MockupResponse } from '@/types/common/mockup-settings';
-import { generateMockupFilename } from '@/lib/mockups/utils';
+import { PrintfulService } from '@lib/printful/service';
+import { initQueue, addTask } from '@lib/printful/mockup-queue';
+import type { MockupSettings, MockupResponse } from '@local-types/common/mockup-settings';
+import { generateMockupFilename } from '@lib/mockups/utils';
 import { onRequest } from '../middleware';
-
-// Import types for PrintfulService
-import type { PrintfulService as PrintfulServiceType } from '@/lib/printful/service';
-
-// Define queue task type
-interface QueueTask {
-  variantId: string;
-  productId: string;
-  files: Array<{
-    placement: string;
-    artwork_url: string;
-  }>;
-  mockup_positions: string[];
-}
-
-// These will be dynamically imported when needed
-let printfulServiceModule: any;
-let mockupQueueModule: any;
-let fsModule: any;
-let pathModule: any;
-
-// Function to get PrintfulService
-async function getPrintfulService(): Promise<PrintfulServiceType> {
-  if (!printfulServiceModule) {
-    printfulServiceModule = await import('@/lib/printful/service');
-  }
-  return new printfulServiceModule.PrintfulService();
-}
-
-// Function to initialize queue
-async function initMockupQueue(): Promise<void> {
-  if (!mockupQueueModule) {
-    mockupQueueModule = await import('@/lib/printful/mockup-queue');
-  }
-  return mockupQueueModule.initQueue();
-}
-
-// Function to add task to queue
-async function addMockupTask(task: QueueTask): Promise<void> {
-  if (!mockupQueueModule) {
-    mockupQueueModule = await import('@/lib/printful/mockup-queue');
-  }
-  return mockupQueueModule.addTask(task);
-}
-
-// Helper function to get fs module
-async function getFs() {
-  if (!fsModule) {
-    fsModule = await import('node:fs');
-  }
-  return fsModule;
-}
-
-// Helper function to get path module
-async function getPath() {
-  if (!pathModule) {
-    pathModule = await import('node:path');
-  }
-  return pathModule;
-}
 
 // Disable prerendering to ensure we have access to request headers
 export const prerender = false;
@@ -228,11 +172,7 @@ function extractColorFromVariant(variant: ProductVariant): string {
 }
 
 // Function to get mockups from the local directory
-async function getLocalMockups(productType: string, color: string = ''): Promise<Array<{filename: string, url: string, view: string}>> {
-  // Dynamically import required modules
-  const fs = await getFs();
-  const path = await getPath();
-  
+function getLocalMockups(productType: string, color: string = ''): Array<{filename: string, url: string, view: string}> {
   // Only check the mockups-new directory for unassigned mockups
   const mockupsDir = path.resolve(process.cwd(), 'src/assets/mockups-new');
   
@@ -374,13 +314,7 @@ function copyFileAsync(src: string, dest: string): Promise<void> {
 
 // Helper function to run the image optimization script
 function runOptimizeImagesScript(files: string[]): Promise<void> {
-  return new Promise(async (resolve, reject) => {
-    // Get path module
-    const path = await getPath();
-    
-    // Import child_process
-    const { spawn } = await import('node:child_process');
-    
+  return new Promise((resolve, reject) => {
     const scriptPath = path.join(process.cwd(), 'scripts', 'optimize-images.js');
     
     console.log('Running optimization script with files:', files);
@@ -753,10 +687,6 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
         return new Response('Filename is required', { status: 400 });
       }
       
-      // Get fs and path modules
-      const fs = await getFs();
-      const path = await getPath();
-      
       // Prevent directory traversal attacks
       const sanitizedFilename = path.basename(filename);
       
@@ -798,39 +728,26 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
       console.log('Received request for product:', productParam);
       
       // First try with the full product name
-      let mockups = await getLocalMockups(productParam);
-      console.log(`Found ${mockups.length} mockups for product: ${productParam}`);
+      let mockups = getLocalMockups(productParam);
       
       // If no results, try with just the product type (first part of the slug)
       if (mockups.length === 0 && productParam.includes('-')) {
         const productParts = productParam.split('-');
         const productType = productParts[0]; // Try with just the first part
         console.log('No mockups found with full product name. Trying with product type:', productType);
-        mockups = await getLocalMockups(productType);
-        console.log(`Found ${mockups.length} mockups for product type: ${productType}`);
+        mockups = getLocalMockups(productType);
       }
       
       // If still no results, return all mockups
       if (mockups.length === 0) {
         console.log('No specific mockups found. Returning all mockups.');
-        mockups = await getLocalMockups('');
-        console.log(`Found ${mockups.length} mockups in total`);
+        mockups = getLocalMockups('');
       }
-      
-      // Ensure mockups is always an array
-      if (!Array.isArray(mockups)) {
-        console.error('Expected mockups to be an array but got:', typeof mockups);
-        mockups = [];
-      }
-      
-      // Log the mockups for debugging
-      console.log('Returning mockups:', mockups.map(m => m.filename));
       
       return new Response(JSON.stringify({
         success: true,
-        mockups: mockups, // Explicitly name the property to ensure it's included
-        productType: productParam,
-        count: mockups.length
+        mockups,
+        productType: productParam
       }), {
         status: 200,
         headers: {
@@ -988,12 +905,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     // Handle remove mockup endpoint
     else if (action === 'remove') {
-      const { variantId, view, mockupFilename, filename, removeAll } = body;
+      const { variantId, view, mockupFilename, removeAll } = body;
 
-      // Handle both new and old parameter names
-      const fileToRemove = mockupFilename || filename;
-      
-      console.log('Remove mockup request:', { variantId, view, fileToRemove, removeAll });
+      console.log('Remove mockup request:', { variantId, view, mockupFilename, removeAll });
 
       // Get current mockup settings
       const { data: variant, error: variantError } = await supabase
@@ -1022,31 +936,17 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         console.log('Removing all mockups');
         // Reset mockup settings completely when removing all
         mockupSettings = { views: [] };
-      } else if (fileToRemove) {
-        console.log(`Removing specific mockup: ${fileToRemove} with view: ${view || 'any'}`);
+      } else if (view && mockupFilename) {
+        console.log(`Removing specific mockup: ${mockupFilename} with view: ${view}`);
         // Initialize views array if it doesn't exist
         if (!mockupSettings.views) {
           mockupSettings.views = [];
         }
-        
         // Remove specific mockup
         const beforeCount = mockupSettings.views.length;
-        
-        if (view) {
-          // If view is specified, only remove mockups with that view
-          mockupSettings.views = mockupSettings.views.filter((v: any) => {
-            const filenameMatch = v.filename === fileToRemove || 
-                                 (v.filename && v.filename.includes(fileToRemove));
-            return !(v.view === view && filenameMatch);
-          });
-        } else {
-          // If view is not specified, remove any mockup with matching filename
-          mockupSettings.views = mockupSettings.views.filter((v: any) => {
-            return !(v.filename === fileToRemove || 
-                    (v.filename && v.filename.includes(fileToRemove)));
-          });
-        }
-        
+        mockupSettings.views = mockupSettings.views.filter((v: any) => 
+          !(v.view === view && v.filename === mockupFilename)
+        );
         const afterCount = mockupSettings.views.length;
         console.log(`Removed ${beforeCount - afterCount} mockup(s)`);
       }
@@ -1185,10 +1085,6 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       }
       productName = productName || 'Atrocitee';
 
-      // Get fs and path modules before using them
-      const fs = await getFs();
-      const path = await getPath();
-
       // Process mockup files
       const processedFiles = await Promise.all(mockupFiles.map(async (file: string) => {
         try {
@@ -1232,7 +1128,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
           // Copy file to src/assets/mockups first (for the optimization script to find)
           try {
             console.log(`Copying file from ${sourceFile} to ${srcTargetFile}`);
-            await fs.promises.copyFile(sourceFile, srcTargetFile);
+            await copyFileAsync(sourceFile, srcTargetFile);
             console.log(`Successfully copied file to ${srcTargetFile}`);
             
             // Verify the file was copied
@@ -1330,12 +1226,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
           );
           
           console.log('Running optimization with relative paths:', relativeFilePaths);
-          console.log('Full source paths:', validProcessedFiles.map(f => path.join(process.cwd(), 'src', 'assets', 'mockups', productSlug, f.newFile)));
-          console.log('Full target paths:', validProcessedFiles.map(f => path.join(process.cwd(), 'public', 'images', 'mockups', productSlug, f.newFile)));
           
           // Run the optimization script with the relative paths
           await runOptimizeImagesScript(relativeFilePaths);
-          console.log('Optimization script completed');
         } catch (error) {
           console.error('Error during image optimization:', error);
           // Continue with the response even if optimization fails

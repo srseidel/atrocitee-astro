@@ -1,187 +1,107 @@
-import type { ProductMockup, MockupSet, ProductColor, ProductView } from '@local-types/common/mockups';
-import type { Database } from '@local-types/database/schema';
-
-type ProductVariant = Database['public']['Tables']['product_variants']['Row'];
-
-// Import all mockup images
-import { getImage } from 'astro:assets';
-import type { ImageMetadata } from 'astro';
-
-// Import mockup images dynamically
-const mockupImages = import.meta.glob<{ default: ImageMetadata }>('/src/assets/mockups/*.{jpg,png,webp}', {
-  import: 'default',
-  eager: true
-});
+/**
+ * ESM-compatible version of mockup utilities for client-side use
+ * Contains only the functions needed by product pages
+ */
 
 /**
- * Parse a mockup filename to extract its components
- * @param filename The full filename of the mockup image
- * @returns Object containing the parsed components
+ * Parse a mockup filename to extract product, color, variant info
+ * @param filename The filename to parse
+ * @returns Object with parsed information or null if parsing fails
  */
-export function parseMockupFilename(filename: string): Partial<ProductMockup> {
-  // Remove path and extension
-  const basename = filename.split('/').pop()?.replace(/\.(jpg|png|webp)$/, '') || '';
+export function parseMockupFilename(filename: string): {
+  productType: string;
+  color: string;
+  view: string;
+  hash?: string;
+} | null {
+  if (!filename) return null;
   
-  // Split the filename into components
-  const parts = basename.split('-');
-  const id = parts.pop() || '';
+  // Remove file extension
+  const nameWithoutExt = filename.replace(/\.[^.]+$/, '');
   
-  // Extract view by working backwards - the last two parts before id are the view
-  let viewParts = [];
-  let colorIndex = -1;
+  // Extract hash if present (last segment after last dash)
+  let hash: string | undefined;
+  const hashMatch = nameWithoutExt.match(/-([0-9a-f]+)$/);
+  let nameWithoutHash = nameWithoutExt;
   
-  // Find known view parts from the end (before the ID)
-  for (let i = parts.length - 1; i >= 0; i--) {
-    const part = parts[i].toLowerCase();
-    if (['front', 'back', 'left', 'right', 'front-2', 'back-2'].includes(part) || 
-        part === 'front' && parts[i-1]?.toLowerCase() === 'left' ||
-        part === 'front' && parts[i-1]?.toLowerCase() === 'right') {
-      viewParts.unshift(part);
-      if (part === 'front' && (parts[i-1]?.toLowerCase() === 'left' || parts[i-1]?.toLowerCase() === 'right')) {
-        viewParts.unshift(parts[i-1].toLowerCase());
-        i--; // Skip the next part as we've already processed it
-      }
-      colorIndex = i - 1;
-      break;
-    }
+  if (hashMatch) {
+    hash = hashMatch[1];
+    nameWithoutHash = nameWithoutExt.replace(/-([0-9a-f]+)$/, '');
   }
   
-  // Join view parts with hyphens
-  const view = viewParts.join('-') as ProductView;
+  // Split remaining name by dashes
+  const parts = nameWithoutHash.split('-');
   
-  // The color should be the part before the view
-  const color = colorIndex >= 0 ? parts[colorIndex] as ProductColor : 'unknown';
+  // The view is typically the last part
+  const view = parts.pop() || 'front';
   
-  // The product type is everything up to the color
-  const productType = parts.slice(0, colorIndex).join('-');
-
+  // The color is typically the second-to-last part
+  const color = parts.pop() || 'unknown';
+  
+  // Everything else is considered the product type
+  const productType = parts.join('-');
+  
   return {
     productType,
     color,
     view,
-    id,
-    path: filename
+    hash
   };
-}
-
-/**
- * Get all mockup images for a specific variant
- * @param variant The product variant
- * @returns A set of mockup images for the variant
- */
-export async function getMockupSet(variant: ProductVariant): Promise<MockupSet | null> {
-  try {
-    // Parse variant name to get color
-    const [_productName, color] = (variant.name || '').split('/').map((part: string) => part.trim());
-    
-    if (!color) {
-      console.error('No color found in variant name:', variant.name);
-      return null;
-    }
-
-    const mockupSet: Partial<MockupSet> = {};
-    
-    // Log available mockup images for debugging
-    console.log('Available mockup images:', Object.keys(mockupImages));
-    
-    // Convert all image paths to optimized versions
-    for (const [path, importedImage] of Object.entries(mockupImages)) {
-      const parsed = parseMockupFilename(path);
-      
-      // Log parsed filename components
-      console.log('Parsed mockup file:', {
-        path,
-        parsed,
-        variantColor: color.toLowerCase(),
-        matches: parsed.color?.toLowerCase() === color.toLowerCase()
-      });
-      
-      if (parsed.color?.toLowerCase() !== color.toLowerCase()) continue;
-
-      // Convert the imported image to an optimized version
-      const optimizedImage = await getImage({
-        src: importedImage.default,
-        width: 800,
-        format: 'webp'
-      });
-
-      const mockup: ProductMockup = {
-        ...parsed as ProductMockup,
-        path: optimizedImage.src
-      };
-
-      // Map the view to the correct property in MockupSet
-      switch (parsed.view) {
-        case 'front':
-          mockupSet.front = mockup;
-          break;
-        case 'back':
-          mockupSet.back = mockup;
-          break;
-        case 'left':
-          mockupSet.left = mockup;
-          break;
-        case 'right':
-          mockupSet.right = mockup;
-          break;
-        case 'left-front':
-          mockupSet.leftFront = mockup;
-          break;
-        case 'right-front':
-          mockupSet.rightFront = mockup;
-          break;
-        case 'front-and-back':
-          mockupSet.frontAndBack = mockup;
-          break;
-        case 'front-2':
-          mockupSet.front2 = mockup;
-          break;
-        case 'back-2':
-          mockupSet.back2 = mockup;
-          break;
-      }
-    }
-
-    // Log final mockup set
-    console.log('Generated mockup set:', mockupSet);
-
-    // Only return if we have at least a front image
-    return mockupSet.front ? mockupSet as MockupSet : null;
-  } catch (error) {
-    console.error('Error getting mockup set:', error);
-    return null;
-  }
-}
-
-/**
- * Get the primary mockup image for a variant
- * @param variant The product variant
- * @returns The front view mockup image or null
- */
-export async function getPrimaryMockup(variant: ProductVariant): Promise<ProductMockup | null> {
-  const mockupSet = await getMockupSet(variant);
-  return mockupSet?.front || null;
 }
 
 /**
  * Get a human-readable label for a view type
- * @param viewId The view identifier
- * @returns A formatted label for the view
+ * @param view The view type (e.g., 'front', 'back')
+ * @returns Human-readable label
  */
-export function getViewLabel(viewId: string): string {
-  const viewLabels: Record<string, string> = {
-    'front': 'Front',
-    'back': 'Back',
-    'left': 'Left',
-    'right': 'Right',
-    'left_front': 'Left Front',
-    'right_front': 'Right Front',
-    'front-2': 'Front Detail',
-    'back-2': 'Back Detail',
-    'front-and-back': 'Front & Back',
-    'flat': 'Flat',
-    'lifestyle': 'Lifestyle'
+export function getViewLabel(view: string): string {
+  const viewMap: Record<string, string> = {
+    'front': 'Front View',
+    'back': 'Back View',
+    'left': 'Left Side',
+    'right': 'Right Side',
+    'detail': 'Detail View',
+    'lifestyle': 'Lifestyle',
+    'product-details': 'Product Details',
+    'left-front': 'Left Front',
+    'right-front': 'Right Front',
+    'mockup': 'Mockup',
+    'inside': 'Inside',
+    'outside': 'Outside',
+    'top': 'Top View',
+    'bottom': 'Bottom View'
   };
   
-  return viewLabels[viewId] || viewId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  return viewMap[view.toLowerCase()] || view.charAt(0).toUpperCase() + view.slice(1);
+}
+
+/**
+ * Generate a standardized filename from product and variant data
+ * @param productSlug The product slug
+ * @param color The color
+ * @param size The size (if applicable)
+ * @param view The view type
+ * @returns Standardized filename
+ */
+export function generateMockupFilename(
+  productSlug: string,
+  color: string,
+  size: string,
+  view: string
+): string {
+  // Clean up inputs
+  const cleanSlug = productSlug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  const cleanColor = color.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  const cleanSize = size ? size.toLowerCase().replace(/[^a-z0-9-]/g, '-') : '';
+  const cleanView = view.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  
+  // Generate filename with format: product-color-size-view.png
+  const filename = [
+    cleanSlug,
+    cleanColor,
+    cleanSize,
+    cleanView
+  ].filter(Boolean).join('-') + '.png';
+  
+  return filename;
 } 
