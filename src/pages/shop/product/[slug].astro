@@ -38,10 +38,18 @@ interface ProductVariant {
   in_stock: boolean;
   stock_level?: number | null;
   mockup_settings?: {
-    [key: string]: {
+    views?: Array<{
+      view: string;
       filename: string;
+      url: string;
+      webpUrl: string;
+    }>;
+    mockups?: Record<string, {
+      filename: string;
+      updated_at?: string;
       [key: string]: unknown;
-    } | undefined;
+    }>;
+    [key: string]: unknown;
   };
   mockupViews: MockupView[];
 }
@@ -62,11 +70,11 @@ export async function getStaticPaths() {
   const supabase = createClient();
   
   // Get all products to generate static paths
-  const { data: products, error } = await supabase
+  const { data: products = [], error } = await supabase
     .from('products')
     .select('slug');
   
-  if (error || !products) {
+  if (error) {
     console.error('Error fetching products for static paths:', error);
     return [];
   }
@@ -89,36 +97,69 @@ export async function getStaticPaths() {
     }
     
     // Process variants the same way as before
-    const processedVariants = (product.variants as any[]).map((variant: any): ProductVariant => {
+    const processedVariants = (product.variants || []).map((variant: any): ProductVariant => {
       const mockupSettings = variant.mockup_settings || {};
       const mockupViews: MockupView[] = [];
 
-      if (mockupSettings && typeof mockupSettings === 'object') {
+      // Handle the "views" array structure
+      if (mockupSettings.views && Array.isArray(mockupSettings.views)) {
+        mockupViews.push(...mockupSettings.views);
+      }
+      // Handle the "mockups" object structure
+      else if (mockupSettings.mockups && typeof mockupSettings.mockups === 'object') {
+        for (const [view, settings] of Object.entries(mockupSettings.mockups)) {
+          if (settings && typeof settings === 'object' && 'filename' in settings) {
+            const filename = settings.filename as string;
+            const viewName = view.replace('_', '-'); // Convert view names like "left_front" to "left-front"
+            
+            const baseUrl = `/images/mockups/${product.slug}/${filename}`;
+            const webpUrl = baseUrl.endsWith('.png') || baseUrl.endsWith('.jpg') ? 
+              `${baseUrl.substring(0, baseUrl.lastIndexOf('.'))}.webp` : 
+              `${baseUrl}.webp`;
+            
+            mockupViews.push({
+              view: viewName,
+              label: getViewLabel(viewName),
+              filename,
+              url: baseUrl,
+              webpUrl,
+            });
+          }
+        }
+      }
+      // Handle direct object structure (legacy format)
+      else if (typeof mockupSettings === 'object') {
         for (const [view, settings] of Object.entries(mockupSettings)) {
           if (settings && typeof settings === 'object' && 'filename' in settings) {
             const filename = settings.filename as string;
-            const parsed = parseMockupFilename(filename);
-            if (parsed) {
-              const baseUrl = `/images/mockups/${product.slug}/${filename}`;
-              const webpUrl = `${baseUrl.substring(0, baseUrl.lastIndexOf('.'))}.webp`;
+            const baseUrl = `/images/mockups/${product.slug}/${filename}`;
+            const webpUrl = baseUrl.endsWith('.png') || baseUrl.endsWith('.jpg') ? 
+              `${baseUrl.substring(0, baseUrl.lastIndexOf('.'))}.webp` : 
+              `${baseUrl}.webp`;
 
-              mockupViews.push({
-                view,
-                label: getViewLabel(view),
-                filename,
-                url: baseUrl,
-                webpUrl,
-              });
-            }
+            mockupViews.push({
+              view,
+              label: getViewLabel(view),
+              filename,
+              url: baseUrl,
+              webpUrl,
+            });
           }
         }
       }
 
+      // Sort views to prioritize front views
       mockupViews.sort((a, b) => {
         if (a.view.includes('front') && !b.view.includes('front')) return -1;
         if (!a.view.includes('front') && b.view.includes('front')) return 1;
         return 0;
       });
+
+      // Add debugging
+      console.log(`Variant ${variant.id} has ${mockupViews.length} mockup views`);
+      if (mockupViews.length > 0) {
+        console.log(`First mockup view: ${JSON.stringify(mockupViews[0])}`);
+      }
 
       return {
         ...variant,
@@ -141,6 +182,12 @@ export async function getStaticPaths() {
 // Get props from Astro
 const { product, slug, processedVariants } = Astro.props;
 
+// Debug processed variants
+console.log(`Product ${product.name} has ${processedVariants.length} variants`);
+processedVariants.forEach((v, i) => {
+  console.log(`Variant ${i+1}: ${v.id}, Color: ${v.options.color}, Size: ${v.options.size}, Views: ${v.mockupViews?.length || 0}`);
+});
+
 // Get URL parameters for color and size
 const url = new URL(Astro.request.url);
 const initialColor = url.searchParams.get('color') || '';
@@ -154,7 +201,13 @@ function findVariant(color: string, size: string): ProductVariant | undefined {
 }
 
 const selectedVariant = findVariant(initialColor, initialSize) || processedVariants[0];
+console.log(`Selected variant: Color=${selectedVariant?.options.color}, Size=${selectedVariant?.options.size}`);
+
 const variantViews = selectedVariant?.mockupViews || [];
+console.log(`Selected variant has ${variantViews.length} views`);
+if (variantViews.length > 0) {
+  console.log(`First view: ${JSON.stringify(variantViews[0])}`);
+}
 
 const availableColors = [...new Set(processedVariants.map((v: ProductVariant) => v.options.color))].filter(Boolean) as string[];
 const availableSizes = [...new Set(processedVariants.map((v: ProductVariant) => v.options.size))].filter(Boolean) as string[];
@@ -202,6 +255,50 @@ const mainImage = variantViews.length > 0 ? variantViews[0] : null;
 const formattedPrice = selectedVariant?.retail_price
   ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(selectedVariant.retail_price)
   : 'Price not available';
+
+// Helper function to debug mockup settings structure
+function debugMockupSettings(variant: any) {
+  const settings = variant.mockup_settings;
+  if (!settings) {
+    console.log(`Variant ${variant.id} has no mockup settings`);
+    return;
+  }
+  
+  console.log(`Variant ${variant.id} mockup settings structure:`);
+  
+  if (settings.views && Array.isArray(settings.views)) {
+    console.log(`- Has 'views' array with ${settings.views.length} items`);
+    if (settings.views.length > 0) {
+      console.log(`  First view: ${JSON.stringify(settings.views[0])}`);
+    }
+  }
+  
+  if (settings.mockups && typeof settings.mockups === 'object') {
+    const mockupKeys = Object.keys(settings.mockups);
+    console.log(`- Has 'mockups' object with ${mockupKeys.length} keys: ${mockupKeys.join(', ')}`);
+    if (mockupKeys.length > 0) {
+      console.log(`  First mockup (${mockupKeys[0]}): ${JSON.stringify(settings.mockups[mockupKeys[0]])}`);
+    }
+  }
+  
+  // Check for direct key-value pairs
+  const directKeys = Object.keys(settings).filter(k => k !== 'views' && k !== 'mockups');
+  if (directKeys.length > 0) {
+    console.log(`- Has ${directKeys.length} direct keys: ${directKeys.join(', ')}`);
+    for (const key of directKeys) {
+      if (settings[key] && typeof settings[key] === 'object') {
+        console.log(`  Key ${key}: ${JSON.stringify(settings[key])}`);
+      }
+    }
+  }
+}
+
+// Debug each variant's mockup settings
+console.log('Debugging mockup settings structure for each variant:');
+(product.variants || []).forEach((variant, index) => {
+  console.log(`\nVariant ${index + 1}/${product.variants.length}:`);
+  debugMockupSettings(variant);
+});
 ---
 
 <Layout title={product.name}>
@@ -213,11 +310,21 @@ const formattedPrice = selectedVariant?.retail_price
           {mainImage ? (
             <picture>
               <source srcset={mainImage.webpUrl} type="image/webp" />
-              <img src={mainImage.url} alt={`${product.name} - ${mainImage.label}`} class="w-full h-auto object-cover" width="600" height="600" />
+              <img 
+                src={mainImage.url || product.thumbnail_url} 
+                alt={`${product.name} - ${mainImage.label}`} 
+                class="w-full h-auto object-cover" 
+                width="600" 
+                height="600" 
+              />
             </picture>
           ) : (
             <div class="bg-gray-200 w-full h-96 flex items-center justify-center">
-              <p class="text-gray-500">No image available</p>
+              <img 
+                src={product.thumbnail_url || 'https://via.placeholder.com/600'} 
+                alt={product.name} 
+                class="w-full h-auto object-cover" 
+              />
             </div>
           )}
         </div>
@@ -228,12 +335,26 @@ const formattedPrice = selectedVariant?.retail_price
               <a href={`/shop/product/${slug}?color=${selectedVariant?.options.color || ''}&size=${selectedVariant?.options.size || ''}&view=${view.view}`} class="block">
                 <picture>
                   <source srcset={view.webpUrl} type="image/webp" />
-                  <img src={view.url} alt={`${product.name} - ${view.label}`} class="w-full h-auto object-cover rounded border hover:border-primary" width="150" height="150" />
+                  <img 
+                    src={view.url} 
+                    alt={`${product.name} - ${view.label}`} 
+                    class="w-full h-auto object-cover rounded border hover:border-primary" 
+                    width="150" 
+                    height="150" 
+                  />
                 </picture>
               </a>
             ))}
           </div>
         )}
+        
+        {/* Debug info */}
+        <div class="mt-4 p-2 bg-gray-100 rounded text-xs">
+          <p>Debug: {variantViews.length} views available</p>
+          {variantViews.map((view, index) => (
+            <p>View {index+1}: {view.view} - {view.url}</p>
+          ))}
+        </div>
       </div>
 
       {/* Product Info */}

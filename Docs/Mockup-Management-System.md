@@ -124,7 +124,8 @@ The unified mockup.ts API endpoint supports the following actions:
 
 ## Important Notes
 
-1. **Git Commit Reference**: The working mockup assignment code is in commit `87e8706..300efeb` (main -> main). Reference this commit if future changes break functionality.
+1. **Git Commit Reference**: The working mockup assignment code is in commit `10dfd4e`
+ (main -> main). Reference this commit if future chan87e8706..ges break functionality.
 
 2. **File Cleanup**: Original mockup files are automatically removed from `mockups-new` after successful processing to prevent duplication.
 

@@ -1,7 +1,7 @@
 ---
 // @ts-nocheck - Disable TypeScript checking for Astro-specific attributes like 'class' vs 'className'
-import { createClient } from '@supabase/supabase-js';
 import Layout from '@layouts/Layout.astro';
+import { createClient } from '@lib/supabase/client';
 import type { Database } from '@local-types/database/schema';
 import type { GetStaticPaths } from 'astro';
 
@@ -19,20 +19,16 @@ interface ProductWithCategory extends Product {
 
 // Get all categories and their products at build time
 export const getStaticPaths = (async () => {
-  // Create a static Supabase client for build time
-  const supabase = createClient(
-    import.meta.env.PUBLIC_SUPABASE_URL,
-    import.meta.env.PUBLIC_SUPABASE_ANON_KEY
-  );
+  const supabase = createClient();
 
   // Get all active categories
-  const { data: categories } = await supabase
+  const { data: categories = [] } = await supabase
     .from('atrocitee_categories')
     .select('*')
-    .eq('is_active', true) as { data: Category[] | null };
+    .eq('is_active', true);
 
   // Get all published products with their categories
-  const { data: products } = await supabase
+  const { data: products = [] } = await supabase
     .from('products')
     .select(`
       *,
@@ -43,29 +39,31 @@ export const getStaticPaths = (async () => {
         *
       )
     `)
-    .eq('published_status', true) as { data: ProductWithCategory[] | null };
+    .eq('published_status', true);
 
   // Group products by category
-  const productsByCategory = products?.reduce((acc: Record<string, Product[]>, product) => {
-    const categoryId = product.atrocitee_categories.id;
-    if (!acc[categoryId]) {
-      acc[categoryId] = [];
+  const productsByCategory = products.reduce((acc: Record<string, Product[]>, product) => {
+    const categoryId = product.atrocitee_categories?.id;
+    if (categoryId) {
+      if (!acc[categoryId]) {
+        acc[categoryId] = [];
+      }
+      acc[categoryId].push(product);
     }
-    acc[categoryId].push(product);
     return acc;
   }, {});
 
   // Return array of category pages to generate
-  return categories?.map((category) => ({
+  return categories.map((category) => ({
     params: { category: category.slug },
     props: { 
       category,
-      products: productsByCategory?.[category.id] || []
+      products: productsByCategory[category.id] || []
     }
-  })) || [];
+  }));
 }) satisfies GetStaticPaths;
 
-const { category, products } = Astro.props;
+const { category, products = [] } = Astro.props;
 ---
 
 <Layout title={`${category.name} - Shop`}>
@@ -94,7 +92,7 @@ const { category, products } = Astro.props;
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
     {/* Products grid */}
     <div class="grid grid-cols-1 gap-y-10 gap-x-6 sm:grid-cols-2 lg:grid-cols-4 xl:gap-x-8">
-      {products?.map((product) => (
+      {products.map((product) => (
         <div class="group relative">
           <div class="w-full min-h-80 bg-gray-200 aspect-w-1 aspect-h-1 rounded-md overflow-hidden group-hover:opacity-75">
             <img
@@ -114,7 +112,7 @@ const { category, products } = Astro.props;
               <p class="mt-1 text-sm text-gray-500">{product.description}</p>
             </div>
             <p class="text-sm font-medium text-gray-900">
-              ${product.atrocitee_base_price?.toFixed(2)}
+              ${product.atrocitee_base_price?.toFixed(2) || '0.00'}
             </p>
           </div>
         </div>
@@ -122,7 +120,7 @@ const { category, products } = Astro.props;
     </div>
 
     {/* Show message if no products */}
-    {(!products || products.length === 0) && (
+    {products.length === 0 && (
       <div class="text-center py-12">
         <h3 class="text-lg font-medium text-gray-900">No products found</h3>
         <p class="mt-2 text-sm text-gray-500">

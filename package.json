@@ -7,7 +7,7 @@
     "start": "astro dev",
     "optimize-images": "node scripts/optimize-images.js",
     "build": "npm run optimize-images && astro build",
-    "build-dev": "NODE_ENV=development ASTRO_DISABLE_PRERENDERING=true astro build",
+    "build-dev": "NODE_ENV=development ASTRO_DISABLE_PRERENDERING=false astro build",
     "build-quick": "NODE_ENV=development ASTRO_DISABLE_PRERENDERING=true astro build",
     "build-no-prerender": "ASTRO_DISABLE_PRERENDERING=true npm run optimize-images && ASTRO_DISABLE_PRERENDERING=true astro build",
     "cloudflare-build": "npm run optimize-images && PUBLIC_SUPABASE_URL=https://placeholder-for-build.supabase.co PUBLIC_SUPABASE_ANON_KEY=placeholder-for-build astro build",

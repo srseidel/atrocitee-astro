@@ -2,6 +2,10 @@
 // @ts-nocheck - Disable TypeScript checking for Astro-specific attributes like 'class' vs 'className'
 import Layout from '@layouts/Layout.astro';
 import type { Database } from '@local-types/database/schema';
+import { createClient } from '@lib/supabase/client';
+
+// Enable prerendering
+export const prerender = true;
 
 interface ProductVariant {
   retail_price: number | null;
@@ -28,89 +32,108 @@ type Product = Database['public']['Tables']['products']['Row'] & {
 
 type Category = Database['public']['Tables']['atrocitee_categories']['Row'];
 
-export async function get() {
-  // Import the client at runtime to avoid ESM issues
-  const { createClient } = await import('@lib/supabase/client');
-  const supabase = createClient();
+// Fetch data in the frontmatter
+const supabase = createClient();
 
-  // Get all active products with their variants and charity info
-  const { data: products, error: productsError } = await supabase
-    .from('products')
-    .select(`
-      *,
-      product_variants (
-        retail_price,
-        in_stock,
-        stock_level,
-        mockup_settings
-      ),
-      charities (
-        name,
-        description,
-        website_url,
-        logo_url
-      )
-    `)
-    .eq('published_status', true)
-    .order('created_at', { ascending: false });
+// Get all active products with their variants and charity info
+const { data: products = [], error: productsError } = await supabase
+  .from('products')
+  .select(`
+    *,
+    product_variants (
+      retail_price,
+      in_stock,
+      stock_level,
+      mockup_settings
+    )
+  `)
+  .eq('published_status', true)
+  .order('created_at', { ascending: false });
 
-  if (productsError) {
-    console.error('Error fetching products:', productsError);
-  }
-
-  // Get all categories
-  const { data: categories, error: categoriesError } = await supabase
-    .from('atrocitee_categories')
-    .select('*')
-    .eq('is_active', true);
-
-  if (categoriesError) {
-    console.error('Error fetching categories:', categoriesError);
-  }
-
-  // Get featured products
-  const featuredProducts = products?.filter(p => p.atrocitee_featured) || [];
-
-  // Process products to get mockup images
-  const processedProducts = products?.map(product => {
-    // Find the first variant with mockup settings
-    const variantWithMockup = product.product_variants.find((v: ProductVariant) => 
-      v.mockup_settings?.views && v.mockup_settings.views.length > 0
-    );
-    
-    // Get the front view mockup if available
-    const frontMockup = variantWithMockup?.mockup_settings?.views.find((v: {view: string}) => v.view === 'front');
-    
-    // If no front view, get the first available mockup
-    const firstMockup = variantWithMockup?.mockup_settings?.views[0];
-    
-    // Use mockup image URL if available, otherwise fallback to thumbnail_url
-    const imageUrl = frontMockup?.url || firstMockup?.url || product.thumbnail_url;
-    const webpUrl = frontMockup?.webpUrl || firstMockup?.webpUrl;
-    
-    return {
-      ...product,
-      imageUrl,
-      webpUrl
-    };
-  }) || [];
-
-  // Debug logging
-  console.log('Products loaded:', products?.length || 0);
-  console.log('Categories loaded:', categories?.length || 0);
-  console.log('Featured products:', featuredProducts.length);
-  
-  return {
-    props: {
-      products,
-      categories,
-      featuredProducts,
-      processedProducts
-    }
-  };
+if (productsError) {
+  console.error('Error fetching products:', productsError);
+} else {
+  console.log('Products data:', JSON.stringify(products, null, 2));
 }
 
-const { products, categories, featuredProducts, processedProducts } = Astro.props;
+// Get all categories
+const { data: categories = [], error: categoriesError } = await supabase
+  .from('atrocitee_categories')
+  .select('*')
+  .eq('is_active', true);
+
+if (categoriesError) {
+  console.error('Error fetching categories:', categoriesError);
+}
+
+// Get featured products
+const featuredProducts = products ? products.filter(p => p && p.atrocitee_featured === true) : [];
+
+// Process products to get mockup images
+const processedProducts = products ? products.map(product => {
+  // Find the first variant with mockup settings
+  const variantWithMockup = product.product_variants?.find((v: ProductVariant) => 
+    v.mockup_settings?.views && v.mockup_settings.views.length > 0
+  );
+  
+  // Get the front view mockup if available
+  const frontMockup = variantWithMockup?.mockup_settings?.views?.find((v: {view: string}) => v.view === 'front');
+  
+  // If no front view, get the first available mockup
+  const firstMockup = variantWithMockup?.mockup_settings?.views?.[0];
+  
+  // Use mockup image URL if available, otherwise fallback to thumbnail_url
+  const imageUrl = frontMockup?.url || firstMockup?.url || product.thumbnail_url;
+  const webpUrl = frontMockup?.webpUrl || firstMockup?.webpUrl;
+  
+  // Ensure we preserve the featured flag
+  return {
+    ...product,
+    imageUrl,
+    webpUrl,
+    atrocitee_featured: product.atrocitee_featured === true
+  };
+}) : [];
+
+// Debug logging
+console.log('Products loaded:', products?.length || 0);
+console.log('Categories loaded:', categories?.length || 0);
+console.log('Featured products:', featuredProducts?.length || 0);
+
+// Additional debug logging
+if (products && products.length > 0) {
+  console.log('Product details:');
+  products.forEach((product, index) => {
+    console.log(`Product ${index + 1}: ${product.name}`);
+    console.log(`  - Published: ${product.published_status}`);
+    console.log(`  - Featured: ${product.atrocitee_featured}`);
+    console.log(`  - Category ID: ${product.atrocitee_category_id}`);
+    console.log(`  - Has variants: ${product.product_variants?.length || 0}`);
+  });
+}
+
+if (categories && categories.length > 0) {
+  console.log('Category details:');
+  categories.forEach((category, index) => {
+    console.log(`Category ${index + 1}: ${category.name} (ID: ${category.id})`);
+  });
+}
+
+// Additional debug logging for featured products
+console.log('Featured products check:');
+if (products) {
+  products.forEach((product, index) => {
+    console.log(`Product ${index + 1}: ${product.name}, Featured: ${product.atrocitee_featured}, Type: ${typeof product.atrocitee_featured}`);
+  });
+}
+
+// Debug processed products with image URLs
+console.log('Processed products with images:');
+processedProducts.forEach((product, index) => {
+  console.log(`Product ${index + 1}: ${product.name}`);
+  console.log(`  - Image URL: ${product.imageUrl}`);
+  console.log(`  - WebP URL: ${product.webpUrl || 'none'}`);
+});
 ---
 
 <Layout title="Shop">
@@ -154,14 +177,16 @@ const { products, categories, featuredProducts, processedProducts } = Astro.prop
               aria-current={!Astro.params.category ? 'page' : undefined}
             >
               <span class="truncate">All Products</span>
-              {processedProducts && (
-                <span class="ml-auto inline-block py-0.5 px-3 text-xs rounded-full bg-gray-100 text-gray-700">
-                  {processedProducts.length}
-                </span>
-              )}
+              <span class="ml-auto inline-block py-0.5 px-3 text-xs rounded-full bg-gray-100 text-gray-700">
+                {processedProducts.length}
+              </span>
             </a>
-            {categories?.map((category: Category) => {
-              const categoryProducts = processedProducts?.filter((p: Product) => p.atrocitee_category_id === category.id) || [];
+            {categories.map((category: Category) => {
+              const categoryProducts = processedProducts.filter((p: Product) => p && p.atrocitee_category_id === category.id);
+              console.log(`Category ${category.name} (ID: ${category.id}) has ${categoryProducts.length} products`);
+              if (categoryProducts.length > 0) {
+                categoryProducts.forEach(p => console.log(`  - ${p.name}, Category ID: ${p.atrocitee_category_id}`));
+              }
               return (
                 <a
                   href={`/shop/${category.slug}`}
@@ -211,42 +236,45 @@ const { products, categories, featuredProducts, processedProducts } = Astro.prop
                 <div id="featured">
                   <h2 class="text-2xl font-extrabold tracking-tight text-gray-900">Featured Products</h2>
                   <div class="mt-6 grid grid-cols-1 gap-y-10 gap-x-6 sm:grid-cols-2 lg:grid-cols-3 xl:gap-x-8">
-                    {processedProducts.filter((p: Product) => p.atrocitee_featured).map((product: Product) => (
-                      <div class="group relative">
-                        <div class="w-full min-h-80 bg-gray-200 aspect-w-1 aspect-h-1 rounded-md overflow-hidden group-hover:opacity-75">
-                          {product.webpUrl ? (
-                            <picture>
-                              <source srcset={product.webpUrl} type="image/webp" />
+                    {processedProducts.filter((p: Product) => p && p.atrocitee_featured).map((product: Product) => {
+                      console.log(`Rendering featured product: ${product.name}, Featured: ${product.atrocitee_featured}, Image: ${product.imageUrl}`);
+                      return (
+                        <div class="group relative">
+                          <div class="w-full min-h-80 bg-gray-200 aspect-w-1 aspect-h-1 rounded-md overflow-hidden group-hover:opacity-75">
+                            {product.webpUrl ? (
+                              <picture>
+                                <source srcset={product.webpUrl} type="image/webp" />
+                                <img
+                                  src={product.imageUrl || 'https://via.placeholder.com/300'}
+                                  alt={product.name}
+                                  class="w-full h-full object-center object-cover"
+                                />
+                              </picture>
+                            ) : (
                               <img
                                 src={product.imageUrl || 'https://via.placeholder.com/300'}
                                 alt={product.name}
                                 class="w-full h-full object-center object-cover"
                               />
-                            </picture>
-                          ) : (
-                            <img
-                              src={product.imageUrl || 'https://via.placeholder.com/300'}
-                              alt={product.name}
-                              class="w-full h-full object-center object-cover"
-                            />
-                          )}
-                        </div>
-                        <div class="mt-4 flex justify-between">
-                          <div>
-                            <h3 class="text-sm text-gray-700">
-                              <a href={`/shop/product/${product.slug}`}>
-                                <span aria-hidden="true" class="absolute inset-0" />
-                                {product.name}
-                              </a>
-                            </h3>
-                            <p class="mt-1 text-sm text-gray-500">{product.description}</p>
+                            )}
                           </div>
-                          <p class="text-sm font-medium text-gray-900">
-                            ${product.atrocitee_base_price?.toFixed(2)}
-                          </p>
+                          <div class="mt-4 flex justify-between">
+                            <div>
+                              <h3 class="text-sm text-gray-700">
+                                <a href={`/shop/product/${product.slug}`}>
+                                  <span aria-hidden="true" class="absolute inset-0" />
+                                  {product.name}
+                                </a>
+                              </h3>
+                              <p class="mt-1 text-sm text-gray-500">{product.description}</p>
+                            </div>
+                            <p class="text-sm font-medium text-gray-900">
+                              ${product.atrocitee_base_price?.toFixed(2) || '0.00'}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -286,7 +314,7 @@ const { products, categories, featuredProducts, processedProducts } = Astro.prop
                           <p class="mt-1 text-sm text-gray-500">{product.description}</p>
                         </div>
                         <p class="text-sm font-medium text-gray-900">
-                          ${product.atrocitee_base_price?.toFixed(2)}
+                          ${product.atrocitee_base_price?.toFixed(2) || '0.00'}
                         </p>
                       </div>
                     </div>
