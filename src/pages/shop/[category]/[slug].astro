@@ -45,6 +45,11 @@ export const getStaticPaths = (async () => {
     .eq('published_status', true);
 
   // Generate paths for each product in its category
+  // Make sure products is an array before mapping
+  if (!products || !Array.isArray(products)) {
+    return [];
+  }
+  
   return products.map((product) => ({
     params: { 
       category: product.categories.slug,

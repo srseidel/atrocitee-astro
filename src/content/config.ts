@@ -44,8 +44,19 @@ const productsCollection = defineCollection({
   }),
 });
 
+// Define a schema for the rules collection
+const rulesCollection = defineCollection({
+  type: 'content',
+  schema: z.object({
+    description: z.string().optional(),
+    globs: z.array(z.string()).optional(),
+    alwaysApply: z.boolean().optional(),
+  }),
+});
+
 // Export collections
 export const collections = {
   'about': aboutCollection,
   'products': productsCollection,
+  'rules': rulesCollection,
 }; 

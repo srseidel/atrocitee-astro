@@ -42,18 +42,24 @@ export const getStaticPaths = (async () => {
     .eq('published_status', true);
 
   // Group products by category
-  const productsByCategory = products.reduce((acc: Record<string, Product[]>, product) => {
-    const categoryId = product.atrocitee_categories?.id;
-    if (categoryId) {
-      if (!acc[categoryId]) {
-        acc[categoryId] = [];
+  const productsByCategory = {};
+  if (products && Array.isArray(products)) {
+    products.forEach(product => {
+      const categoryId = product.atrocitee_categories?.id;
+      if (categoryId) {
+        if (!productsByCategory[categoryId]) {
+          productsByCategory[categoryId] = [];
+        }
+        productsByCategory[categoryId].push(product);
       }
-      acc[categoryId].push(product);
-    }
-    return acc;
-  }, {});
+    });
+  }
 
   // Return array of category pages to generate
+  if (!categories || !Array.isArray(categories)) {
+    return [];
+  }
+  
   return categories.map((category) => ({
     params: { category: category.slug },
     props: { 

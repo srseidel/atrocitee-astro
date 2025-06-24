@@ -58,19 +58,29 @@ export const getStaticPaths = (async () => {
   // Group products by tag
   const productsByTag = new Map<string, ProductWithRelations[]>();
   
-  products.forEach(product => {
-    (product.product_tags || []).forEach(pt => {
-      const tag = pt.tags;
-      if (tag?.slug) {
-        if (!productsByTag.has(tag.slug)) {
-          productsByTag.set(tag.slug, []);
-        }
-        productsByTag.get(tag.slug)?.push(product);
+  // Check if products is null or undefined before using forEach
+  if (products && Array.isArray(products)) {
+    products.forEach(product => {
+      if (product.product_tags && Array.isArray(product.product_tags)) {
+        product.product_tags.forEach(pt => {
+          const tag = pt.tags;
+          if (tag?.slug) {
+            if (!productsByTag.has(tag.slug)) {
+              productsByTag.set(tag.slug, []);
+            }
+            productsByTag.get(tag.slug)?.push(product);
+          }
+        });
       }
     });
-  });
+  }
 
   // Return array of tag pages to generate
+  // Make sure tags is an array before mapping
+  if (!tags || !Array.isArray(tags)) {
+    return [];
+  }
+  
   return tags.map((tag) => ({
     params: { tag: tag.slug },
     props: { 

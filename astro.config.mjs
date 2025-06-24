@@ -1,14 +1,15 @@
-// @ts-check
+// astro.config.mjs - Dynamic config loader
+// This file dynamically imports the appropriate config based on the environment
+
 import { defineConfig } from 'astro/config';
 import tailwind from '@astrojs/tailwind';
 import react from '@astrojs/react';
-import cloudflare from '@astrojs/cloudflare';
+import node from '@astrojs/node';
 import sentry from '@sentry/astro';
 
-// Determine if we're in development or production mode
-const isDev = process.env.NODE_ENV === 'development';
+// Get environment
+const isDev = process.env.NODE_ENV !== 'production';
 
-// https://astro.build/config
 export default defineConfig({
   site: 'https://atrocitee.com',
   integrations: [
@@ -20,81 +21,55 @@ export default defineConfig({
       dsn: process.env.SENTRY_DSN,
       environment: process.env.NODE_ENV,
       release: process.env.SENTRY_RELEASE,
-      enabled: process.env.NODE_ENV === 'production',
+      enabled: !isDev, // Only enable Sentry in production
       tracesSampleRate: 1.0,
     }),
   ],
-  output: 'server',
-  adapter: cloudflare({
-    imageService: 'compile'
+  output: 'server', // Always use server output to support both static and SSR pages
+  adapter: node({
+    mode: 'standalone',
   }),
   prefetch: {
     prefetchAll: true,
-    defaultStrategy: 'hover'
+    defaultStrategy: 'hover',
   },
   vite: {
-    // Always use resolve.alias for consistent behavior
-    resolve: {
-      alias: {
-        // No custom React DOM aliases needed
-      },
-    },
-    // Disable pre-transform of CommonJS modules to ESM
+    resolve: { alias: {} },
     optimizeDeps: {
       exclude: ['node:fs', 'node:path', 'fs', 'path', 'node:child_process', 'child_process'],
     },
     ssr: {
-      // External dependencies that shouldn't be bundled
       external: [
-        'node:fs',
-        'node:path',
-        'node:child_process',
-        'fs',
-        'path',
-        'child_process',
-        'url',
-        'worker_threads',
-        'diagnostics_channel',
-        'events',
-        'async_hooks',
+        'node:fs', 'node:path', 'node:child_process', 'fs', 'path', 'child_process',
+        'url', 'worker_threads', 'diagnostics_channel', 'events', 'async_hooks',
       ],
-      // Let Astro handle React DOM
       noExternal: [],
     },
-    // Fix circular dependencies in chunks and empty chunks
     build: {
-      // Prevent empty chunks
+      commonjsOptions: { transformMixedEsModules: true },
       rollupOptions: {
         output: {
-          // Combine small chunks
           chunkFileNames: 'chunks/[name]-[hash].js',
-          // Avoid empty chunks
           manualChunks(id) {
-            // Group all Astro middleware modules into a single chunk
-            if (id.includes('node_modules/astro/dist/core/middleware')) {
-              return 'astro-middleware';
-            }
-            // Group all node built-in modules
-            if (id.includes('node:') || id.includes('node_modules/node-')) {
-              return 'node-modules';
-            }
-            // Group all astro script chunks together
-            if (id.includes('astro_type_script_index')) {
-              return 'astro-scripts';
-            }
-            // Keep default chunking for everything else
-            return undefined;
-          }
+            if (id.includes('node_modules/astro/dist/core/middleware')) return 'astro-middleware';
+            if (id.includes('node:') || id.includes('node_modules/node-')) return 'node-modules';
+            if (id.includes('astro_type_script_index')) return 'astro-scripts';
+          },
         },
-        // Suppress empty chunk warnings
         onwarn(warning, warn) {
-          if (warning.code === 'EMPTY_BUNDLE' || 
-              (warning.code === 'CIRCULAR_DEPENDENCY' && warning.ids && warning.ids.some(id => id.includes('middleware')))) {
+          if (
+            warning.code === 'EMPTY_BUNDLE' ||
+            (warning.code === 'CIRCULAR_DEPENDENCY' &&
+              warning.ids?.some(id => id.includes('middleware')))
+          ) {
             return;
           }
           warn(warning);
-        }
-      }
-    }
+        },
+      },
+    },
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(isDev ? 'development' : 'production'),
+    },
   },
 });

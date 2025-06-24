@@ -3,15 +3,15 @@
   "type": "module",
   "version": "0.0.1",
   "scripts": {
-    "dev": "astro dev",
-    "start": "astro dev",
+    "dev": "NODE_ENV=development astro dev",
+    "start": "NODE_ENV=development astro dev",
     "optimize-images": "node scripts/optimize-images.js",
-    "build": "npm run optimize-images && astro build",
-    "build-dev": "NODE_ENV=development ASTRO_DISABLE_PRERENDERING=false astro build",
+    "build": "npm run optimize-images && NODE_ENV=production astro build",
+    "build-dev": "NODE_ENV=development astro build",
     "build-quick": "NODE_ENV=development ASTRO_DISABLE_PRERENDERING=true astro build",
-    "build-no-prerender": "ASTRO_DISABLE_PRERENDERING=true npm run optimize-images && ASTRO_DISABLE_PRERENDERING=true astro build",
-    "cloudflare-build": "npm run optimize-images && PUBLIC_SUPABASE_URL=https://placeholder-for-build.supabase.co PUBLIC_SUPABASE_ANON_KEY=placeholder-for-build astro build",
-    "preview": "astro preview",
+    "build-no-prerender": "ASTRO_DISABLE_PRERENDERING=true npm run optimize-images && NODE_ENV=production ASTRO_DISABLE_PRERENDERING=true astro build",
+    "cloudflare-build": "npm run optimize-images && PUBLIC_SUPABASE_URL=https://placeholder-for-build.supabase.co PUBLIC_SUPABASE_ANON_KEY=placeholder-for-build NODE_ENV=production astro build",
+    "preview": "NODE_ENV=development astro preview",
     "astro": "astro",
     "lint": "eslint . --ext .ts,.tsx,.astro",
     "lint:fix": "eslint . --ext .ts,.tsx,.astro --fix",
@@ -22,7 +22,8 @@
     "move-mockups": "node scripts/move-mockups.js"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "^12.5.5",
+    "@astrojs/cloudflare": "^12.6.0",
+    "@astrojs/node": "^9.2.2",
     "@astrojs/react": "^4.2.7",
     "@astrojs/tailwind": "^6.0.2",
     "@astrojs/vercel": "^8.1.4",
@@ -31,7 +32,7 @@
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.4",
     "@tailwindcss/vite": "^4.1.5",
-    "astro": "^5.9.4",
+    "astro": "^5.10.1",
     "dotenv": "^16.5.0",
     "printful": "^0.1.1",
     "react": "^18.2.0",
@@ -39,6 +40,7 @@
     "sharp": "^0.34.2",
     "slugify": "^1.6.6",
     "tailwindcss": "^3.3.5",
+    "vite": "^6.0.0",
     "vite-plugin-pwa": "^1.0.0"
   },
   "devDependencies": {
@@ -56,6 +58,7 @@
     "eslint-plugin-astro": "^0.31.1",
     "eslint-plugin-import": "^2.31.0",
     "node-fetch": "^3.3.2",
+    "rollup-plugin-visualizer": "^6.0.3",
     "ts-node": "^10.9.2",
     "tsx": "^4.19.4"
   }
