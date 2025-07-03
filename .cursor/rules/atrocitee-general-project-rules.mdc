@@ -1,7 +1,7 @@
 ---
 description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 # Atrocitee Project Guidelines
 
@@ -48,9 +48,35 @@ Atrocitee is a merchandise platform where products are created on Printful, impo
 
 ## Architecture Principles
 
-### Hybrid Rendering Approach
-- **Static Rendering**: `/shop/**/*` pages use static site generation for performance and SEO
-- **Server Rendering**: `/admin/**/*` and `/api/**/*` routes use server-side rendering for security and dynamic content
+### Page Rendering Strategy
+Atrocitee uses a hybrid rendering approach that combines static generation with client-side interactivity:
+
+#### Benefits
+- Fast initial page loads (static HTML)
+- Great SEO (complete content for search engines)
+- Interactive features (client-side JavaScript)
+- Proper URL parameter handling (via client-side code)
+
+#### Prerendering Rules
+
+- **Shop Pages** (`/shop/*`):
+  - **ALWAYS use `export const prerender = true`**
+  - These pages benefit from static generation for SEO and performance
+  - Client-side interactivity still works with prerendering
+  - The `getStaticPaths()` function generates all possible product pages at build time
+
+- **Admin Pages** (`/admin/*`):
+  - **ALWAYS use `export const prerender = false`** or omit it (defaults to false)
+  - These pages need server-side rendering for authentication and dynamic data
+  - They should never be statically generated
+
+- **API Routes** (`/api/*`):
+  - **ALWAYS use `export const prerender = false`** or omit it
+  - API endpoints must be dynamic to handle requests
+
+- **Account Pages** (`/account/*`):
+  - **ALWAYS use `export const prerender = false`** or omit it
+  - These contain user-specific information that must be rendered server-side
 
 ### Data Flow
 1. Products are created in Printful
@@ -81,121 +107,3 @@ Atrocitee is a merchandise platform where products are created on Printful, impo
 3. Implement proper image optimization
 4. Use component-level caching where appropriate
 5. Optimize database queries with proper indexes
-
-## File Structure & Organization
-
-Key configuration files:
-- [astro.config.mjs](mdc:astro.config.mjs): Astro configuration
-- [tsconfig.json](mdc:tsconfig.json): TypeScript configuration
-- [tailwind.config.js](mdc:tailwind.config.js): Tailwind CSS configuration
-
-Project structure:
-```
-src/
-├── components/     # UI components
-│   ├── common/     # Shared UI elements
-│   ├── features/   # Feature-specific components
-│   └── layouts/    # Page layouts
-├── content/        # Static content (MD/MDX)
-│   ├── categories/ # Product categories
-│   ├── charities/  # Charity information
-│   └── rules/      # Project guidelines
-├── layouts/        # Astro layouts
-├── lib/            # Core business logic
-│   ├── auth/       # Authentication logic
-│   ├── database/   # Database interactions
-│   ├── printful/   # Printful API integration
-│   └── stripe/     # Stripe integration
-├── pages/          # All routes
-│   ├── admin/      # Admin pages (SSR)
-│   ├── api/        # API endpoints (SSR)
-│   └── shop/       # Shop pages (static)
-├── styles/         # Global styles
-├── types/          # TypeScript type definitions
-└── utils/          # Utility functions
-```
-
-## Path Aliases
-Use path aliases for all imports:
-- `@/*` -> `src/*`
-- `@components/*` -> `src/components/*`
-- `@layouts/*` -> `src/layouts/*`
-- `@lib/*` -> `src/lib/*`
-- `@types/*` -> `node_modules/@types/*` (external types)
-- `@local-types/*` -> `src/types/*` (project types)
-- `@utils/*` -> `src/utils/*`
-- `@content/*` -> `src/content/*`
-- `@config/*` -> `src/config/*`
-
-## Coding Standards
-
-### Component Development
-- Create `.astro` files for Astro components
-- Use framework-specific components (React, Vue) only when necessary
-- Implement proper component composition and reusability
-- Use Astro's component props for data passing
-
-### Astro File Structure Requirements
-```astro
----
-// Imports and JavaScript/TypeScript code
-// Props, data fetching, and other logic
----
-
-<!-- Template code goes here -->
-```
-
-### Data Fetching
-- Use appropriate data fetching method based on page type:
-  - Static pages: fetch at build time
-  - Server pages: fetch on request
-- Implement proper error handling for all data fetching
-- Use type guards for data validation
-
-### Database Interactions
-- Follow SQL style guide for all database queries
-- Implement Row Level Security (RLS) for all tables
-- Use prepared statements to prevent SQL injection
-- Keep database schema changes in migration files
-
-### Authentication & Authorization
-- Use Supabase auth for all authentication needs
-- Implement middleware for protected routes
-- Check authentication server-side for admin/API routes
-- Use role-based access control for different user types
-
-## Environment-Specific Configuration
-- Development: use local Supabase instance
-- Testing: use test databases and sandboxed services
-- Production: use production services with proper security
-
-## Workflow Integration
-- Printful product sync runs on a schedule
-- Orders are immediately sent to Printful for fulfillment
-- Charity donations are processed monthly
-
-## Error Handling & Logging
-- Use Sentry for production error tracking
-- Implement structured logging
-- Handle API errors gracefully with proper status codes
-- Provide user-friendly error messages
-
-## SEO Optimization
-- Implement proper meta tags for all pages
-- Use semantic HTML throughout the site
-- Ensure proper heading hierarchy
-- Optimize product pages for search engines
-
-## Accessibility Standards
-- Follow WCAG 2.1 AA standards
-- Implement proper semantic HTML
-- Ensure keyboard navigation
-- Provide proper alt text for images
-
-## Related Guidelines
-- Astro & Tailwind: See [astro-tailwind-cursor-rules-5-25.mdc](mdc:.cursor/rules/astro-tailwind-cursor-rules-5-25.mdc)
-- Supabase Admin Auth: See [supabase-admin-auth.mdc](mdc:.cursor/rules/supabase-admin-auth.mdc)
-- Supabase Auth: See [supabase-auth-md-5-25.mdc](mdc:.cursor/rules/supabase-auth-md-5-25.mdc)
-- SQL Formatting: See [supabase-code-format-sql-5-25.mdc](mdc:.cursor/rules/supabase-code-format-sql-5-25.mdc)
-- Database Functions: See [supabase-database-function-5-25.mdc](mdc:.cursor/rules/supabase-database-function-5-25.mdc)
-- RLS Policies: See [supabase-rls-policies-5-25.mdc](mdc:.cursor/rules/supabase-rls-policies-5-25.mdc)
