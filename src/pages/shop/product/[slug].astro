@@ -2,101 +2,42 @@
 // @ts-nocheck - Disable TypeScript checking for Astro-specific attributes like 'class' vs 'className'
 import Layout from '@layouts/Layout.astro';
 import { parseMockupFilename, getViewLabel } from '@utils/helpers/mockups';
-import type { Database } from '@local-types/database/schema';
+import { 
+  findVariant, 
+  findVariantWithImages, 
+  generateMockupUrls, 
+  colorClasses, 
+  type Product, 
+  type ProductVariant, 
+  type MockupView 
+} from '@utils/helpers/product-helpers';
 import { createClient } from '@lib/supabase/client';
 
-// Enable prerendering
+// Enable prerendering for SEO and performance
 export const prerender = true;
 
-interface MockupView {
-  view: string;
-  label: string;
-  filename: string;
-  url: string;
-  webpUrl: string;
-}
-
-interface MockupSetting {
-  filename: string;
-  [key: string]: any;
-}
-
-interface MockupSettings {
-  [view: string]: MockupSetting;
-}
-
-interface ProductVariant {
-  id: string;
-  name?: string;
-  sku?: string;
-  retail_price: number | null;
-  options: {
-    color?: string;
-    size?: string;
-    [key: string]: string | undefined;
-  };
-  in_stock: boolean;
-  stock_level?: number | null;
-  mockup_settings?: {
-    views?: Array<{
-      view: string;
-      filename: string;
-      url: string;
-      webpUrl: string;
-    }>;
-    mockups?: Record<string, {
-      filename: string;
-      updated_at?: string;
-      [key: string]: unknown;
-    }>;
-    [key: string]: unknown;
-  };
-  mockupViews: MockupView[];
-}
-
-interface Product {
-  id: string;
-  name: string;
-  slug: string;
-  description: string;
-  details?: string;
-  published_status: boolean;
-  variants: ProductVariant[];
-  [key: string]: unknown;
-}
-
-// Replace get() with getStaticPaths()
+// Simplified static path generation - one path per product
 export async function getStaticPaths() {
+  // Use createClient() for static generation - this is safe for build time
   const supabase = createClient();
   
-  // Get all products to generate static paths
+  // Get all published products
   const { data: products = [], error } = await supabase
     .from('products')
-    .select('slug');
-  
+    .select(`
+      *,
+      variants:product_variants(*)
+    `)
+    .eq('published_status', true);
+
   if (error) {
     console.error('Error fetching products for static paths:', error);
     return [];
   }
-  
-  // For each product, return a path with its data
-  return await Promise.all(products.map(async ({ slug }) => {
-    // Fetch full product data for this slug
-    const { data: product, error } = await supabase
-      .from('products')
-      .select(`
-        *,
-        variants:product_variants(*)
-      `)
-      .eq('slug', slug)
-      .single();
-      
-    if (error || !product) {
-      console.error(`Error fetching product ${slug}:`, error);
-      return null;
-    }
-    
-    // Process variants the same way as before
+
+  // Generate one static path per product (not per variant)
+  return products.map(product => {
+    // Process variants to extract mockup views and options
     const processedVariants = (product.variants || []).map((variant: any): ProductVariant => {
       const mockupSettings = variant.mockup_settings || {};
       const mockupViews: MockupView[] = [];
@@ -110,18 +51,15 @@ export async function getStaticPaths() {
         for (const [view, settings] of Object.entries(mockupSettings.mockups)) {
           if (settings && typeof settings === 'object' && 'filename' in settings) {
             const filename = settings.filename as string;
-            const viewName = view.replace('_', '-'); // Convert view names like "left_front" to "left-front"
+            const viewName = view.replace('_', '-');
             
-            const baseUrl = `/images/mockups/${product.slug}/${filename}`;
-            const webpUrl = baseUrl.endsWith('.png') || baseUrl.endsWith('.jpg') ? 
-              `${baseUrl.substring(0, baseUrl.lastIndexOf('.'))}.webp` : 
-              `${baseUrl}.webp`;
+            const { url, webpUrl } = generateMockupUrls(product.slug, filename);
             
             mockupViews.push({
               view: viewName,
               label: getViewLabel(viewName),
               filename,
-              url: baseUrl,
+              url,
               webpUrl,
             });
           }
@@ -132,16 +70,13 @@ export async function getStaticPaths() {
         for (const [view, settings] of Object.entries(mockupSettings)) {
           if (settings && typeof settings === 'object' && 'filename' in settings) {
             const filename = settings.filename as string;
-            const baseUrl = `/images/mockups/${product.slug}/${filename}`;
-            const webpUrl = baseUrl.endsWith('.png') || baseUrl.endsWith('.jpg') ? 
-              `${baseUrl.substring(0, baseUrl.lastIndexOf('.'))}.webp` : 
-              `${baseUrl}.webp`;
+            const { url, webpUrl } = generateMockupUrls(product.slug, filename);
 
             mockupViews.push({
               view,
               label: getViewLabel(view),
               filename,
-              url: baseUrl,
+              url,
               webpUrl,
             });
           }
@@ -155,327 +90,155 @@ export async function getStaticPaths() {
         return 0;
       });
 
-      // Add debugging
-      console.log(`Variant ${variant.id} has ${mockupViews.length} mockup views`);
-      if (mockupViews.length > 0) {
-        console.log(`First mockup view: ${JSON.stringify(mockupViews[0])}`);
-      }
-
       // Extract color and size from variant options or filename
-      let options = variant.options || {};
+      let options: ProductVariantOptions = {};
+      
+      // Transform Printful options array to simple object
+      if (variant.options && Array.isArray(variant.options)) {
+        // Find color and size from Printful options array
+        const colorOption = variant.options.find((opt: any) => opt.id === 'color');
+        const sizeOption = variant.options.find((opt: any) => opt.id === 'size');
+        
+        if (colorOption?.value) options.color = colorOption.value;
+        if (sizeOption?.value) options.size = sizeOption.value;
+      } else if (variant.options && typeof variant.options === 'object') {
+        // Already in the correct format
+        options = variant.options;
+      }
       
       // If options are not properly set, try to extract from filename
-      if (!options.color && mockupViews.length > 0) {
-        // Try to extract color from filename (e.g., "taxistake-under-armour-dad-hat-grey-front")
+      if (mockupViews.length > 0 && (!options.color || !options.size)) {
         const filename = mockupViews[0].filename;
-        const colorMatches = filename.match(/-([a-z]+)-(front|back|left|right)/);
-        if (colorMatches && colorMatches[1]) {
-          options.color = colorMatches[1].charAt(0).toUpperCase() + colorMatches[1].slice(1); // Capitalize color
-          console.log(`Extracted color from filename: ${options.color}`);
+        const parsedInfo = parseMockupFilename(filename);
+        
+        if (!options.color && parsedInfo?.color) {
+          options.color = parsedInfo.color.charAt(0).toUpperCase() + parsedInfo.color.slice(1);
+        }
+        
+        if (!options.size && parsedInfo?.size) {
+          options.size = parsedInfo.size.toUpperCase();
         }
       }
       
-      // If we have a variant with mockup views but no options, set default values
+      // Set default values if still missing
       if (mockupViews.length > 0 && (!options.color || !options.size)) {
-        if (!options.color) options.color = "Default";
+        if (!options.color) options.color = "Black";
         if (!options.size) options.size = "One Size";
-        console.log(`Set default options for variant ${variant.id}: Color=${options.color}, Size=${options.size}`);
       }
-
+  
       return {
         ...variant,
         options,
         mockupViews,
       };
     });
-    
-    // Return the path and props
+
     return {
-      params: { slug },
+      params: { slug: product.slug },
       props: {
         product: product as unknown as Product,
-        slug,
         processedVariants,
-      },
+      }
     };
-  })).then(paths => paths.filter(Boolean));
+  });
 }
 
 // Get props from Astro
-const { product, slug, processedVariants } = Astro.props;
-
-// Debug processed variants
-console.log(`Product ${product.name} has ${processedVariants.length} variants`);
-processedVariants.forEach((v, i) => {
-  console.log(`Variant ${i+1}: ${v.id}, Color: ${v.options.color}, Size: ${v.options.size}, Views: ${v.mockupViews?.length || 0}`);
-});
+const { product, processedVariants } = Astro.props;
 
 // Get URL parameters for color and size
 const url = new URL(Astro.request.url);
-const initialColor = url.searchParams.get('color') || '';
-const initialSize = url.searchParams.get('size') || '';
-console.log(`URL parameters: color=${initialColor}, size=${initialSize}`);
+const colorParam = url.searchParams.get('color') || '';
+const sizeParam = url.searchParams.get('size') || '';
 
-// Log the full URL for debugging
-console.log(`Full URL: ${Astro.request.url}`);
+// Find the selected variant based on URL parameters
+let selectedVariant = findVariant(colorParam, sizeParam, processedVariants);
 
-// Helpers
-function findVariant(color: string, size: string): ProductVariant | undefined {
-  console.log(`Finding variant with color=${color}, size=${size}`);
-  
-  // Special handling for Navy color
-  if (color === 'Navy') {
-    console.log('Special handling for Navy color');
-    // Find Navy variant
-    const navyVariant = processedVariants.find(v => 
-      v.options.color === 'Navy' && 
-      (size ? v.options.size === size : true)
-    );
-    
-    if (navyVariant) {
-      console.log('Found Navy variant:', navyVariant.id);
-      return navyVariant;
-    }
-  }
-  
-  // Log all variants for debugging
-  console.log("Available variants for matching:");
-  processedVariants.forEach((v, i) => {
-    console.log(`  Variant ${i+1}: ID=${v.id}, Color="${v.options.color}", Size="${v.options.size}", Has ${v.mockupViews?.length || 0} views`);
-  });
-  
-  // No special handling for Navy color
-  
-  // Try exact match first
-  let variant = processedVariants.find(
-    (v: ProductVariant) => 
-      v.options.color === color && 
-      v.options.size === size
-  );
-  
-  // If no exact match, try case-insensitive match
-  if (!variant && color) {
-    const colorLower = color.toLowerCase();
-    console.log(`Trying case-insensitive match for color: ${colorLower}`);
-    
-    variant = processedVariants.find(
-      (v: ProductVariant) => {
-        const variantColorLower = v.options.color?.toLowerCase() || '';
-        const sizeMatches = !size || v.options.size === size;
-        console.log(`  Checking variant: Color="${v.options.color}" (${variantColorLower}) against "${colorLower}", Size matches: ${sizeMatches}`);
-        return variantColorLower === colorLower && sizeMatches;
-      }
-    );
-  }
-  
-  // If still no match, try to find by color only
-  if (!variant && color) {
-    console.log(`Trying to find variant by color only: ${color}`);
-    variant = processedVariants.find(
-      (v: ProductVariant) => 
-        v.options.color === color || 
-        v.options.color?.toLowerCase() === color?.toLowerCase()
-    );
-    
-    if (variant) {
-      console.log(`Found variant by color only: ${variant.id}`);
-    }
-  }
-  
-  console.log(`Found variant: ${variant ? variant.id : 'none'}`);
-  return variant;
-}
-
-// Find a variant with images if URL params don't match any variant
-function findVariantWithImages(): ProductVariant | undefined {
-  // First try to find a variant with both color/size and images
-  const variantWithImagesAndOptions = processedVariants.find(
-    (v: ProductVariant) => 
-      v.mockupViews && 
-      v.mockupViews.length > 0 && 
-      v.options.color && 
-      v.options.size
-  );
-  
-  if (variantWithImagesAndOptions) {
-    console.log(`Found variant with images and options: ${variantWithImagesAndOptions.id}`);
-    return variantWithImagesAndOptions;
-  }
-  
-  // Then try to find any variant with images
-  const variantWithImages = processedVariants.find(
-    (v: ProductVariant) => v.mockupViews && v.mockupViews.length > 0
-  );
-  
-  if (variantWithImages) {
-    console.log(`Found variant with images: ${variantWithImages.id}`);
-    return variantWithImages;
-  }
-  
-  // Fall back to first variant
-  return processedVariants[0];
-}
-
-// Get the variant from URL params or find one with images
-let selectedVariant = findVariant(initialColor, initialSize);
-
-// If no variant found or the variant has no images, try to find a better one
+// If no variant found or the variant has no images, find a better one
 if (!selectedVariant || !selectedVariant.mockupViews || selectedVariant.mockupViews.length === 0) {
-  selectedVariant = findVariantWithImages();
+  selectedVariant = findVariantWithImages(processedVariants);
 }
-
-console.log(`Selected variant: ID=${selectedVariant?.id}, Color=${selectedVariant?.options.color}, Size=${selectedVariant?.options.size}`);
-console.log(`SELECTED COLOR: ${selectedVariant?.options.color}`); // Add a prominent debug message
 
 const variantViews = selectedVariant?.mockupViews || [];
-console.log(`Selected variant has ${variantViews.length} views`);
-if (variantViews.length > 0) {
-  console.log(`First view: ${JSON.stringify(variantViews[0])}`);
-}
 
+// Get available colors and sizes for UI
 const availableColors = [...new Set(processedVariants.map((v: ProductVariant) => v.options.color))].filter(Boolean) as string[];
 const availableSizes = [...new Set(processedVariants.map((v: ProductVariant) => v.options.size))].filter(Boolean) as string[];
+
+// Sort sizes in logical order
 availableSizes.sort((a, b) => {
-  const sizeOrder: Record<string, number> = { XS: 1, S: 2, M: 3, L: 4, XL: 5, '2XL': 6, '3XL': 7, '4XL': 8 };
+  const sizeOrder: Record<string, number> = { 
+    'XS': 1, 'S': 2, 'M': 3, 'L': 4, 'XL': 5, '2XL': 6, '3XL': 7, '4XL': 8, 'One Size': 9
+  };
   return (sizeOrder[a] || 99) - (sizeOrder[b] || 99);
 });
 
-// Log detailed information about the color matching process
-console.log(`Color matching details:`);
-console.log(`- URL color parameter: "${initialColor}"`);
-console.log(`- Available colors: ${availableColors.map(c => `"${c}"`).join(', ')}`);
-
-const colorClasses: Record<string, string> = {
-  Black: 'bg-black',
-  White: 'bg-white border border-gray-300',
-  Gray: 'bg-gray-500',
-  Red: 'bg-red-600',
-  Blue: 'bg-blue-600',
-  Navy: 'bg-blue-900',
-  Green: 'bg-green-600',
-  Yellow: 'bg-yellow-500',
-  Orange: 'bg-orange-500',
-  Purple: 'bg-purple-600',
-  Pink: 'bg-pink-500',
-  Brown: 'bg-amber-800',
-  'Heather Gray': 'bg-gray-400',
-  Charcoal: 'bg-gray-700',
-  'Athletic Heather': 'bg-gray-300',
-  'Royal Blue': 'bg-blue-700',
-  'Forest Green': 'bg-green-800',
-  Maroon: 'bg-red-900',
-  Gold: 'bg-yellow-600',
-  Teal: 'bg-teal-500',
-  Burgundy: 'bg-red-800',
-  Olive: 'bg-olive-700',
-  Mint: 'bg-mint-400',
-  Coral: 'bg-coral-500',
-  Cream: 'bg-cream-200',
-  Tan: 'bg-tan-400',
-  'Light Blue': 'bg-blue-300',
-  'Light Pink': 'bg-pink-300',
-  'Light Green': 'bg-green-300',
-  'Dark Green': 'bg-green-900',
-  'Dark Blue': 'bg-blue-950',
-  'Dark Gray': 'bg-gray-800',
-};
-
+// Get main image and format price
 const mainImage = variantViews.length > 0 ? variantViews[0] : null;
 const formattedPrice = selectedVariant?.retail_price
   ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(selectedVariant.retail_price)
   : 'Price not available';
 
-// Helper function to debug mockup settings structure
-function debugMockupSettings(variant: any) {
-  const settings = variant.mockup_settings;
-  if (!settings) {
-    console.log(`Variant ${variant.id} has no mockup settings`);
-    return;
-  }
-  
-  console.log(`Variant ${variant.id} mockup settings structure:`);
-  
-  if (settings.views && Array.isArray(settings.views)) {
-    console.log(`- Has 'views' array with ${settings.views.length} items`);
-    if (settings.views.length > 0) {
-      console.log(`  First view: ${JSON.stringify(settings.views[0])}`);
-    }
-  }
-  
-  if (settings.mockups && typeof settings.mockups === 'object') {
-    const mockupKeys = Object.keys(settings.mockups);
-    console.log(`- Has 'mockups' object with ${mockupKeys.length} keys: ${mockupKeys.join(', ')}`);
-    if (mockupKeys.length > 0) {
-      console.log(`  First mockup (${mockupKeys[0]}): ${JSON.stringify(settings.mockups[mockupKeys[0]])}`);
-    }
-  }
-  
-  // Check for direct key-value pairs
-  const directKeys = Object.keys(settings).filter(k => k !== 'views' && k !== 'mockups');
-  if (directKeys.length > 0) {
-    console.log(`- Has ${directKeys.length} direct keys: ${directKeys.join(', ')}`);
-    for (const key of directKeys) {
-      if (settings[key] && typeof settings[key] === 'object') {
-        console.log(`  Key ${key}: ${JSON.stringify(settings[key])}`);
-      }
-    }
-  }
-}
-
-// Debug each variant's mockup settings
-console.log('Debugging mockup settings structure for each variant:');
-(product.variants || []).forEach((variant, index) => {
-  console.log(`\nVariant ${index + 1}/${product.variants.length}:`);
-  debugMockupSettings(variant);
-});
-
-// Serialize the processed variants to JSON for client-side use
-const serializedVariants = JSON.stringify(processedVariants.map(v => ({
-  id: v.id,
-  options: {
-    color: v.options.color || '',
-    size: v.options.size || ''
-  },
-  mockupViews: v.mockupViews,
-  in_stock: v.in_stock,
-  retail_price: v.retail_price
-})));
-
-// Get the product name for client-side use
-const productName = product.name;
+// Prepare data for client-side JavaScript
+const clientData = {
+  variants: processedVariants.map(v => ({
+    id: v.id,
+    options: v.options,
+    mockupViews: v.mockupViews,
+    in_stock: v.in_stock,
+    retail_price: v.retail_price
+  })),
+  productName: product.name,
+  productSlug: product.slug,
+  isDevelopment: import.meta.env.DEV
+};
 ---
 
 <Layout title={product.name}>
   <div class="container mx-auto px-4 py-8">
-    <!-- Debug info -->
-    <div class="bg-gray-100 p-2 mb-4 text-xs">
-      Current URL: {Astro.request.url}<br />
-      Color param: {initialColor}<br />
-      Size param: {initialSize}<br />
-      Selected variant: {selectedVariant?.id} ({selectedVariant?.options?.color || 'No color'})
-      <button id="debug-button" class="bg-blue-500 text-white px-2 py-1 rounded text-xs ml-2">Show Debug</button>
-    </div>
-    
-    <!-- Debug modal -->
-    <div id="debug-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
-      <div class="bg-white p-4 rounded-lg max-w-2xl max-h-[80vh] overflow-auto">
-        <h3 class="text-lg font-bold mb-2">Debug Information</h3>
-        <div id="debug-content" class="text-xs font-mono whitespace-pre-wrap"></div>
-        <button id="close-debug" class="mt-4 bg-red-500 text-white px-4 py-2 rounded">Close</button>
+    <!-- Debug info - controlled by environment variable -->
+    {import.meta.env.DEV && import.meta.env.PUBLIC_SHOW_DEBUG === 'true' && (
+      <div class="bg-gray-100 p-4 mb-4 text-sm rounded">
+        <div class="flex justify-between items-center mb-2">
+          <strong>Debug Info</strong>
+          <button id="toggle-debug" class="bg-blue-500 text-white px-2 py-1 rounded text-xs">Toggle Details</button>
+        </div>
+        <div>
+          <p>URL: {Astro.request.url}</p>
+          <p>Color Param: {colorParam || 'None'}</p>
+          <p>Size Param: {sizeParam || 'None'}</p>
+          <p>Selected Variant: {selectedVariant?.id} ({selectedVariant?.options?.color || 'No color'}, {selectedVariant?.options?.size || 'No size'})</p>
+          <p>Available Colors: {availableColors.join(', ')}</p>
+          <p>Available Sizes: {availableSizes.join(', ')}</p>
+        </div>
+        <div id="debug-details" class="mt-2 hidden">
+          <p>Total Variants: {processedVariants.length}</p>
+          <p>Variant Views: {variantViews.length}</p>
+          {variantViews.length > 0 && (
+            <div class="mt-2">
+              <strong>Available Views:</strong>
+              <ul class="list-disc list-inside ml-4">
+                {variantViews.map(view => (
+                  <li>{view.view}: {view.url}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    )}
     
     <div class="flex flex-col md:flex-row gap-8">
-      {/* Product Images */}
+      <!-- Product Images -->
       <div class="w-full md:w-1/2">
         <div class="bg-white rounded-lg overflow-hidden shadow-lg">
           {mainImage ? (
             <picture>
-              <source srcset={mainImage.webpUrl} type="image/webp" class="main-product-image-webp" />
+              <source srcset={mainImage.webpUrl} type="image/webp" />
               <img 
-                src={mainImage.url || product.thumbnail_url} 
+                src={mainImage.url} 
                 alt={`${product.name} - ${mainImage.label}`} 
-                class="w-full h-auto object-cover main-product-image" 
+                class="w-full h-auto object-cover" 
                 width="600" 
                 height="600" 
                 id="main-product-image"
@@ -486,82 +249,42 @@ const productName = product.name;
               <img 
                 src={product.thumbnail_url || 'https://via.placeholder.com/600'} 
                 alt={product.name} 
-                class="w-full h-auto object-cover main-product-image" 
+                class="w-full h-auto object-cover" 
                 id="main-product-image"
               />
             </div>
           )}
         </div>
-
+        
+        {/* Thumbnail Gallery */}
         {variantViews.length > 1 && (
           <div class="mt-4 grid grid-cols-4 gap-2" id="thumbnail-container">
-            {variantViews.map((view: MockupView) => (
-              <a 
-                href={`#view-${view.view}`}
-                class="block cursor-pointer thumbnail-link" 
+            {variantViews.map((view: MockupView, index: number) => (
+              <button 
+                type="button"
+                class={`block cursor-pointer thumbnail-btn ${index === 0 ? 'active' : ''}`}
                 data-src={view.url}
                 data-webp={view.webpUrl}
                 data-view={view.view}
+                data-label={view.label}
               >
                 <picture>
                   <source srcset={view.webpUrl} type="image/webp" />
                   <img 
                     src={view.url} 
                     alt={`${product.name} - ${view.label}`} 
-                    class="w-full h-auto object-cover rounded border hover:border-primary" 
+                    class={`w-full h-auto object-cover rounded border hover:border-primary ${index === 0 ? 'border-primary' : 'border-gray-300'}`}
                     width="150" 
                     height="150" 
                   />
                 </picture>
-              </a>
+              </button>
             ))}
           </div>
         )}
-        
-        {/* Debug info */}
-        <div class="mt-4 p-4 bg-gray-100 rounded text-sm">
-          <h3 class="font-bold mb-2">Debug Information</h3>
-          <p>Selected variant: <span id="debug-variant-id">{selectedVariant?.id}</span></p>
-          <p>Color: <span id="debug-color">{selectedVariant?.options?.color || 'Not set'}</span></p>
-          <p>Size: <span id="debug-size">{selectedVariant?.options?.size || 'Not set'}</span></p>
-          <p>Views: <span id="debug-views">{variantViews.length}</span></p>
-          <p>URL: {Astro.request.url}</p>
-          <p>URL color param: {initialColor}</p>
-          
-          <div class="mt-2">
-            <h4 class="font-semibold">Available Colors:</h4>
-            <ul class="list-disc list-inside">
-              {availableColors.map(color => (
-                <li>{color}</li>
-              ))}
-              {availableColors.length === 0 && <li>No colors available</li>}
-            </ul>
-          </div>
-          
-          <div class="mt-2">
-            <h4 class="font-semibold">Available Sizes:</h4>
-            <ul class="list-disc list-inside">
-              {availableSizes.map(size => (
-                <li>{size}</li>
-              ))}
-              {availableSizes.length === 0 && <li>No sizes available</li>}
-            </ul>
-          </div>
-          
-          {variantViews.length > 0 && (
-            <div class="mt-2">
-              <h4 class="font-semibold">Available Views:</h4>
-              <ul class="list-disc list-inside" id="debug-view-list">
-                {variantViews.map((view, index) => (
-                  <li>{view.view}: {view.url}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
       </div>
 
-      {/* Product Info */}
+      <!-- Product Info -->}
       <div class="w-full md:w-1/2">
         <h1 class="text-3xl font-bold mb-2">{product.name}</h1>
         <p class="text-2xl font-semibold text-primary mb-4" id="product-price">{formattedPrice}</p>
@@ -582,11 +305,11 @@ const productName = product.name;
                 return (
                   <button
                     type="button"
-                    class={`inline-block w-8 h-8 rounded-full ${colorClass} ${isSelected ? 'ring-2 ring-offset-2 ring-primary' : ''} cursor-pointer color-selector`}
+                    class={`color-btn inline-block w-8 h-8 rounded-full ${colorClass} ${isSelected ? 'ring-2 ring-offset-2 ring-primary' : ''} cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-primary/50`}
                     title={`Select ${color} color`}
                     data-color={color}
-                    aria-selected={isSelected}
-                    id={`color-${color.toLowerCase().replace(/\s+/g, '-')}`}
+                    aria-label={`Select ${color} color`}
+                    aria-pressed={isSelected}
                   >
                     <span class="sr-only">{color}</span>
                   </button>
@@ -601,47 +324,23 @@ const productName = product.name;
           <div class="mb-6">
             <div class="flex justify-between items-center mb-2">
               <h3 class="text-lg font-semibold">Size: <span id="selected-size">{selectedVariant?.options.size}</span></h3>
-              <button class="text-sm text-primary hover:underline">Size Guide</button>
+              <button type="button" class="text-sm text-primary hover:underline">Size Guide</button>
             </div>
             <div class="flex flex-wrap gap-2">
               {availableSizes.map((size: string) => {
-                const variant = findVariant(selectedVariant?.options.color || '', size);
                 const isSelected = size === selectedVariant?.options.size;
-                const isOutOfStock = variant && !variant.in_stock;
                 
-                if (isOutOfStock) {
-                  return (
-                    <span
-                      class={`
-                        min-w-[3rem] h-10 flex items-center justify-center px-3 rounded border 
-                        bg-gray-100 text-gray-400 cursor-not-allowed border-gray-300
-                      `}
-                      aria-label={`Size ${size} - Out of Stock`}
-                      aria-disabled="true"
-                      data-size={size}
-                    >
-                      {size}
-                      <span class="ml-1 text-xs">- Out of Stock</span>
-                    </span>
-                  );
-                } else {
-                  return (
-                    <button
-                      type="button"
-                      class={`
-                        min-w-[3rem] h-10 flex items-center justify-center px-3 rounded border 
-                        ${isSelected ? 'border-primary bg-primary text-white' : 'border-gray-300'} 
-                        hover:border-primary size-selector
-                      `}
-                      aria-label={`Select size ${size}`}
-                      aria-selected={isSelected}
-                      data-size={size}
-                      id={`size-${size.toLowerCase().replace(/\s+/g, '-')}`}
-                    >
-                      {size}
-                    </button>
-                  );
-                }
+                return (
+                  <button
+                    type="button"
+                    class={`size-btn min-w-[3rem] h-10 flex items-center justify-center px-3 rounded border transition-colors ${isSelected ? 'border-primary bg-primary text-white' : 'border-gray-300 hover:border-primary'}`}
+                    data-size={size}
+                    aria-label={`Select size ${size}`}
+                    aria-pressed={isSelected}
+                  >
+                    {size}
+                  </button>
+                );
               })}
             </div>
           </div>
@@ -655,7 +354,7 @@ const productName = product.name;
             <input type="hidden" name="quantity" value="1" />
             <button
               type="submit"
-              class="w-full bg-primary hover:bg-primary-dark text-white font-bold py-3 px-6 rounded transition-colors"
+              class="w-full bg-primary hover:bg-primary-dark text-white font-bold py-3 px-6 rounded transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
               disabled={!selectedVariant?.in_stock}
               id="add-to-cart-button"
             >
@@ -676,378 +375,292 @@ const productName = product.name;
       </div>
     </div>
   </div>
+
+  <!-- Pass data to client-side JavaScript -->
+  <script type="application/json" id="product-data" set:html={JSON.stringify(clientData)}></script>
 </Layout>
 
-<script is:inline define:vars={{ serializedVariants, slug, productName }}>
-  document.addEventListener('DOMContentLoaded', () => {
-    console.log('Page loaded with URL:', window.location.href);
-    console.log('URL parameters:', new URLSearchParams(window.location.search).toString());
+<script>
+  import type { ClientVariant } from '@utils/helpers/product-helpers';
+
+  // Get product data from the JSON script tag
+  const productDataEl = document.getElementById('product-data');
+  if (!productDataEl) {
+    console.error('Product data not found');
+    throw new Error('Product data not found');
+  }
+
+  let productData;
+  try {
+    productData = JSON.parse(productDataEl.textContent || '{}');
+  } catch (error) {
+    console.error('Failed to parse product data:', error);
+    throw error;
+  }
+
+  const { variants, productName, productSlug, isDevelopment } = productData;
+
+  // Helper functions for client-side
+  function findVariant(color: string, size: string, variants: ClientVariant[]): ClientVariant | undefined {
+    if (!color && !size) return undefined;
     
-    // Parse the serialized variants
-    const processedVariants = JSON.parse(serializedVariants);
-    console.log('Loaded variants:', processedVariants);
-    
-    // Log the structure of each variant's options
-    processedVariants.forEach((v, i) => {
-      console.log(`Variant ${i+1} options:`, v.options);
-      console.log(`  Color: ${v.options.color}, Size: ${v.options.size}`);
-      console.log(`  Has ${v.mockupViews?.length || 0} views`);
+    return variants.find(variant => {
+      const matchesColor = !color || variant.options.color === color;
+      const matchesSize = !size || variant.options.size === size;
+      return matchesColor && matchesSize && variant.mockupViews && variant.mockupViews.length > 0;
     });
-    
-    // Helper function to find a variant by color and size
-    function findVariant(color, size) {
-      console.log(`Finding variant with color=${color}, size=${size}`);
+  }
+
+  function findVariantWithImages(variants: ClientVariant[]): ClientVariant | undefined {
+    return variants.find(variant => variant.mockupViews && variant.mockupViews.length > 0);
+  }
+
+  // Current selected variant
+  let currentVariant: ClientVariant | undefined;
+
+  // Initialize with URL parameters
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialColor = urlParams.get('color') || '';
+  const initialSize = urlParams.get('size') || '';
+
+  // Find initial variant
+  currentVariant = findVariant(initialColor, initialSize, variants);
+  if (!currentVariant) {
+    currentVariant = findVariantWithImages(variants);
+  }
+
+  // Update UI for a selected variant
+  function updateUI(variant: ClientVariant) {
+    if (!variant) return;
+
+    currentVariant = variant;
+
+    // Update selected color and size display
+    const colorEl = document.getElementById('selected-color');
+    const sizeEl = document.getElementById('selected-size');
+    if (colorEl) colorEl.textContent = variant.options.color || 'Not set';
+    if (sizeEl) sizeEl.textContent = variant.options.size || 'Not set';
+
+    // Update form input
+    const variantInput = document.getElementById('variant-id-input') as HTMLInputElement;
+    if (variantInput) variantInput.value = variant.id;
+
+    // Update price
+    if (variant.retail_price) {
+      const formattedPrice = new Intl.NumberFormat('en-US', { 
+        style: 'currency', 
+        currency: 'USD' 
+      }).format(variant.retail_price);
       
-      // Special handling for Navy color
-      if (color === 'Navy') {
-        console.log('Special handling for Navy color');
-        // Find Navy variant
-        const navyVariant = processedVariants.find(v => 
-          v.options.color === 'Navy' && 
-          (size ? v.options.size === size : true)
-        );
-        
-        if (navyVariant) {
-          console.log('Found Navy variant:', navyVariant.id);
-          return navyVariant;
-        }
-      }
-      
-      // Log all variants for matching
-      console.log("Available variants for matching:");
-      processedVariants.forEach((v, i) => {
-        console.log(`  Variant ${i+1}: ID=${v.id}, Color="${v.options.color}", Size="${v.options.size}", Has ${v.mockupViews?.length || 0} views`);
-      });
-      
-      // Try exact match first
-      let variant = processedVariants.find(
-        v => v.options.color === color && v.options.size === size
-      );
-      
-      console.log(`Exact match result:`, variant ? `Found ${variant.id}` : 'Not found');
-      
-      // If no exact match, try case-insensitive match
-      if (!variant && color) {
-        const colorLower = color.toLowerCase();
-        console.log(`Trying case-insensitive match for color: ${colorLower}`);
-        
-        variant = processedVariants.find(
-          v => {
-            const variantColorLower = (v.options.color || '').toLowerCase();
-            const sizeMatches = !size || v.options.size === size;
-            console.log(`  Checking variant: Color="${v.options.color}" (${variantColorLower}) against "${colorLower}", Size matches: ${sizeMatches}`);
-            return variantColorLower === colorLower && sizeMatches;
-          }
-        );
-        
-        console.log(`Case-insensitive match result:`, variant ? `Found ${variant.id}` : 'Not found');
-      }
-      
-      // If still no match, try to find by color only
-      if (!variant && color) {
-        console.log(`Trying to find variant by color only: ${color}`);
-        variant = processedVariants.find(
-          v => 
-            v.options.color === color || 
-            (v.options.color || '').toLowerCase() === color.toLowerCase()
-        );
-        
-        console.log(`Color-only match result:`, variant ? `Found ${variant.id}` : 'Not found');
-      }
-      
-      console.log(`Final variant found:`, variant ? variant : 'None');
-      return variant;
+      const priceEl = document.getElementById('product-price');
+      if (priceEl) priceEl.textContent = formattedPrice;
     }
-    
-    // Helper function to find a variant with images
-    function findVariantWithImages() {
-      // First try to find a variant with both color/size and images
-      const variantWithImagesAndOptions = processedVariants.find(
-        v => v.mockupViews && v.mockupViews.length > 0 && v.options.color && v.options.size
-      );
-      
-      if (variantWithImagesAndOptions) {
-        return variantWithImagesAndOptions;
-      }
-      
-      // Then try to find any variant with images
-      const variantWithImages = processedVariants.find(
-        v => v.mockupViews && v.mockupViews.length > 0
-      );
-      
-      if (variantWithImages) {
-        return variantWithImages;
-      }
-      
-      // Fall back to first variant
-      return processedVariants[0];
-    }
-    
-    // Helper function to update the UI for a selected variant
-    function updateUI(variant) {
-      if (!variant) return;
-      
-      console.log('Updating UI for variant:', variant);
-      
-      // Update selected color and size display
-      document.getElementById('selected-color').textContent = variant.options.color || 'Not set';
-      document.getElementById('selected-size').textContent = variant.options.size || 'Not set';
-      
-      // Update form input
-      document.getElementById('variant-id-input').value = variant.id;
-      
-      // Update price
-      if (variant.retail_price) {
-        const formattedPrice = new Intl.NumberFormat('en-US', { 
-          style: 'currency', 
-          currency: 'USD' 
-        }).format(variant.retail_price);
-        document.getElementById('product-price').textContent = formattedPrice;
-      }
-      
-      // Update add to cart button
-      const addToCartButton = document.getElementById('add-to-cart-button');
+
+    // Update add to cart button
+    const addToCartButton = document.getElementById('add-to-cart-button') as HTMLButtonElement;
+    if (addToCartButton) {
       addToCartButton.disabled = !variant.in_stock;
       addToCartButton.textContent = variant.in_stock ? 'Add to Cart' : 'Out of Stock';
-      
-      // Update color selectors
-      document.querySelectorAll('.color-selector').forEach(el => {
-        const isSelected = el.dataset.color === variant.options.color;
-        el.setAttribute('aria-selected', isSelected);
-        if (isSelected) {
-          el.classList.add('ring-2', 'ring-offset-2', 'ring-primary');
-        } else {
-          el.classList.remove('ring-2', 'ring-offset-2', 'ring-primary');
-        }
-      });
-      
-      // Update size selectors
-      document.querySelectorAll('.size-selector').forEach(el => {
-        const isSelected = el.dataset.size === variant.options.size;
-        el.setAttribute('aria-selected', isSelected);
-        if (isSelected) {
-          el.classList.add('border-primary', 'bg-primary', 'text-white');
-          el.classList.remove('border-gray-300');
-        } else {
-          el.classList.remove('border-primary', 'bg-primary', 'text-white');
-          el.classList.add('border-gray-300');
-        }
-      });
-      
-      // Update images
-      updateImages(variant);
-      
-      // Update debug info
-      document.getElementById('debug-variant-id').textContent = variant.id;
-      document.getElementById('debug-color').textContent = variant.options.color || 'Not set';
-      document.getElementById('debug-size').textContent = variant.options.size || 'Not set';
-      document.getElementById('debug-views').textContent = (variant.mockupViews || []).length.toString();
-      
-      // Update URL without reloading the page
-      const url = new URL(window.location.href);
-      url.searchParams.set('color', variant.options.color || '');
-      url.searchParams.set('size', variant.options.size || '');
-      window.history.replaceState({}, '', url.toString());
     }
-    
-    // Helper function to update images for a variant
-    function updateImages(variant) {
-      const variantViews = variant.mockupViews || [];
-      if (variantViews.length === 0) return;
+
+    // Update color buttons
+    document.querySelectorAll('.color-btn').forEach(btn => {
+      const isSelected = (btn as HTMLElement).dataset.color === variant.options.color;
+      btn.setAttribute('aria-pressed', isSelected.toString());
+      if (isSelected) {
+        btn.classList.add('ring-2', 'ring-offset-2', 'ring-primary');
+      } else {
+        btn.classList.remove('ring-2', 'ring-offset-2', 'ring-primary');
+      }
+    });
+
+    // Update size buttons
+    document.querySelectorAll('.size-btn').forEach(btn => {
+      const isSelected = (btn as HTMLElement).dataset.size === variant.options.size;
+      btn.setAttribute('aria-pressed', isSelected.toString());
+      if (isSelected) {
+        btn.classList.add('border-primary', 'bg-primary', 'text-white');
+        btn.classList.remove('border-gray-300');
+      } else {
+        btn.classList.remove('border-primary', 'bg-primary', 'text-white');
+        btn.classList.add('border-gray-300');
+      }
+    });
+
+    // Update images
+    updateImages(variant);
+
+    // Update URL without reloading
+    const url = new URL(window.location.href);
+    if (variant.options.color) url.searchParams.set('color', variant.options.color);
+    if (variant.options.size) url.searchParams.set('size', variant.options.size);
+    window.history.replaceState({}, '', url.toString());
+  }
+
+  // Update images for a variant
+  function updateImages(variant: ClientVariant) {
+    const variantViews = variant.mockupViews || [];
+    if (variantViews.length === 0) return;
+
+    // Update main image
+    const mainImage = variantViews[0];
+    const mainImg = document.getElementById('main-product-image') as HTMLImageElement;
+    const mainWebp = document.querySelector('source[type="image/webp"]');
+
+    if (mainImg && mainImage) {
+      mainImg.src = mainImage.url;
+      mainImg.alt = `${productName} - ${variant.options.color} - ${mainImage.label}`;
+    }
+
+    if (mainWebp && mainImage) {
+      (mainWebp as HTMLSourceElement).srcset = mainImage.webpUrl;
+    }
+
+    // Update thumbnails
+    const thumbnailContainer = document.getElementById('thumbnail-container');
+    if (thumbnailContainer && variantViews.length > 1) {
+      thumbnailContainer.innerHTML = '';
+
+      variantViews.forEach((view, index) => {
+        const thumbnailBtn = document.createElement('button');
+        thumbnailBtn.type = 'button';
+        thumbnailBtn.className = `block cursor-pointer thumbnail-btn ${index === 0 ? 'active' : ''}`;
+        thumbnailBtn.dataset.src = view.url;
+        thumbnailBtn.dataset.webp = view.webpUrl;
+        thumbnailBtn.dataset.view = view.view;
+        thumbnailBtn.dataset.label = view.label;
+
+        thumbnailBtn.innerHTML = `
+          <picture>
+            <source srcset="${view.webpUrl}" type="image/webp" />
+            <img 
+              src="${view.url}" 
+              alt="${productName} - ${variant.options.color} - ${view.label}" 
+              class="w-full h-auto object-cover rounded border hover:border-primary ${index === 0 ? 'border-primary' : 'border-gray-300'}" 
+              width="150" 
+              height="150" 
+            />
+          </picture>
+        `;
+
+        thumbnailBtn.addEventListener('click', () => {
+          if (mainImg) {
+            mainImg.src = view.url;
+            mainImg.alt = `${productName} - ${variant.options.color} - ${view.label}`;
+          }
+          if (mainWebp) (mainWebp as HTMLSourceElement).srcset = view.webpUrl;
+
+          // Update active state
+          document.querySelectorAll('.thumbnail-btn').forEach(btn => {
+            btn.classList.remove('active');
+            const img = btn.querySelector('img');
+            if (img) img.classList.remove('border-primary');
+            if (img) img.classList.add('border-gray-300');
+          });
+          thumbnailBtn.classList.add('active');
+          const img = thumbnailBtn.querySelector('img');
+          if (img) img.classList.add('border-primary');
+          if (img) img.classList.remove('border-gray-300');
+        });
+
+        thumbnailContainer.appendChild(thumbnailBtn);
+      });
+    }
+  }
+
+  // Color selection handler
+  document.querySelectorAll('.color-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const color = (btn as HTMLElement).dataset.color || '';
+      const currentSize = currentVariant?.options.size || '';
       
-      console.log('Updating images for variant:', variant.id);
-      console.log('Variant color:', variant.options.color);
-      console.log('Available views:', variantViews);
+      // Find variant with this color
+      let newVariant = findVariant(color, currentSize, variants);
       
-      // Update main image
-      const mainImage = variantViews[0];
-      const mainImg = document.getElementById('main-product-image');
-      const mainWebp = document.querySelector('.main-product-image-webp');
+             // If no exact match, find any variant with this color
+       if (!newVariant) {
+         newVariant = variants.find((v: ClientVariant) => v.options.color === color);
+       }
+      
+      // If still no match, use first variant with images
+      if (!newVariant) {
+        newVariant = findVariantWithImages(variants);
+      }
+      
+      if (newVariant) {
+        updateUI(newVariant);
+      }
+    });
+  });
+
+  // Size selection handler
+  document.querySelectorAll('.size-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const size = (btn as HTMLElement).dataset.size || '';
+      const currentColor = currentVariant?.options.color || '';
+      
+      // Find variant with this size
+      let newVariant = findVariant(currentColor, size, variants);
+      
+             // If no exact match, find any variant with this size
+       if (!newVariant) {
+         newVariant = variants.find((v: ClientVariant) => v.options.size === size);
+       }
+      
+      // If still no match, use first variant with images
+      if (!newVariant) {
+        newVariant = findVariantWithImages(variants);
+      }
+      
+      if (newVariant) {
+        updateUI(newVariant);
+      }
+    });
+  });
+
+  // Thumbnail click handlers (for initial load)
+  document.querySelectorAll('.thumbnail-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mainImg = document.getElementById('main-product-image') as HTMLImageElement;
+      const mainWebp = document.querySelector('source[type="image/webp"]');
       
       if (mainImg) {
-        console.log('Setting main image src to:', mainImage.url);
-        mainImg.src = mainImage.url;
+        mainImg.src = (btn as HTMLElement).dataset.src || '';
+        mainImg.alt = `${productName} - ${(btn as HTMLElement).dataset.label || ''}`;
       }
       if (mainWebp) {
-        console.log('Setting main webp srcset to:', mainImage.webpUrl);
-        mainWebp.srcset = mainImage.webpUrl;
+        (mainWebp as HTMLSourceElement).srcset = (btn as HTMLElement).dataset.webp || '';
       }
       
-      // Update thumbnails
-      const thumbnailContainer = document.getElementById('thumbnail-container');
-      if (thumbnailContainer) {
-        console.log('Updating thumbnail container with', variantViews.length, 'views');
-        thumbnailContainer.innerHTML = '';
-        
-        variantViews.forEach(view => {
-          console.log('Adding thumbnail for view:', view.view);
-          const thumbnailLink = document.createElement('a');
-          thumbnailLink.href = `#view-${view.view}`;
-          thumbnailLink.className = 'block cursor-pointer thumbnail-link';
-          thumbnailLink.dataset.src = view.url;
-          thumbnailLink.dataset.webp = view.webpUrl;
-          thumbnailLink.dataset.view = view.view;
-          
-          thumbnailLink.innerHTML = `
-            <picture>
-              <source srcset="${view.webpUrl}" type="image/webp" />
-              <img 
-                src="${view.url}" 
-                alt="${productName} - ${view.view}" 
-                class="w-full h-auto object-cover rounded border hover:border-primary" 
-                width="150" 
-                height="150" 
-              />
-            </picture>
-          `;
-          
-          thumbnailLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            console.log('Thumbnail clicked:', view.view);
-            if (mainImg) mainImg.src = view.url;
-            if (mainWebp) mainWebp.srcset = view.webpUrl;
-          });
-          
-          thumbnailContainer.appendChild(thumbnailLink);
-        });
-      }
-      
-      // Update debug view list
-      const debugViewList = document.getElementById('debug-view-list');
-      if (debugViewList) {
-        debugViewList.innerHTML = '';
-        variantViews.forEach(view => {
-          const li = document.createElement('li');
-          li.textContent = `${view.view}: ${view.url}`;
-          debugViewList.appendChild(li);
-        });
-      }
-    }
-    
-    // Get current URL parameters
-    const params = new URLSearchParams(window.location.search);
-    const colorParam = params.get('color');
-    const sizeParam = params.get('size');
-    console.log('Color parameter:', colorParam);
-    console.log('Size parameter:', sizeParam);
-    
-    // Special handling for Navy color in URL
-    if (colorParam === 'Navy') {
-      console.log('Navy color detected in URL parameters');
-      const navyVariant = processedVariants.find(v => v.options.color === 'Navy');
-      if (navyVariant) {
-        console.log('Found Navy variant from URL parameter:', navyVariant);
-        // Force update UI for Navy variant
-        setTimeout(() => {
-          updateUI(navyVariant);
-          console.log('Forced Navy variant update');
-        }, 100);
-      }
-    }
-    
-    // Add click handlers for color selectors
-    document.querySelectorAll('.color-selector').forEach(colorButton => {
-      colorButton.addEventListener('click', (e) => {
-        e.preventDefault();
-        const color = colorButton.dataset.color;
-        console.log(`Color button clicked: ${color}`);
-        
-        // Find the current size
-        const currentSize = document.getElementById('selected-size').textContent;
-        console.log(`Current size: ${currentSize}`);
-        
-        // Direct lookup for Navy color
-        if (color === 'Navy') {
-          const navyVariant = processedVariants.find(v => v.options.color === 'Navy');
-          if (navyVariant) {
-            console.log('Found Navy variant directly:', navyVariant);
-            updateUI(navyVariant);
-            return;
-          }
-        }
-        
-        // Find the variant with this color and current size
-        let variant = findVariant(color, currentSize);
-        
-        // If no variant found with this color and size, find one with just this color
-        if (!variant) {
-          console.log(`No variant found with color=${color}, size=${currentSize}. Trying with just color.`);
-          variant = findVariant(color, '');
-        }
-        
-        // If still no variant, use default
-        if (!variant) {
-          console.log(`No variant found with color=${color}. Using default.`);
-          variant = findVariantWithImages();
-        }
-        
-        console.log(`Selected variant for UI update:`, variant);
-        
-        // Update the UI
-        updateUI(variant);
+      // Update active state
+      document.querySelectorAll('.thumbnail-btn').forEach(b => {
+        b.classList.remove('active');
+        const img = b.querySelector('img');
+        if (img) img.classList.remove('border-primary');
+        if (img) img.classList.add('border-gray-300');
       });
+      btn.classList.add('active');
+      const img = btn.querySelector('img');
+      if (img) img.classList.add('border-primary');
+      if (img) img.classList.remove('border-gray-300');
     });
-    
-    // Add click handlers for size selectors
-    document.querySelectorAll('.size-selector').forEach(sizeButton => {
-      sizeButton.addEventListener('click', (e) => {
-        e.preventDefault();
-        const size = sizeButton.dataset.size;
-        console.log(`Size button clicked: ${size}`);
-        
-        // Find the current color
-        const currentColor = document.getElementById('selected-color').textContent;
-        
-        // Find the variant with current color and this size
-        let variant = findVariant(currentColor, size);
-        
-        // If no variant found, use default
-        if (!variant) {
-          variant = findVariantWithImages();
-        }
-        
-        // Update the UI
-        updateUI(variant);
-      });
-    });
-    
-    // Add click handlers for thumbnails
-    document.querySelectorAll('.thumbnail-link').forEach(link => {
-      link.addEventListener('click', (e) => {
-        e.preventDefault();
-        const mainImg = document.getElementById('main-product-image');
-        const mainWebp = document.querySelector('.main-product-image-webp');
-        if (mainImg) mainImg.src = link.dataset.src;
-        if (mainWebp) mainWebp.srcset = link.dataset.webp;
-      });
-    });
-    
-    // Debug button functionality
-    const debugButton = document.getElementById('debug-button');
-    const debugModal = document.getElementById('debug-modal');
-    const debugContent = document.getElementById('debug-content');
-    const closeDebug = document.getElementById('close-debug');
-    
-    if (debugButton && debugModal && debugContent && closeDebug) {
-      debugButton.addEventListener('click', () => {
-        // Get current variant info
-        const variantId = document.getElementById('debug-variant-id').textContent;
-        const currentVariant = processedVariants.find(v => v.id === variantId);
-        
-        // Format debug info
-        let debugInfo = 'CURRENT URL:\n' + window.location.href + '\n\n';
-        debugInfo += 'SELECTED VARIANT:\n' + JSON.stringify(currentVariant, null, 2) + '\n\n';
-        debugInfo += 'ALL VARIANTS:\n' + JSON.stringify(processedVariants, null, 2);
-        
-        // Display in modal
-        debugContent.textContent = debugInfo;
-        debugModal.classList.remove('hidden');
-      });
-      
-      closeDebug.addEventListener('click', () => {
-        debugModal.classList.add('hidden');
-      });
-    }
   });
+
+  // Debug toggle
+  if (isDevelopment) {
+    const debugBtn = document.getElementById('toggle-debug');
+    const debugDetails = document.getElementById('debug-details');
+    
+    if (debugBtn && debugDetails) {
+      debugBtn.addEventListener('click', () => {
+        debugDetails.classList.toggle('hidden');
+      });
+    }
+  }
+
+  // Initialize the page
+  if (currentVariant) {
+    updateUI(currentVariant);
+  }
 </script>
 ---

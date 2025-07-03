@@ -33,9 +33,17 @@ interface MockSupabaseClient {
 
 // Create a client for static generation or build time - no cookies needed
 export const createClient = (): SupabaseClient => {
+  // Always use the basic client for static generation (no cookies)
   return createSupabaseClient(
     supabaseUrl,
-    supabaseAnonKey
+    supabaseAnonKey,
+    {
+      auth: {
+        persistSession: false, // Don't persist session in static generation
+        autoRefreshToken: false, // Don't auto-refresh tokens
+        detectSessionInUrl: false // Don't detect session in URL
+      }
+    }
   );
 };
 
@@ -65,7 +73,14 @@ export const createBrowserSupabaseClient = (): SupabaseClient | MockSupabaseClie
 
   return createBrowserClient(
     supabaseUrl,
-    supabaseAnonKey
+    supabaseAnonKey,
+    {
+      auth: {
+        persistSession: true, // Allow session persistence in browser
+        autoRefreshToken: true, // Allow auto-refresh in browser
+        detectSessionInUrl: true // Allow URL session detection in browser
+      }
+    }
   );
 };
 

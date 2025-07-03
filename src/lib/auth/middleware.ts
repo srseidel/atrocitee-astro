@@ -113,7 +113,10 @@ export const authMiddleware: MiddlewareHandler = async (context, next) => {
                        !pathname.startsWith('/account') && 
                        !ADMIN_API_ROUTE_PATTERN.test(pathname);
   
-  if (isPublicRoute) {
+  // Skip auth check for shop routes (they are prerendered)
+  const isShopRoute = pathname.startsWith('/shop/');
+  
+  if (isPublicRoute || isShopRoute) {
     return next();
   }
 

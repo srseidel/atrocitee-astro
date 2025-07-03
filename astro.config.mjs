@@ -71,5 +71,11 @@ export default defineConfig({
     define: {
       'process.env.NODE_ENV': JSON.stringify(isDev ? 'development' : 'production'),
     },
+    // Disable CSP in development
+    server: {
+      headers: isDev ? {
+        'Content-Security-Policy': "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+      } : {},
+    },
   },
 });

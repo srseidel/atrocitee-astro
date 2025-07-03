@@ -11,6 +11,7 @@
 export function parseMockupFilename(filename: string): {
   productType: string;
   color: string;
+  size?: string;
   view: string;
   hash?: string;
 } | null {
@@ -35,15 +36,55 @@ export function parseMockupFilename(filename: string): {
   // The view is typically the last part
   const view = parts.pop() || 'front';
   
-  // The color is typically the second-to-last part
-  const color = parts.pop() || 'unknown';
+  // Check if the second-to-last part is a size
+  let size: string | undefined;
+  let color: string = 'unknown';
+  
+  if (parts.length > 0) {
+    const lastPart = parts[parts.length - 1].toLowerCase();
+    
+    // Check if it's a size (common patterns like s, m, l, xl, 2xl, etc.)
+    const sizePattern = /^(xs|s|m|l|xl|2xl|3xl|4xl|5xl|6xl|one|size|one-size|small|medium|large|x-large|xx-large)$/i;
+    
+    if (sizePattern.test(lastPart)) {
+      // It's a size
+      size = parts.pop() || undefined;
+      
+      // Format size properly
+      if (size) {
+        if (/^[0-9]+xl$/i.test(size)) {
+          // Convert 2xl to 2XL format
+          size = size.replace(/^([0-9]+)xl$/i, '$1XL');
+        } else if (/^[xsml]$/i.test(size)) {
+          // Single letter sizes to uppercase
+          size = size.toUpperCase();
+        } else if (size.toLowerCase() === 'xl') {
+          size = 'XL';
+        } else if (size.toLowerCase() === 'one-size' || size.toLowerCase() === 'one') {
+          size = 'One Size';
+        }
+      }
+      
+      // Color is now the next part
+      if (parts.length > 0) {
+        color = parts.pop() || 'unknown';
+      }
+    } else {
+      // It's a color
+      color = parts.pop() || 'unknown';
+    }
+  }
   
   // Everything else is considered the product type
   const productType = parts.join('-');
   
+  // Capitalize color
+  color = color.charAt(0).toUpperCase() + color.slice(1);
+  
   return {
     productType,
     color,
+    size,
     view,
     hash
   };
