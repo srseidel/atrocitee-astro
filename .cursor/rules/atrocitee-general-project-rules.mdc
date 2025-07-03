@@ -1,14 +1,15 @@
 ---
-description: 
+description: Comprehensive project guidelines and rules for Atrocitee development
 globs: 
 alwaysApply: true
 ---
+
 You are the AI used within the AI editor Cursor, so you can view, edit, create, and run files within the project directory. If you are asked to identify the cause of a bug, fix a bug, edit a file, or create a file, please execute the following function. Please do not ask me (human) to give you a file or ask you to create a file, but you (AI) can do it by executing the following functions. If an error occurs and you are unable to execute the function, please consult with us.
 
 edit_file: Edit an existing file, create a new file
 read_file: Read the contents of a file
 grep_search: Search in the codebase based on a specific creator
-list_dir: Get a list of files and folders in a specific directory”
+list_dir: Get a list of files and folders in a specific directory"
 
 Please edit the file in small chunks
 
@@ -33,6 +34,7 @@ Atrocitee is a merchandise platform where products are created on Printful, impo
   - PostgreSQL database
   - Row Level Security (RLS) policies
   - Real-time capabilities
+  - **Note**: Uses both `@supabase/ssr` (for web auth) and `@supabase/supabase-js` (for server utilities)
 
 - **Printful**: Product Management & Fulfillment
   - Print-on-demand service
@@ -75,16 +77,16 @@ Atrocitee uses a hybrid rendering approach that combines static generation with 
   - The `getStaticPaths()` function generates all possible product pages at build time
 
 - **Admin Pages** (`/admin/*`):
-  - **ALWAYS use `export const prerender = false`** or omit it (defaults to false)
+  - **ALWAYS use `export const prerender = false`** 
   - These pages need server-side rendering for authentication and dynamic data
   - They should never be statically generated
 
 - **API Routes** (`/api/*`):
-  - **ALWAYS use `export const prerender = false`** or omit it
+  - **ALWAYS use `export const prerender = false`** 
   - API endpoints must be dynamic to handle requests
 
 - **Account Pages** (`/account/*`):
-  - **ALWAYS use `export const prerender = false`** or omit it
+  - **ALWAYS use `export const prerender = false`** 
   - These contain user-specific information that must be rendered server-side
 
 ### Data Flow
@@ -111,8 +113,173 @@ Atrocitee uses a hybrid rendering approach that combines static generation with 
 5. Store all secrets in environment variables
 
 ### Performance Optimization
-1. Minimize client-side JavaScript
-2. Utilize Astro's partial hydration with `client:*` directives judiciously
-3. Implement proper image optimization
-4. Use component-level caching where appropriate
-5. Optimize database queries with proper indexes
+1. Use Astro's strengths: prioritize static generation and server-side rendering
+2. For product pages: Use minimal, targeted client-side JavaScript for interactivity (variants, cart)
+3. For admin/API/account pages: Avoid client-side state management (security requirement)
+4. Utilize Astro's partial hydration with `client:*` directives judiciously
+5. Implement proper image optimization
+6. Use component-level caching where appropriate
+7. Optimize database queries with proper indexes
+
+## Critical Development Rules - Learned from Product Page Debugging
+
+### 🎯 **Context-Specific Rule Application**
+
+#### **Product Pages** (`/shop/product/*`)
+- **Purpose**: SEO optimization + user experience
+- **Rendering**: Static generation with client-side interactivity
+- **JavaScript**: Minimal, targeted client-side code for variants, cart preview
+- **State Management**: Client-side state for UI interactions
+- **Security**: Lower concern (public content)
+
+#### **Admin/API/Account Pages** (`/admin/*`, `/api/*`, `/account/*`)
+- **Purpose**: Security + data integrity
+- **Rendering**: Server-side rendering only
+- **JavaScript**: Avoid client-side state management
+- **State Management**: Server-side only
+- **Security**: Highest priority (sensitive operations)
+
+#### **General Pages** (marketing, about, etc.)
+- **Purpose**: SEO + performance
+- **Rendering**: Static generation preferred
+- **JavaScript**: Minimal or none
+- **State Management**: Not applicable
+
+### 🚨 Prerendering and Client-Side Interactivity Rules
+
+#### Cookie and Session Handling for Prerendered Pages
+- **NEVER** use session persistence (`persistSession: true`) on prerendered pages
+- **ALWAYS** use `persistSession: false` for Supabase clients on static pages
+- **SHOP ROUTES**: Exclude from auth middleware during static generation, but plan for checkout authentication
+- **REMEMBER**: Headers cannot be set after response is sent on static pages
+
+#### Data Transformation for External APIs
+- **ALWAYS** transform external API data to match client-side expectations
+- **NEVER** assume external API format matches internal data structures
+- **ALWAYS** implement transformation functions for complex data structures
+- **EXAMPLE**: Transform Printful arrays `[{"id":"color","value":"Grey"}]` to simple objects `{"color":"Grey"}`
+
+#### Client-Server Boundary Management
+- **NEVER** import server-side utilities in client-side code
+- **PREFER** framework components (React/Vue/Svelte) over inline scripts for complex interactivity
+- **WHEN using inline scripts**: Define helper functions inline with proper TypeScript types
+- **ALWAYS** be explicit about what code runs where (server vs client)
+- **ADMIN/API/ACCOUNT**: No client-side state management (security requirement)
+- **PRODUCT PAGES**: Client-side interactivity is appropriate for variants, cart, etc.
+
+#### JSON Data Embedding
+- **ALWAYS** use `set:html={JSON.stringify(data)}` for complex data structures
+- **NEVER** use template literals for complex JSON embedding
+- **ALWAYS** ensure all data types are JSON-serializable before embedding
+- **ALWAYS** add error handling for JSON parsing on client-side
+
+#### Debug Infrastructure
+- **ALWAYS** implement debug controls with environment variables
+- **ALWAYS** use `import.meta.env.DEV && import.meta.env.PUBLIC_SHOW_DEBUG === 'true'` pattern
+- **NEVER** expose debug information to production users
+- **ALWAYS** include comprehensive debug information for development
+
+### 🔧 Data Structure and Type Safety Rules
+
+#### Variant Data Handling
+- **ALWAYS** implement proper variant matching logic with error handling
+- **ALWAYS** provide fallback data extraction (e.g., from filenames)
+- **ALWAYS** validate variant data structure before using
+- **ALWAYS** implement type guards for unknown data types
+
+#### Error Handling Requirements
+- **ALWAYS** implement comprehensive error handling at all levels
+- **ALWAYS** provide meaningful error messages for debugging
+- **ALWAYS** log errors with sufficient context for troubleshooting
+- **NEVER** let errors fail silently
+
+#### Type Safety Enforcement
+- **ALWAYS** use proper TypeScript types throughout the application
+- **NEVER** use `any` types without proper type guards
+- **ALWAYS** implement type guards for external data
+- **ALWAYS** validate data structure before processing
+
+### 🏗️ Architecture and Performance Rules
+
+#### Static Generation Strategy
+- **PRODUCT PAGES**: Use one path per product with all variant data embedded for SEO
+- **PRODUCT PAGES**: Optimize for SEO while maintaining interactivity
+- **PRODUCT PAGES**: Implement client-side switching for variants
+- **NEVER** reload pages for variant changes
+- **ADMIN/API/ACCOUNT**: Use server-side rendering, not static generation
+
+#### Image and Asset Management
+- **ALWAYS** optimize images for web performance (WebP format)
+- **ALWAYS** implement proper image loading strategies
+- **ALWAYS** organize assets in consistent directory structures
+- **ALWAYS** use proper public URL paths for assets
+
+#### State Management
+- **PRODUCT PAGES**: Use client-side JavaScript for UI state management (variants, cart preview)
+- **PRODUCT PAGES**: Maintain URL state for shareable links
+- **ADMIN/API/ACCOUNT**: Use server-side state management only (security requirement)
+- **ALWAYS** implement proper event handling for user interactions
+- **PREFER** framework components (React/Vue/Svelte) for complex state management
+
+### 📝 Code Organization Rules
+
+#### File Structure
+- **ALWAYS** create utility files for reusable functions
+- **ALWAYS** organize code by functionality and responsibility
+- **ALWAYS** use path aliases for all imports
+- **NEVER** use relative paths for imports
+
+#### Documentation Requirements
+- **ALWAYS** document complex logic and architecture decisions
+- **ALWAYS** maintain comprehensive changelogs for major fixes
+- **ALWAYS** document debugging sessions and solutions
+- **ALWAYS** include examples in documentation
+
+#### Testing and Validation
+- **ALWAYS** test all variant switching functionality
+- **ALWAYS** validate data transformations
+- **ALWAYS** test error handling paths
+- **ALWAYS** verify performance optimizations
+
+### 🔍 Debugging and Troubleshooting Rules
+
+#### When Debugging Complex Issues
+1. **ALWAYS** start with error logs and stack traces
+2. **ALWAYS** identify the root cause before implementing fixes
+3. **ALWAYS** test each fix independently
+4. **ALWAYS** document the debugging process
+5. **ALWAYS** implement preventive measures
+
+#### Common Pitfalls to Avoid
+- **NEVER** mix server-side and client-side code without clear boundaries
+- **NEVER** assume external API data matches internal expectations
+- **NEVER** ignore cookie/session errors on static pages
+- **NEVER** use complex data structures without proper transformation
+- **NEVER** implement client-side functionality without proper error handling
+
+#### Recovery Strategies
+- **ALWAYS** implement graceful degradation for missing data
+- **ALWAYS** provide fallback values for critical functionality
+- **ALWAYS** log errors with sufficient context for debugging
+- **ALWAYS** maintain backup strategies for critical operations
+
+### 🎯 Product Page Specific Rules
+
+#### Variant Management
+- **ALWAYS** implement proper variant matching with multiple criteria
+- **ALWAYS** handle missing variant data gracefully
+- **ALWAYS** provide visual feedback for variant selection
+- **ALWAYS** update prices dynamically based on variant selection
+
+#### Image Handling
+- **ALWAYS** implement multiple mockup views per variant
+- **ALWAYS** provide fallback images for missing variants
+- **ALWAYS** implement proper image loading states
+
+#### User Experience
+- **ALWAYS** provide immediate visual feedback for user actions
+- **ALWAYS** maintain URL state for shareable product links
+- **ALWAYS** implement proper loading states and error messages
+- **ALWAYS** optimize for mobile and desktop experiences
+
+## Remember: These rules were learned through extensive debugging of the product page color selection issue. Following these guidelines will prevent similar complex issues in the future.

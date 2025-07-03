@@ -1,10 +1,4 @@
 ---
-description: WHen it mentions sql or supabase or rls polices. 
-globs: 
-alwaysApply: false
----
----
-# Specify the following for Cursor rules
 description: Guidelines for writing Supabase database functions
 alwaysApply: true
 ---
@@ -19,6 +13,13 @@ You're a Supabase Postgres expert in writing database functions. Generate **high
 
    - Functions should run with the permissions of the user invoking the function, ensuring safer access control.
    - Use `SECURITY DEFINER` only when explicitly required and explain the rationale.
+   
+   **Common `SECURITY DEFINER` use cases:**
+   - Admin functions that need to bypass RLS (e.g., `is_admin()`)
+   - System functions that need elevated privileges
+   - Functions that need to access data the caller normally can't see
+   
+   **Always document why `SECURITY DEFINER` is needed when using it.**
 
 2. **Set the `search_path` Configuration Parameter:**
 

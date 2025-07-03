@@ -1,9 +1,4 @@
 ---
-description: 
-globs: 
-alwaysApply: true
----
----
 description: Guidelines for creating protected Admin or API routes for Atrocitee, including Row Level Security policies
 globs:
   - "src/pages/admin/**/*"
@@ -50,6 +45,9 @@ All database views **must**:
 - Have explicit column selection (no SELECT *)
 - Have proper RLS policies on underlying tables
 - Have explicit GRANT statements for access control
+
+### 🔍 SECURITY DEFINER Exception
+**Note**: `SECURITY DEFINER` is appropriate for specific admin functions that need to bypass RLS (like `is_admin()` functions). This is the exception, not the rule, and should be used sparingly with proper justification.
 
 Example of a secure view:
 

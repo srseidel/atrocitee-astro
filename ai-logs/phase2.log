@@ -1340,3 +1340,178 @@ Next Steps:
    - Add drag-and-drop interface for mockup assignment
    - Consider automated mockup generation integration
    - Add mockup analytics and tracking
+
+### 2024-12-30 - Product Page Color Selection Fix - MAJOR DEBUGGING SESSION
+
+## Problem Summary
+The product page color selection was completely broken. When users clicked different color options (Grey, Red, Navy), the URL would update but the page would still display the Grey color variant and images. This was a complex issue involving multiple layers of the application.
+
+## Root Cause Analysis
+1. **Cookie Setting Error**: Initial error "Cannot set headers after they are sent" when accessing product pages
+2. **Variant Data Structure Problems**: Database stored variant options as Printful arrays, but code expected simple objects
+3. **JSON Data Embedding Issues**: Client-side JavaScript couldn't access product data
+4. **Missing Client-Side Helper Functions**: JavaScript was trying to import server-side functions
+5. **Prerendering vs Dynamic Content**: Static generation conflicted with dynamic variant switching
+
+## Technical Context
+- **Architecture**: Astro e-commerce site with Supabase database and Printful integration
+- **Rendering Strategy**: Static page generation (`export const prerender = true`) for SEO with client-side interactivity
+- **Product Structure**: Two products tested - a hat (one size, multiple colors) and a t-shirt (multiple sizes/colors)
+- **Data Flow**: Printful → Supabase → Astro page → Client-side JavaScript
+
+## Issues Fixed and Solutions Implemented
+
+### 1. Cookie Setting Error Fix
+**Problem**: "Cannot set headers after they are sent" error when accessing product pages
+**Root Cause**: Supabase client was trying to set session cookies on prerendered pages
+**Solution**:
+- Updated `src/lib/supabase/client.ts` to disable session persistence for static generation
+- Modified `src/lib/auth/middleware.ts` to skip shop routes during prerendering
+- Added proper client configurations for prerendered vs server-rendered pages
+
+**Files Modified**:
+- `src/lib/supabase/client.ts` - Added `persistSession: false` for static pages
+- `src/lib/auth/middleware.ts` - Added shop route exclusions
+- `astro.config.mjs` - Updated middleware configuration
+
+### 2. Variant Data Structure Transformation
+**Problem**: Database stored variant options as Printful arrays `[{"id":"color","value":"Grey"}]`, but code expected simple objects `{"color":"Grey","size":"One Size"}`
+**Root Cause**: Mismatch between Printful API format and client-side expectations
+**Solution**:
+- Added transformation logic in `src/pages/shop/product/[slug].astro`
+- Implemented `transformVariantOptions()` function to convert Printful format to client format
+- Added fallback extraction from mockup filenames when options are missing
+- Enhanced variant matching logic with proper error handling
+
+**Key Code Changes**:
+```typescript
+// Transform Printful array format to simple object
+function transformVariantOptions(options: any): Record<string, string> {
+  if (Array.isArray(options)) {
+    return options.reduce((acc, option) => {
+      acc[option.id] = option.value;
+      return acc;
+    }, {});
+  }
+  return options || {};
+}
+```
+
+### 3. JSON Data Embedding Fix
+**Problem**: Client-side JavaScript couldn't access product data due to template literal issues
+**Root Cause**: Complex data structures weren't being properly serialized for client-side consumption
+**Solution**:
+- Used `set:html={JSON.stringify(clientData)}` instead of template literals
+- Properly structured client data with transformed variant options
+- Added comprehensive error handling for JSON parsing
+- Ensured all data types were JSON-serializable
+
+**Files Modified**:
+- `src/pages/shop/product/[slug].astro` - Fixed JSON embedding and data structure
+
+### 4. Client-Side Helper Functions
+**Problem**: JavaScript was trying to import server-side functions that don't exist in the browser
+**Root Cause**: Import statements for server-side utilities in client-side code
+**Solution**:
+- Defined `findVariant` and `findVariantWithImages` functions inline in client-side script
+- Removed conflicting import statements
+- Added proper TypeScript types for client-side code
+- Implemented proper variant matching logic
+
+**Key Functions Added**:
+```typescript
+function findVariant(variants, targetOptions) {
+  return variants.find(variant => {
+    return Object.entries(targetOptions).every(([key, value]) => 
+      variant.options && variant.options[key] === value
+    );
+  });
+}
+
+function findVariantWithImages(variants, targetOptions) {
+  const variant = findVariant(variants, targetOptions);
+  return variant?.mockupViews?.length > 0 ? variant : null;
+}
+```
+
+### 5. Debug Information Management
+**Problem**: Debug information was cluttering the user experience
+**Solution**:
+- Added `PUBLIC_SHOW_DEBUG` environment variable control
+- Debug section only shows when `import.meta.env.DEV && import.meta.env.PUBLIC_SHOW_DEBUG === 'true'`
+- Created clean `.env` structure with `PUBLIC_SHOW_DEBUG=false` for production
+- Comprehensive debug info includes URL params, selected variants, available colors/sizes
+
+**Files Modified**:
+- `src/pages/shop/product/[slug].astro` - Added debug controls
+- `.env` - Added debug configuration
+
+### 6. Product Helper Utilities
+**Problem**: Missing utility functions for product operations
+**Solution**:
+- Created `src/utils/helpers/product-helpers.ts` with reusable functions
+- Added proper TypeScript types and error handling
+- Implemented variant matching and image handling utilities
+
+**Files Created**:
+- `src/utils/helpers/product-helpers.ts` - Product utility functions
+
+## Final Implementation Architecture
+
+### Static Generation Strategy
+- **One Path Per Product**: `/shop/product/[slug]` with all variant data embedded
+- **SEO Optimized**: Each product has dedicated static URL with complete metadata
+- **Client-Side Switching**: JavaScript dynamically updates images, prices, and UI
+- **Hybrid Approach**: Static generation for SEO + client-side interactivity
+
+### Data Flow
+1. **Server-Side**: Processes Printful data → transforms to client format → embeds in page
+2. **Client-Side**: JavaScript handles interactions → updates UI → maintains URL state
+3. **Database**: Products with variants containing options (color/size) and mockupViews (images)
+
+### Technical Features
+- **Dynamic Price Updates**: Based on size selection (2XL: $21.00, 4XL: $27.50)
+- **Image Management**: Multiple mockup views per variant (front, back, left-front, etc.)
+- **State Management**: Client-side JavaScript manages current variant selection
+- **Error Handling**: Comprehensive error handling at all levels
+- **Type Safety**: Full TypeScript support with proper type guards
+
+## Testing Results
+- **Product Loading**: ✅ No errors, proper initial variant display (Grey hat)
+- **Color Switching**: ✅ Dynamic switching between Grey, Red, Navy variants
+- **Image Updates**: ✅ Proper image updates for each color variant
+- **Price Updates**: ✅ Dynamic price updates based on size selection
+- **URL Updates**: ✅ Proper URL parameter updates without page reload
+- **Debug Information**: ✅ Hidden from users, available for development
+
+## Performance Optimizations
+- **WebP Images**: All mockup images optimized for web performance
+- **Static Generation**: Fast initial page loads with complete SEO content
+- **Client-Side Updates**: No page reloads for variant switching
+- **Proper Caching**: Static assets cached at CDN level
+
+## Files Modified Summary
+1. `src/pages/shop/product/[slug].astro` - Main product page (major rewrite)
+2. `src/lib/supabase/client.ts` - Cookie/session handling fix
+3. `src/lib/auth/middleware.ts` - Route exclusions for prerendering
+4. `src/utils/helpers/mockups.ts` - Mockup utility functions
+5. `src/utils/helpers/product-helpers.ts` - Product utility functions (created)
+6. `astro.config.mjs` - Middleware configuration
+7. `.env` - Debug configuration
+
+## Key Learnings
+1. **Prerendering + Interactivity**: Astro's hybrid approach requires careful handling of static vs dynamic content
+2. **Data Transformation**: Always transform external API data to match client expectations
+3. **Client-Server Boundary**: Be explicit about what code runs where
+4. **Error Handling**: Comprehensive error handling prevents silent failures
+5. **Debug Infrastructure**: Proper debug tools are essential for complex issues
+
+## Next Steps
+1. Implement add to cart functionality
+2. Add size guide and product image gallery
+3. Implement variant-specific stock levels
+4. Add product analytics and tracking
+5. Consider automated testing for variant switching
+
+## Status: ✅ FULLY RESOLVED
+The product page color selection now works perfectly. Users can switch between colors dynamically, see proper images for each variant, and experience fast, responsive interactions while maintaining full SEO benefits from static generation.

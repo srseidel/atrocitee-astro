@@ -1,10 +1,4 @@
 ---
-description: 
-globs: 
-alwaysApply: true
----
----
-# Specify the following for Cursor rules
 description: Guidelines for writing Postgres Row Level Security policies
 alwaysApply: true
 ---
@@ -200,6 +194,8 @@ using ( (select auth.uid()) = user_id );
 
 This method works well for JWT functions like `auth.uid()` and `auth.jwt()` as well as `security definer` Functions. Wrapping the function causes an `initPlan` to be run by the Postgres optimizer, which allows it to "cache" the results per-statement, rather than calling the function on each row.
 
+**Note**: `security definer` functions are appropriate for admin/system functions that need elevated privileges (like `is_admin()` functions). Most regular functions should use `security invoker` (the default).
+
 Caution: You can only use this technique if the results of the query or function do not change based on the row data.
 
 ### Minimize joins
@@ -253,96 +249,13 @@ using ( (select auth.uid()) = user_id );
 
 This prevents the policy `( (select auth.uid()) = user_id )` from running for any `anon` users, since the execution stops at the `to authenticated` step.
 
-### Browser Client
-
-```typescript
-import { createClient } from '@supabase/supabase-js';
-
-export const supabaseClient = createClient(
-  import.meta.env.PUBLIC_SUPABASE_URL,
-  import.meta.env.PUBLIC_SUPABASE_ANON_KEY
-);
-```
-
-### Server Client
-
-For server-side API routes, use cookies to maintain the session:
-
-```typescript
-import { createClient } from '@supabase/supabase-js';
-
-export const createServerClient = (cookies) => {
-  return createClient(
-    import.meta.env.PUBLIC_SUPABASE_URL,
-    import.meta.env.PUBLIC_SUPABASE_ANON_KEY,
-    {
-      global: {
-        headers: {
-          cookie: cookies.get('sb-auth-token')?.value || '',
-        },
-      },
-    }
-  );
-};
-```
-
-### Authentication Middleware
-
-```typescript
-// src/lib/auth/middleware.ts
-import { createServerClient } from '@lib/supabase/server';
-
-export async function onRequest({ request, redirect, cookies }) {
-  const supabase = createServerClient(cookies);
-  
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  // Redirect unauthenticated users for protected routes
-  if (!session && request.url.includes('/admin')) {
-    return redirect('/login');
-  }
-
-  return;
-}
-```
-
-## Protected Routes
-
-For admin routes, use the middleware to check authentication:
-
-```typescript
-// src/pages/admin/dashboard.astro
----
-import { onRequest } from '@lib/auth/middleware';
-import AdminLayout from '@layouts/AdminLayout.astro';
-import { createServerClient } from '@lib/supabase/server';
-
-// Auth check happens in middleware
-const supabase = createServerClient(Astro.cookies);
-const { data: { user } } = await supabase.auth.getUser();
-
-// Additional authorization checks
-if (!user || user.role !== 'admin') {
-  return Astro.redirect('/unauthorized');
-}
-
-// Page logic here
----
-
-<AdminLayout>
-  <h1>Admin Dashboard</h1>
-  <!-- Admin content -->
-</AdminLayout>
-
-export { onRequest };
-```
-
-## Best Practices
+## Best Practices for RLS Implementation
 
 1. Always check authentication server-side
 2. Never expose sensitive operations in client-side code
 3. Implement proper error handling for auth operations
 4. Use role-based access control for different user types
 5. Keep auth tokens secure and implement proper refresh mechanisms
+6. Always specify roles in your policies using the `TO` operator
+7. Use performance optimizations like indexes and function wrapping
+8. Minimize joins in policies for better performance
