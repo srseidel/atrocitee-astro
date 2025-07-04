@@ -256,32 +256,10 @@ const clientData = {
           )}
         </div>
         
-        {/* Thumbnail Gallery */}
-        {variantViews.length > 1 && (
-          <div class="mt-4 grid grid-cols-4 gap-2" id="thumbnail-container">
-            {variantViews.map((view: MockupView, index: number) => (
-              <button 
-                type="button"
-                class={`block cursor-pointer thumbnail-btn ${index === 0 ? 'active' : ''}`}
-                data-src={view.url}
-                data-webp={view.webpUrl}
-                data-view={view.view}
-                data-label={view.label}
-              >
-                <picture>
-                  <source srcset={view.webpUrl} type="image/webp" />
-                  <img 
-                    src={view.url} 
-                    alt={`${product.name} - ${view.label}`} 
-                    class={`w-full h-auto object-cover rounded border hover:border-primary ${index === 0 ? 'border-primary' : 'border-gray-300'}`}
-                    width="150" 
-                    height="150" 
-                  />
-                </picture>
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Thumbnail Gallery - populated by JavaScript */}
+        <div class="mt-4 grid grid-cols-4 gap-2" id="thumbnail-container" style="display: none;">
+          <!-- Thumbnails will be populated by JavaScript -->
+        </div>
       </div>
 
       <!-- Product Info -->
@@ -500,10 +478,18 @@ const clientData = {
   // Update images for a variant
   function updateImages(variant: ClientVariant) {
     const variantViews = variant.mockupViews || [];
-    if (variantViews.length === 0) return;
+    
+    // Find the best main image for this variant
+    let mainImage;
+    if (variantViews.length > 0) {
+      // Use the variant's own images if available
+      mainImage = variantViews[0];
+    } else {
+      // No images available for this variant
+      mainImage = null;
+    }
 
     // Update main image
-    const mainImage = variantViews[0];
     const mainImg = document.getElementById('main-product-image') as HTMLImageElement;
     const mainWebp = document.querySelector('source[type="image/webp"]');
 
@@ -516,55 +502,61 @@ const clientData = {
       (mainWebp as HTMLSourceElement).srcset = mainImage.webpUrl;
     }
 
-    // Update thumbnails
+    // Update thumbnails to show what's available for this variant
     const thumbnailContainer = document.getElementById('thumbnail-container');
-    if (thumbnailContainer && variantViews.length > 1) {
-      thumbnailContainer.innerHTML = '';
+    if (thumbnailContainer) {
+      if (variantViews.length > 1) {
+        thumbnailContainer.innerHTML = '';
+        thumbnailContainer.style.display = 'grid';
 
-      variantViews.forEach((view, index) => {
-        const thumbnailBtn = document.createElement('button');
-        thumbnailBtn.type = 'button';
-        thumbnailBtn.className = `block cursor-pointer thumbnail-btn ${index === 0 ? 'active' : ''}`;
-        thumbnailBtn.dataset.src = view.url;
-        thumbnailBtn.dataset.webp = view.webpUrl;
-        thumbnailBtn.dataset.view = view.view;
-        thumbnailBtn.dataset.label = view.label;
+        variantViews.forEach((view: any, index: number) => {
+          const thumbnailBtn = document.createElement('button');
+          thumbnailBtn.type = 'button';
+          thumbnailBtn.className = `block cursor-pointer thumbnail-btn ${index === 0 ? 'active' : ''}`;
+          thumbnailBtn.dataset.src = view.url;
+          thumbnailBtn.dataset.webp = view.webpUrl;
+          thumbnailBtn.dataset.view = view.view;
+          thumbnailBtn.dataset.label = view.label;
 
-        thumbnailBtn.innerHTML = `
-          <picture>
-            <source srcset="${view.webpUrl}" type="image/webp" />
-            <img 
-              src="${view.url}" 
-              alt="${productName} - ${variant.options.color} - ${view.label}" 
-              class="w-full h-auto object-cover rounded border hover:border-primary ${index === 0 ? 'border-primary' : 'border-gray-300'}" 
-              width="150" 
-              height="150" 
-            />
-          </picture>
-        `;
+          thumbnailBtn.innerHTML = `
+            <picture>
+              <source srcset="${view.webpUrl}" type="image/webp" />
+              <img 
+                src="${view.url}" 
+                alt="${productName} - ${variant.options.color} - ${view.label}" 
+                class="w-full h-auto object-cover rounded border hover:border-primary ${index === 0 ? 'border-primary' : 'border-gray-300'}" 
+                width="150" 
+                height="150" 
+              />
+            </picture>
+          `;
 
-        thumbnailBtn.addEventListener('click', () => {
-          if (mainImg) {
-            mainImg.src = view.url;
-            mainImg.alt = `${productName} - ${variant.options.color} - ${view.label}`;
-          }
-          if (mainWebp) (mainWebp as HTMLSourceElement).srcset = view.webpUrl;
+          thumbnailBtn.addEventListener('click', () => {
+            if (mainImg) {
+              mainImg.src = view.url;
+              mainImg.alt = `${productName} - ${variant.options.color} - ${view.label}`;
+            }
+            if (mainWebp) (mainWebp as HTMLSourceElement).srcset = view.webpUrl;
 
-          // Update active state
-          document.querySelectorAll('.thumbnail-btn').forEach(btn => {
-            btn.classList.remove('active');
-            const img = btn.querySelector('img');
-            if (img) img.classList.remove('border-primary');
-            if (img) img.classList.add('border-gray-300');
+            // Update active state
+            document.querySelectorAll('.thumbnail-btn').forEach(btn => {
+              btn.classList.remove('active');
+              const img = btn.querySelector('img');
+              if (img) img.classList.remove('border-primary');
+              if (img) img.classList.add('border-gray-300');
+            });
+            thumbnailBtn.classList.add('active');
+            const img = thumbnailBtn.querySelector('img');
+            if (img) img.classList.add('border-primary');
+            if (img) img.classList.remove('border-gray-300');
           });
-          thumbnailBtn.classList.add('active');
-          const img = thumbnailBtn.querySelector('img');
-          if (img) img.classList.add('border-primary');
-          if (img) img.classList.remove('border-gray-300');
-        });
 
-        thumbnailContainer.appendChild(thumbnailBtn);
-      });
+          thumbnailContainer.appendChild(thumbnailBtn);
+        });
+      } else {
+        // Hide thumbnail container if only one or no images
+        thumbnailContainer.style.display = 'none';
+      }
     }
   }
 
@@ -618,33 +610,11 @@ const clientData = {
     });
   });
 
-  // Thumbnail click handlers (for initial load)
-  document.querySelectorAll('.thumbnail-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const mainImg = document.getElementById('main-product-image') as HTMLImageElement;
-      const mainWebp = document.querySelector('source[type="image/webp"]');
-      
-      if (mainImg) {
-        mainImg.src = (btn as HTMLElement).dataset.src || '';
-        mainImg.alt = `${productName} - ${(btn as HTMLElement).dataset.label || ''}`;
-      }
-      if (mainWebp) {
-        (mainWebp as HTMLSourceElement).srcset = (btn as HTMLElement).dataset.webp || '';
-      }
-      
-      // Update active state
-      document.querySelectorAll('.thumbnail-btn').forEach(b => {
-        b.classList.remove('active');
-        const img = b.querySelector('img');
-        if (img) img.classList.remove('border-primary');
-        if (img) img.classList.add('border-gray-300');
-      });
-      btn.classList.add('active');
-      const img = btn.querySelector('img');
-      if (img) img.classList.add('border-primary');
-      if (img) img.classList.remove('border-gray-300');
-    });
-  });
+  // Initialize on page load
+  if (currentVariant) {
+    updateUI(currentVariant);
+    updateImages(currentVariant);
+  }
 
   // Debug toggle
   if (isDevelopment) {
@@ -656,11 +626,6 @@ const clientData = {
         debugDetails.classList.toggle('hidden');
       });
     }
-  }
-
-  // Initialize the page
-  if (currentVariant) {
-    updateUI(currentVariant);
   }
 </script>
 ---
