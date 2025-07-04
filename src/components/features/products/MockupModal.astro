@@ -280,6 +280,15 @@ const viewOptions = [
               uniqueId
             });
             
+            console.log('🔍 DEBUG: Mockup selected via checkbox:', {
+              filename,
+              defaultView,
+              viewSelectValue: viewSelect ? viewSelect.value : 'N/A',
+              finalViewValue: viewValue,
+              uniqueId,
+              timestamp: new Date().toISOString()
+            });
+            
             console.log(`Added to selectedMockups: ${filename} -> ${viewValue} (${uniqueId})`);
             console.log('Current selectedMockups:', Array.from(selectedMockups.entries()));
           } else {
@@ -321,12 +330,42 @@ const viewOptions = [
             // Update the view for this mockup
             const mockupData = selectedMockups.get(checkboxFilename);
             const oldView = mockupData.view;
-            mockupData.view = this.value;
+            mockupData.view = target.value;
             selectedMockups.set(checkboxFilename, mockupData);
             
-            console.log(`Updated view in selectedMockups: ${checkboxFilename} from ${oldView} to ${this.value} (${uniqueId})`);
+            console.log('🔍 DEBUG: Updated selectedMockups via dropdown change:', {
+              filename,
+              checkboxFilename,
+              uniqueId,
+              oldView,
+              newView: target.value,
+              mapSizeBefore: selectedMockups.size,
+              mapSizeAfter: selectedMockups.size,
+              updatedMapEntry: selectedMockups.get(checkboxFilename),
+              allMapEntries: Array.from(selectedMockups.entries()),
+              timestamp: new Date().toISOString()
+            });
+            
+            console.log(`Updated view in selectedMockups: ${checkboxFilename} from ${oldView} to ${target.value} (${uniqueId})`);
             console.log('Current selectedMockups:', Array.from(selectedMockups.entries()));
+          } else {
+            console.log('🔍 DEBUG: Dropdown change NOT applied because:', {
+              checkboxFilename,
+              hasInMap: selectedMockups.has(checkboxFilename),
+              mapKeys: Array.from(selectedMockups.keys()),
+              filename,
+              uniqueId,
+              timestamp: new Date().toISOString()
+            });
           }
+        } else {
+          console.log('🔍 DEBUG: Dropdown change NOT applied because checkbox not checked:', {
+            checkboxExists: !!checkbox,
+            checkboxChecked: checkbox ? checkbox.checked : 'N/A',
+            filename,
+            uniqueId,
+            timestamp: new Date().toISOString()
+          });
         }
       }
     });
@@ -436,6 +475,15 @@ const viewOptions = [
                     uniqueId
                   });
                   
+                  console.log('🔍 DEBUG: Mockup selected via checkbox:', {
+                    filename,
+                    defaultView,
+                    viewSelectValue: viewSelect ? viewSelect.value : 'N/A',
+                    finalViewValue: viewValue,
+                    uniqueId,
+                    timestamp: new Date().toISOString()
+                  });
+                  
                   console.log(`Added to selectedMockups: ${filename} -> ${viewValue} (${uniqueId})`);
                   console.log('Current selectedMockups:', Array.from(selectedMockups.entries()));
                 } else {
@@ -453,14 +501,21 @@ const viewOptions = [
           document.querySelectorAll('.mockup-view-select').forEach(select => {
             console.log('Setting up direct handler for view select:', select);
             select.addEventListener('change', function() {
-              const selectFilename = this.getAttribute('data-filename');
+              const filename = this.getAttribute('data-filename');
               const uniqueId = this.getAttribute('data-unique-id');
               
               console.log('Direct view select handler triggered:', {
                 select: this,
-                selectFilename,
+                selectFilename: filename,
                 uniqueId,
                 value: this.value
+              });
+              
+              console.log('🔍 DEBUG: View dropdown changed:', {
+                filename: filename,
+                newValue: this.value,
+                uniqueId,
+                timestamp: new Date().toISOString()
               });
               
               const mockupItem = this.closest('.mockup-item');
@@ -483,9 +538,39 @@ const viewOptions = [
                   mockupData.view = this.value;
                   selectedMockups.set(checkboxFilename, mockupData);
                   
+                  console.log('🔍 DEBUG: Updated selectedMockups via dropdown change:', {
+                    filename,
+                    checkboxFilename,
+                    uniqueId,
+                    oldView,
+                    newView: this.value,
+                    mapSizeBefore: selectedMockups.size,
+                    mapSizeAfter: selectedMockups.size,
+                    updatedMapEntry: selectedMockups.get(checkboxFilename),
+                    allMapEntries: Array.from(selectedMockups.entries()),
+                    timestamp: new Date().toISOString()
+                  });
+                  
                   console.log(`Updated view in selectedMockups: ${checkboxFilename} from ${oldView} to ${this.value} (${uniqueId})`);
                   console.log('Current selectedMockups:', Array.from(selectedMockups.entries()));
+                } else {
+                  console.log('🔍 DEBUG: Dropdown change NOT applied because:', {
+                    checkboxFilename,
+                    hasInMap: selectedMockups.has(checkboxFilename),
+                    mapKeys: Array.from(selectedMockups.keys()),
+                    filename,
+                    uniqueId,
+                    timestamp: new Date().toISOString()
+                  });
                 }
+              } else {
+                console.log('🔍 DEBUG: Dropdown change NOT applied because checkbox not checked:', {
+                  checkboxExists: !!checkbox,
+                  checkboxChecked: checkbox ? checkbox.checked : 'N/A',
+                  filename,
+                  uniqueId,
+                  timestamp: new Date().toISOString()
+                });
               }
             });
           });
@@ -591,6 +676,13 @@ const viewOptions = [
         filename,
         view: data.view
       }));
+      
+      console.log('🔍 DEBUG: About to assign mockups:', {
+        selectedMockupsSize: selectedMockups.size,
+        selectedMockupsEntries: Array.from(selectedMockups.entries()),
+        mockupsToAssign,
+        timestamp: new Date().toISOString()
+      });
       
       console.log('Mockups to assign:', mockupsToAssign);
       
@@ -745,6 +837,15 @@ const viewOptions = [
                   uniqueId
                 });
                 
+                console.log('🔍 DEBUG: Mockup selected via checkbox:', {
+                  filename,
+                  defaultView,
+                  viewSelectValue: viewSelect ? viewSelect.value : 'N/A',
+                  finalViewValue: viewValue,
+                  uniqueId,
+                  timestamp: new Date().toISOString()
+                });
+                
                 console.log(`Added to selectedMockups: ${filename} -> ${viewValue} (${uniqueId})`);
                 console.log('Current selectedMockups:', Array.from(selectedMockups.entries()));
               } else {
@@ -762,14 +863,21 @@ const viewOptions = [
         document.querySelectorAll('.mockup-view-select').forEach(select => {
           console.log('Setting up direct handler for view select:', select);
           select.addEventListener('change', function() {
-            const selectFilename = this.getAttribute('data-filename');
+            const filename = this.getAttribute('data-filename');
             const uniqueId = this.getAttribute('data-unique-id');
             
             console.log('Direct view select handler triggered:', {
               select: this,
-              selectFilename,
+              selectFilename: filename,
               uniqueId,
               value: this.value
+            });
+            
+            console.log('🔍 DEBUG: View dropdown changed:', {
+              filename: filename,
+              newValue: this.value,
+              uniqueId,
+              timestamp: new Date().toISOString()
             });
             
             const mockupItem = this.closest('.mockup-item');
@@ -792,9 +900,39 @@ const viewOptions = [
                 mockupData.view = this.value;
                 selectedMockups.set(checkboxFilename, mockupData);
                 
+                console.log('🔍 DEBUG: Updated selectedMockups via dropdown change:', {
+                  filename,
+                  checkboxFilename,
+                  uniqueId,
+                  oldView,
+                  newView: this.value,
+                  mapSizeBefore: selectedMockups.size,
+                  mapSizeAfter: selectedMockups.size,
+                  updatedMapEntry: selectedMockups.get(checkboxFilename),
+                  allMapEntries: Array.from(selectedMockups.entries()),
+                  timestamp: new Date().toISOString()
+                });
+                
                 console.log(`Updated view in selectedMockups: ${checkboxFilename} from ${oldView} to ${this.value} (${uniqueId})`);
                 console.log('Current selectedMockups:', Array.from(selectedMockups.entries()));
+              } else {
+                console.log('🔍 DEBUG: Dropdown change NOT applied because:', {
+                  checkboxFilename,
+                  hasInMap: selectedMockups.has(checkboxFilename),
+                  mapKeys: Array.from(selectedMockups.keys()),
+                  filename,
+                  uniqueId,
+                  timestamp: new Date().toISOString()
+                });
               }
+            } else {
+              console.log('🔍 DEBUG: Dropdown change NOT applied because checkbox not checked:', {
+                checkboxExists: !!checkbox,
+                checkboxChecked: checkbox ? checkbox.checked : 'N/A',
+                filename,
+                uniqueId,
+                timestamp: new Date().toISOString()
+              });
             }
           });
         });

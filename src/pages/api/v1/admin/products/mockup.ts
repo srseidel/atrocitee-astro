@@ -1215,8 +1215,19 @@ export const POST: APIRoute = async ({ request, cookies }) => {
             return null;
           }
           
-          // Determine view from filename
-          let view = determineViewFromFilename(baseFilename);
+          // Find the assigned view for this file from the mockup settings
+          let assignedView = null;
+          if (variant.mockup_settings?.views && Array.isArray(variant.mockup_settings.views)) {
+            const assignedMockup = variant.mockup_settings.views.find((v: any) => v.filename === baseFilename);
+            if (assignedMockup) {
+              assignedView = assignedMockup.view;
+              console.log(`Found assigned view for ${baseFilename}: ${assignedView}`);
+            }
+          }
+          
+          // Use assigned view if found, otherwise determine from filename
+          const view = assignedView || determineViewFromFilename(baseFilename);
+          console.log(`Using view for ${baseFilename}: ${view} (assigned: ${!!assignedView})`);
           
           // Generate standardized filename
           const newFilename = generateMockupFilename(
