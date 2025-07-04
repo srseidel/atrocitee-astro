@@ -327,6 +327,13 @@ CREATE TABLE product_variants (
   files JSONB DEFAULT '{}',
   mockup_settings JSONB DEFAULT '{}',
   
+  -- Printful variant properties (extracted for easier querying)
+  size TEXT,
+  color TEXT,
+  availability_status TEXT,
+  is_available BOOLEAN DEFAULT TRUE,
+  last_synced_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  
   -- Inventory
   in_stock BOOLEAN DEFAULT TRUE,
   stock_level INTEGER,
@@ -339,10 +346,19 @@ CREATE TABLE product_variants (
 -- Add indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_product_variants_printful_id ON product_variants(printful_id);
 CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON product_variants(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_variants_color ON product_variants(color);
+CREATE INDEX IF NOT EXISTS idx_product_variants_size ON product_variants(size);
+CREATE INDEX IF NOT EXISTS idx_product_variants_availability ON product_variants(is_available);
+CREATE INDEX IF NOT EXISTS idx_product_variants_availability_status ON product_variants(availability_status);
 
 -- Add comment to track the changes
-COMMENT ON TABLE product_variants IS 'Updated 2024-05-26: Added mockup_settings column for storing mockup configuration';
+COMMENT ON TABLE product_variants IS 'Updated 2024-05-26: Added mockup_settings, size, color, availability columns for better querying and stock management';
 COMMENT ON COLUMN product_variants.mockup_settings IS 'Added 2024-05-26: Stores mockup generation settings like selected views';
+COMMENT ON COLUMN product_variants.size IS 'Added 2024-05-26: Extracted from Printful API for easier querying and filtering';
+COMMENT ON COLUMN product_variants.color IS 'Added 2024-05-26: Extracted from Printful API for easier querying and filtering';
+COMMENT ON COLUMN product_variants.availability_status IS 'Added 2024-05-26: Printful availability status (active, discontinued, out_of_stock, etc.)';
+COMMENT ON COLUMN product_variants.is_available IS 'Added 2024-05-26: Boolean flag for quick availability filtering';
+COMMENT ON COLUMN product_variants.last_synced_at IS 'Added 2024-05-26: Timestamp of last sync with Printful API';
 COMMENT ON COLUMN product_variants.printful_id IS 'Printful''s ID for this specific variant - used in variant_ids field for mockup generation';
 COMMENT ON COLUMN product_variants.printful_product_id IS 'ID of the parent product in Printful''s system - used as id field for mockup generation';
 COMMENT ON COLUMN product_variants.printful_external_id IS 'External reference ID used in Printful system for external tracking';

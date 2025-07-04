@@ -8,7 +8,65 @@ function generateSlug(name: string): string {
   return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Enhances variant options by extracting color and size from Printful's direct properties
+ * and variant name when they're not provided in the options array
+ */
+function enhanceVariantOptions(variant: any): any[] {
+  const options = Array.isArray(variant.options) ? [...variant.options] : [];
+  
+  // Check if color and size options already exist
+  const hasColor = options.some(opt => opt.id === 'color');
+  const hasSize = options.some(opt => opt.id === 'size');
+  
+  // First priority: Use Printful's direct size and color properties
+  if (!hasSize && variant.size) {
+    options.push({ id: 'size', value: variant.size });
+  }
+  
+  if (!hasColor && variant.color) {
+    options.push({ id: 'color', value: variant.color });
+  }
+  
+  // If we still don't have color/size, fall back to extracting from variant name
+  if (!hasColor || !hasSize) {
+    const stillNeedsColor = !options.some(opt => opt.id === 'color');
+    const stillNeedsSize = !options.some(opt => opt.id === 'size');
+    
+    if (variant.name && (stillNeedsColor || stillNeedsSize)) {
+      const parts = variant.name.split('/').map((p: string) => p.trim());
+      
+      if (parts.length >= 2) {
+        const lastPart = parts[parts.length - 1];
+        const secondLastPart = parts.length >= 3 ? parts[parts.length - 2] : null;
+        
+        // Check if last part looks like a size
+        const isSizePattern = /^(xs|s|m|l|xl|2xl|3xl|4xl|5xl|\d+\s*(oz|ml|l|inch|in|cm|mm|"))$/i.test(lastPart);
+        
+        if (isSizePattern && stillNeedsSize) {
+          // Last part is size
+          options.push({ id: 'size', value: lastPart });
+          
+          // Second last part might be color
+          if (secondLastPart && stillNeedsColor) {
+            // Check if it's NOT a size pattern
+            const isNotSize = !/^(xs|s|m|l|xl|2xl|3xl|4xl|5xl|\d+\s*(oz|ml|l|inch|in|cm|mm|"))$/i.test(secondLastPart);
+            if (isNotSize) {
+              options.push({ id: 'color', value: secondLastPart });
+            }
+          }
+        } else if (stillNeedsColor) {
+          // Last part might be color (if it's not a size)
+          options.push({ id: 'color', value: lastPart });
+        }
+      }
+    }
+  }
+  
+  return options;
 }
 
 export class PrintfulProductSync {
@@ -205,43 +263,39 @@ export class PrintfulProductSync {
                 throw variantSelectError;
               }
 
-              const variantData = {
+              // Upsert product variant
+              const variantData: any = {
                 product_id: productId,
                 printful_id: variant.id,
                 printful_external_id: variant.external_id,
-                printful_product_id: product.id,
-                printful_synced: true,
+                printful_product_id: variant.product?.product_id,
+                printful_synced: variant.synced,
                 name: variant.name,
                 sku: variant.sku,
-                retail_price: parseFloat(variant.retail_price),
-                currency: variant.currency || 'USD',
-                options: variant.options,
-                files: variant.files,
-                in_stock: variant.in_stock,
-                stock_level: variant.in_stock ? 1 : 0
+                retail_price: variant.retail_price,
+                currency: variant.currency,
+                options: enhanceVariantOptions(variant),
+                files: variant.files || [],
+                in_stock: !variant.is_ignored,
+                // New fields from Printful API
+                size: variant.size || null,
+                color: variant.color || null,
+                availability_status: variant.availability_status || 'active',
+                is_available: variant.availability_status === 'active',
+                last_synced_at: new Date().toISOString(),
               };
 
+              // Add ID only if updating existing variant
               if (existingVariant) {
-                console.log(`[Sync] Updating variant ${variant.id} (${variant.name}) for product ${productId}`);
-                // Update existing variant
-                const { error: updateError } = await this.supabase
-                  .from('product_variants')
-                  .update(variantData)
-                  .eq('id', existingVariant.id);
+                variantData.id = existingVariant.id;
+              }
 
-                if (updateError) {
-                  throw updateError;
-                }
-              } else {
-                console.log(`[Sync] Creating new variant ${variant.id} (${variant.name}) for product ${productId}`);
-                // Create new variant
-                const { error: insertError } = await this.supabase
-                  .from('product_variants')
-                  .insert(variantData);
+              const { error: variantError } = await this.supabase
+                .from('product_variants')
+                .upsert(variantData);
 
-                if (insertError) {
-                  throw insertError;
-                }
+              if (variantError) {
+                throw variantError;
               }
             } catch (error) {
               console.error(`[Sync] Failed to sync variant ${variant.id} for product ${product.id}:`, error);

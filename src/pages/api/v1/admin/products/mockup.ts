@@ -128,18 +128,33 @@ export function storeProgress(progressData: ProgressUpdate): void {
 function extractColorFromVariant(variant: ProductVariant): string {
   let color = '';
   
+  console.log('🔍 DEBUG: extractColorFromVariant called with:', {
+    variantId: variant.id,
+    variantName: variant.name,
+    variantSku: variant.sku,
+    variantOptions: variant.options,
+    optionsType: typeof variant.options,
+    optionsIsArray: Array.isArray(variant.options)
+  });
+  
   // First try to get color from options
   if (variant.options && Array.isArray(variant.options)) {
+    console.log('🔍 DEBUG: Checking variant options for color:', variant.options);
     for (const option of variant.options) {
+      console.log('🔍 DEBUG: Checking option:', option);
       if (option.id === 'color') {
         color = option.value;
+        console.log('🔍 DEBUG: Found color in options:', color);
         break;
       }
     }
+  } else {
+    console.log('🔍 DEBUG: No valid options array found, variant.options is:', variant.options);
   }
   
   // Try to extract color from SKU if available
   if (!color && variant.sku) {
+    console.log('🔍 DEBUG: No color in options, trying SKU:', variant.sku);
     const skuParts = variant.sku.split('_');
     if (skuParts.length > 1) {
       // Check if the last part contains color information
@@ -149,6 +164,7 @@ function extractColorFromVariant(variant: ProductVariant): string {
       for (const commonColor of COMMON_COLORS) {
         if (lastPart.includes(commonColor.toLowerCase().replace(' ', '-'))) {
           color = lastPart;
+          console.log('🔍 DEBUG: Found color in SKU:', color);
           break;
         }
       }
@@ -169,23 +185,53 @@ function extractColorFromVariant(variant: ProductVariant): string {
   
   // If color is not found in options or SKU, try to extract it from the variant name
   if (!color && variant.name) {
+    console.log('🔍 DEBUG: No color in options or SKU, trying variant name:', variant.name);
     const variantNameLower = variant.name.toLowerCase();
     
     // Look for "/ color" pattern often used in variant names (e.g., "Product / Navy")
     const slashPattern = variantNameLower.split('/');
     if (slashPattern.length > 1) {
       const potentialColor = slashPattern[slashPattern.length - 1].trim();
-      // Check if this part contains a known color
-      for (const commonColor of COMMON_COLORS) {
-        if (potentialColor.includes(commonColor.toLowerCase().replace(' ', '-'))) {
-          color = potentialColor;
-          break;
-        }
-      }
+      console.log('🔍 DEBUG: Found slash pattern, potential color:', potentialColor);
       
-      // If we didn't find a known color but there's text after the slash, use it
-      if (!color && potentialColor.length > 0) {
-        color = potentialColor;
+      // Check if this looks like a size rather than a color
+      const isSizePattern = /\d+\s*(oz|ml|l|xl|xs|sm|md|lg|inch|in|cm|mm|")/i.test(potentialColor);
+      if (isSizePattern) {
+        console.log('🔍 DEBUG: Potential color looks like a size, skipping:', potentialColor);
+        // If the part after slash is a size, try to extract color from the product name (before slash)
+        const productNamePart = slashPattern[0].trim();
+        console.log('🔍 DEBUG: Trying to extract color from product name part:', productNamePart);
+        
+        // Look for colors in the product name
+        for (const commonColor of COMMON_COLORS) {
+          const normalizedColor = commonColor.toLowerCase().replace(' ', '-');
+          if (productNamePart.includes(normalizedColor)) {
+            color = commonColor;
+            console.log('🔍 DEBUG: Found color in product name part:', color);
+            break;
+          }
+        }
+        
+        // Special check for "white" in product names like "White Mug"
+        if (!color && productNamePart.includes('white')) {
+          color = 'white';
+          console.log('🔍 DEBUG: Found "white" in product name part:', color);
+        }
+      } else {
+        // Check if this part contains a known color
+        for (const commonColor of COMMON_COLORS) {
+          if (potentialColor.includes(commonColor.toLowerCase().replace(' ', '-'))) {
+            color = potentialColor;
+            console.log('🔍 DEBUG: Found known color in slash pattern:', color);
+            break;
+          }
+        }
+        
+        // If we didn't find a known color but there's text after the slash, use it only if it doesn't look like a size
+        if (!color && potentialColor.length > 0 && !isSizePattern) {
+          color = potentialColor;
+          console.log('🔍 DEBUG: Using potential color from slash pattern:', color);
+        }
       }
     }
     
@@ -197,6 +243,7 @@ function extractColorFromVariant(variant: ProductVariant): string {
         
         if (normalizedName.includes(normalizedColor)) {
           color = commonColor;
+          console.log('🔍 DEBUG: Found common color in variant name:', color);
           break;
         }
       }
@@ -209,6 +256,10 @@ function extractColorFromVariant(variant: ProductVariant): string {
       else if (variantNameLower.includes('dark blue')) color = 'dark blue';
       else if (variantNameLower.includes('light gray') || variantNameLower.includes('light grey')) color = 'light gray';
       else if (variantNameLower.includes('dark gray') || variantNameLower.includes('dark grey')) color = 'dark gray';
+      
+      if (color) {
+        console.log('🔍 DEBUG: Found multi-word color in variant name:', color);
+      }
     }
   }
   
@@ -223,6 +274,8 @@ function extractColorFromVariant(variant: ProductVariant): string {
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join('-');
   }
+  
+  console.log('🔍 DEBUG: Final extracted color:', color);
   
   return color;
 }
@@ -552,14 +605,29 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
       // Get size from variant options if available
       let size = '';
       
+      console.log('🔍 DEBUG: Extracting size from variant:', {
+        variantId: typedVariant.id,
+        variantName: typedVariant.name,
+        variantOptions: typedVariant.options,
+        optionsType: typeof typedVariant.options,
+        optionsIsArray: Array.isArray(typedVariant.options)
+      });
+      
       if (typedVariant.options && Array.isArray(typedVariant.options)) {
+        console.log('🔍 DEBUG: Checking variant options for size:', typedVariant.options);
         for (const option of typedVariant.options) {
+          console.log('🔍 DEBUG: Checking option for size:', option);
           if (option.id === 'size') {
             size = option.value;
+            console.log('🔍 DEBUG: Found size in options:', size);
             break;
           }
         }
+      } else {
+        console.log('🔍 DEBUG: No valid options array found for size extraction, variant.options is:', typedVariant.options);
       }
+      
+      console.log('🔍 DEBUG: Final extracted size:', size);
       
       // Extract color from variant
       const color = extractColorFromVariant(typedVariant);
@@ -1165,14 +1233,31 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       // Extract color and size from variant
       const color = extractColorFromVariant(variant);
       let size = '';
+      
+      console.log('🔍 DEBUG: Extracting size from variant (process endpoint):', {
+        variantId: variant.id,
+        variantName: variant.name,
+        variantOptions: variant.options,
+        optionsType: typeof variant.options,
+        optionsIsArray: Array.isArray(variant.options)
+      });
+      
       if (variant.options && Array.isArray(variant.options)) {
+        console.log('🔍 DEBUG: Checking variant options for size (process):', variant.options);
         for (const option of variant.options) {
+          console.log('🔍 DEBUG: Checking option for size (process):', option);
           if (option.id === 'size') {
             size = option.value;
+            console.log('🔍 DEBUG: Found size in options (process):', size);
             break;
           }
         }
+      } else {
+        console.log('🔍 DEBUG: No valid options array found for size extraction (process), variant.options is:', variant.options);
       }
+      
+      console.log('🔍 DEBUG: Final extracted size (process):', size);
+      console.log('🔍 DEBUG: Final extracted color (process):', color);
 
       // Get product name from variant
       let productName = '';

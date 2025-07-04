@@ -36,6 +36,9 @@ export interface PrintfulVariant {
   sku: string;
   currency: string;
   in_stock: boolean;
+  size?: string;
+  color?: string;
+  availability_status?: string;
   product: {
     variant_id: number;
     product_id: number;
