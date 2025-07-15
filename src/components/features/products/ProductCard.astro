@@ -1,21 +1,33 @@
 ---
+import QuickAddButton from './QuickAddButton.tsx';
+
 interface Props {
   productId: string;
+  productSlug: string;
   name: string;
   price: number;
   imageUrl: string;
   description: string;
   category: string;
+  variants: Array<{
+    id: string;
+    name: string;
+    options: Record<string, string>;
+    price: number;
+    imageUrl?: string;
+  }>;
   badge?: 'new' | 'sale' | 'featured';
 }
 
 const { 
-  productId, 
+  productId,
+  productSlug,
   name, 
   price, 
   imageUrl = '/placeholder-product.jpg', 
   description, 
   category,
+  variants,
   badge
 } = Astro.props;
 
@@ -35,7 +47,7 @@ const badgeClasses = {
 
 <div class="product-card group">
   {/* Product image */}
-  <div class="product-img-container">
+  <a href={`/shop/product/${productSlug}`} class="product-img-container">
     <img 
       src={imageUrl} 
       alt={name} 
@@ -48,14 +60,16 @@ const badgeClasses = {
         {badge}
       </div>
     )}
-  </div>
+  </a>
   
   {/* Product info */}
   <div class="product-info">
     <div class="flex justify-between items-start">
       <div>
         <h3 class="product-title">
-          {name}
+          <a href={`/shop/product/${productSlug}`} class="hover:text-primary">
+            {name}
+          </a>
         </h3>
         <p class="text-xs text-neutral-500 mb-2">{category}</p>
       </div>
@@ -64,23 +78,14 @@ const badgeClasses = {
     
     <p class="text-sm text-neutral-600 line-clamp-2 mb-4">{description}</p>
     
-    <div class="flex space-x-2">
-      <a 
-        href={`/product/${productId}`} 
-        class="btn btn-primary text-sm py-1 px-3 flex-1 text-center"
-      >
-        View Details
-      </a>
-      <button 
-        class="btn btn-secondary text-sm py-1 px-3"
-        aria-label="Add to cart"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-          <line x1="3" y1="6" x2="21" y2="6"></line>
-          <path d="M16 10a4 4 0 0 1-8 0"></path>
-        </svg>
-      </button>
+    <div class="flex justify-center">
+      <QuickAddButton 
+        client:load
+        productId={productId}
+        productSlug={productSlug}
+        productName={name}
+        variants={variants}
+      />
     </div>
   </div>
 </div> 

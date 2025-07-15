@@ -1,7 +1,8 @@
 ---
 // @ts-nocheck - Disable TypeScript checking for Astro-specific attributes like 'class' vs 'className'
 
-import Layout from '@layouts/Layout.astro';
+import Layout from '@layouts/MainLayout.astro';
+import AddToCartButton from '@components/features/cart/AddToCartButton.tsx';
 import { createClient } from '@lib/supabase/client';
 import type { Database } from '@local-types/database/schema';
 import type { GetStaticPaths } from 'astro';
@@ -30,7 +31,12 @@ export const getStaticPaths = (async () => {
     .select(`
       *,
       product_variants (
-        *
+        id,
+        retail_price,
+        in_stock,
+        stock_level,
+        mockup_settings,
+        options
       ),
       charities (
         name,
@@ -64,8 +70,20 @@ export const getStaticPaths = (async () => {
 
 const { product, category } = Astro.props;
 
-// Group variants by their options
-const variantOptions = (product.product_variants || []).reduce((acc: Record<string, Set<string>>, variant: ProductVariant) => {
+// Process variants for cart functionality
+const variants = product.product_variants?.map((variant: any) => ({
+  id: variant.id,
+  name: `${variant.options?.color || 'Default'} - ${variant.options?.size || 'One Size'}`,
+  options: variant.options || {},
+  price: variant.retail_price || product.atrocitee_base_price || 0,
+  in_stock: variant.in_stock
+})) || [];
+
+// Get the first available variant as default
+const defaultVariant = variants.find(v => v.in_stock) || variants[0];
+
+// Group variants by their options for selection UI
+const variantOptions = (product.product_variants || []).reduce((acc: Record<string, Set<string>>, variant: any) => {
   const options = variant.options as Record<string, string> || {};
   Object.entries(options).forEach(([key, value]) => {
     if (!acc[key]) {
@@ -81,6 +99,11 @@ const options = Object.entries(variantOptions).reduce((acc: Record<string, strin
   acc[key] = Array.from(values);
   return acc;
 }, {});
+
+// Get main image
+const mainImage = defaultVariant?.mockup_settings?.views?.find((v: any) => v.view === 'front')?.url || 
+                  defaultVariant?.mockup_settings?.views?.[0]?.url || 
+                  product.thumbnail_url;
 ---
 
 <Layout title={product.name}>
@@ -162,35 +185,45 @@ const options = Object.entries(variantOptions).reduce((acc: Record<string, strin
           </div>
         </div>
 
-        <form class="mt-6">
-          <!-- Variant Selection -->
-          {Object.entries(options).map(([optionName, values]) => (
-            <div class="mt-4">
-              <label class="block text-sm font-medium text-gray-700">
-                {optionName.charAt(0).toUpperCase() + optionName.slice(1)}
-              </label>
-              <select
-                class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                name={optionName}
-              >
-                <option value="">Select {optionName}</option>
-                {values.map((value) => (
-                  <option value={value}>{value}</option>
-                ))}
-              </select>
+        <!-- Variant Selection Display -->
+        {Object.entries(options).length > 0 && (
+          <div class="mt-6">
+            <h3 class="text-sm font-medium text-gray-900">Available Options</h3>
+            <div class="mt-4 space-y-4">
+              {Object.entries(options).map(([optionName, values]) => (
+                <div>
+                  <span class="text-sm font-medium text-gray-700">
+                    {optionName.charAt(0).toUpperCase() + optionName.slice(1)}:
+                  </span>
+                  <span class="ml-2 text-sm text-gray-600">
+                    {values.join(', ')}
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
-
-          <!-- Add to Cart Button -->
-          <div class="mt-10 flex">
-            <button
-              type="submit"
-              class="w-full bg-indigo-600 border border-transparent rounded-md py-3 px-8 flex items-center justify-center text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-50 focus:ring-indigo-500"
-            >
-              Add to cart
-            </button>
           </div>
-        </form>
+        )}
+
+        <!-- Add to Cart -->
+        <div class="mt-10">
+          {defaultVariant ? (
+            <AddToCartButton
+              client:load
+              productId={product.id}
+              productSlug={product.slug}
+              productName={product.name}
+              variantId={defaultVariant.id}
+              variantName={defaultVariant.name}
+              options={defaultVariant.options}
+              price={defaultVariant.price}
+              imageUrl={mainImage}
+              maxQuantity={99}
+              disabled={!defaultVariant.in_stock}
+            />
+          ) : (
+            <p class="text-red-600">This product is currently unavailable.</p>
+          )}
+        </div>
 
         <!-- Charity Information -->
         {product.charities && (
@@ -224,27 +257,4 @@ const options = Object.entries(variantOptions).reduce((acc: Record<string, strin
       </div>
     </div>
   </div>
-</Layout>
-
-<script>
-// Client-side variant selection and add to cart logic
-const form = document.querySelector('form');
-const selects = form?.querySelectorAll('select');
-
-if (form && selects) {
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    
-    // Get selected options
-    const selectedOptions: Record<string, string> = {};
-    selects.forEach((select) => {
-      if (select instanceof HTMLSelectElement && select.name && select.value) {
-        selectedOptions[select.name] = select.value;
-      }
-    });
-
-    // TODO: Add to cart logic
-    console.log('Selected options:', selectedOptions);
-  });
-}
-</script> 
+</Layout> 

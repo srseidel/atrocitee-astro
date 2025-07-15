@@ -1,6 +1,7 @@
 ---
 // @ts-nocheck - Disable TypeScript checking for Astro-specific attributes like 'class' vs 'className'
-import Layout from '@layouts/Layout.astro';
+import Layout from '@layouts/MainLayout.astro';
+import AddToCartButton from '@components/features/cart/AddToCartButton.tsx';
 import { parseMockupFilename, getViewLabel } from '@utils/helpers/mockups';
 import { 
   findVariant, 
@@ -326,19 +327,21 @@ const clientData = {
 
         {/* Add to Cart */}
         <div class="mb-6">
-          <form method="post" action="/api/cart/add" id="add-to-cart-form">
-            <input type="hidden" name="product_id" value={product.id} />
-            <input type="hidden" name="variant_id" value={selectedVariant?.id} id="variant-id-input" />
-            <input type="hidden" name="quantity" value="1" />
-            <button
-              type="submit"
-              class="w-full bg-primary hover:bg-primary-dark text-white font-bold py-3 px-6 rounded transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-              disabled={!selectedVariant?.in_stock}
-              id="add-to-cart-button"
-            >
-              {selectedVariant?.in_stock ? 'Add to Cart' : 'Out of Stock'}
-            </button>
-          </form>
+          {selectedVariant && (
+            <AddToCartButton
+              client:load
+              productId={product.id}
+              productSlug={product.slug}
+              productName={product.name}
+              variantId={selectedVariant.id}
+              variantName={`${selectedVariant.options.color} - ${selectedVariant.options.size}`}
+              options={selectedVariant.options}
+              price={selectedVariant.retail_price}
+              imageUrl={mainImage?.url}
+              maxQuantity={99}
+              disabled={!selectedVariant.in_stock}
+            />
+          )}
         </div>
 
         {/* Product Details */}

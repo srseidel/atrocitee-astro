@@ -14,8 +14,9 @@ const ENV = {
   // Sentry.io
   PUBLIC_SENTRY_DSN: import.meta.env.PUBLIC_SENTRY_DSN as string,
   
-  // Stripe (Public)
-  PUBLIC_STRIPE_PUBLISHABLE_KEY: import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY as string,
+  // Stripe Configuration
+  PUBLIC_STRIPE_PUBLISHABLE_KEY: import.meta.env.STRIPE_PUBLIC_KEY as string,
+  STRIPE_SECRET_KEY: import.meta.env.STRIPE_SECRET_KEY as string,
   
   // Printful API Integration
   PRINTFUL_API_KEY: import.meta.env.PRINTFUL_API_KEY as string,

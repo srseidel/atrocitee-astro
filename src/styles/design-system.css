@@ -71,11 +71,11 @@
   }
 
   .product-img-container {
-    @apply relative aspect-[3/4] overflow-hidden bg-neutral-100;
+    @apply relative w-full h-64 overflow-hidden bg-neutral-100;
   }
 
   .product-img {
-    @apply object-cover h-full w-full group-hover:scale-105 transition-transform duration-300;
+    @apply object-contain object-center h-full w-full group-hover:scale-105 transition-transform duration-300;
   }
 
   .product-badge {

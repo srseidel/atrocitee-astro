@@ -1,7 +1,8 @@
 ---
 // @ts-nocheck - Disable TypeScript checking for Astro-specific attributes like 'class' vs 'className'
 
-import Layout from '@layouts/Layout.astro';
+import Layout from '@layouts/MainLayout.astro';
+import ProductCard from '@components/features/products/ProductCard.astro';
 import { createClient } from '@lib/supabase/client';
 import type { Database } from '@local-types/database/schema';
 import type { GetStaticPaths } from 'astro';
@@ -39,7 +40,12 @@ export const getStaticPaths = (async () => {
     .select(`
       *,
       product_variants (
-        *
+        id,
+        retail_price,
+        in_stock,
+        stock_level,
+        mockup_settings,
+        options
       ),
       categories!inner (
         *
@@ -55,8 +61,46 @@ export const getStaticPaths = (async () => {
     `)
     .eq('published_status', true);
 
+  // Process products to include variant data and images
+  const processProducts = (productList: any[]) => {
+    return productList.map(product => {
+      // Find the first variant with mockup settings
+      const variantWithMockup = product.product_variants?.find((v: any) => 
+        v.mockup_settings?.views && v.mockup_settings.views.length > 0
+      );
+      
+      // Get the front view mockup if available
+      const frontMockup = variantWithMockup?.mockup_settings?.views?.find((v: any) => v.view === 'front');
+      
+      // If no front view, get the first available mockup
+      const firstMockup = variantWithMockup?.mockup_settings?.views?.[0];
+      
+      // Use mockup image URL if available, otherwise fallback to thumbnail_url
+      const imageUrl = frontMockup?.url || firstMockup?.url || product.thumbnail_url;
+      
+      // Process variants for cart functionality
+      const variants = product.product_variants?.map((variant: any) => ({
+        id: variant.id,
+        name: `${variant.options?.color || 'Default'} - ${variant.options?.size || 'One Size'}`,
+        options: variant.options || {},
+        price: variant.retail_price || product.atrocitee_base_price || 0,
+        imageUrl: imageUrl
+      })) || [];
+      
+      // Use the first variant's price, or base price as fallback
+      const displayPrice = variants[0]?.price || product.atrocitee_base_price || 0;
+      
+      return {
+        ...product,
+        imageUrl,
+        variants,
+        displayPrice,
+      };
+    });
+  };
+
   // Group products by tag
-  const productsByTag = new Map<string, ProductWithRelations[]>();
+  const productsByTag = new Map<string, any[]>();
   
   // Check if products is null or undefined before using forEach
   if (products && Array.isArray(products)) {
@@ -72,6 +116,11 @@ export const getStaticPaths = (async () => {
           }
         });
       }
+    });
+    
+    // Process products for each tag
+    productsByTag.forEach((products, tagSlug) => {
+      productsByTag.set(tagSlug, processProducts(products));
     });
   }
 
@@ -110,29 +159,17 @@ const { tag, products = [] } = Astro.props;
     {/* Products grid */}
     <div class="grid grid-cols-1 gap-y-10 gap-x-6 sm:grid-cols-2 lg:grid-cols-4 xl:gap-x-8">
       {products.map((product: ProductWithRelations) => (
-        <div class="group relative">
-          <div class="w-full min-h-80 bg-gray-200 aspect-w-1 aspect-h-1 rounded-md overflow-hidden group-hover:opacity-75">
-            <img
-              src={product.thumbnail_url || 'https://via.placeholder.com/300'}
-              alt={product.name}
-              class="w-full h-full object-center object-cover"
-            />
-          </div>
-          <div class="mt-4 flex justify-between">
-            <div>
-              <h3 class="text-sm text-gray-700">
-                <a href={`/shop/${product.categories.slug}/${product.slug}`}>
-                  <span aria-hidden="true" class="absolute inset-0" />
-                  {product.name}
-                </a>
-              </h3>
-              <p class="mt-1 text-sm text-gray-500">{product.description}</p>
-            </div>
-            <p class="text-sm font-medium text-gray-900">
-              ${product.atrocitee_base_price?.toFixed(2) || '0.00'}
-            </p>
-          </div>
-        </div>
+        <ProductCard
+          productId={product.id}
+          productSlug={product.slug}
+          name={product.name}
+          price={product.displayPrice}
+          imageUrl={product.imageUrl || 'https://via.placeholder.com/300'}
+          description={product.description || ''}
+          category={tag.name}
+          variants={product.variants}
+          badge={product.atrocitee_featured ? "featured" : undefined}
+        />
       ))}
     </div>
 

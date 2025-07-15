@@ -1,6 +1,7 @@
 ---
 // @ts-nocheck - Disable TypeScript checking for Astro-specific attributes like 'class' vs 'className'
-import Layout from '@layouts/Layout.astro';
+import Layout from '@layouts/MainLayout.astro';
+import ProductCard from '@components/features/products/ProductCard.astro';
 import type { Database } from '@local-types/database/schema';
 import { createClient } from '@lib/supabase/client';
 
@@ -48,10 +49,12 @@ try {
     .select(`
       *,
       product_variants (
+        id,
         retail_price,
         in_stock,
         stock_level,
-        mockup_settings
+        mockup_settings,
+        options
       )
     `)
     .eq('published_status', true)
@@ -86,7 +89,7 @@ try {
 // Get featured products
 const featuredProducts = products ? products.filter(p => p && p.atrocitee_featured === true) : [];
 
-// Process products to get mockup images
+// Process products to get mockup images and variant data
 const processedProducts = products ? products.map(product => {
   // Find the first variant with mockup settings
   const variantWithMockup = product.product_variants?.find((v: ProductVariant) => 
@@ -103,11 +106,25 @@ const processedProducts = products ? products.map(product => {
   const imageUrl = frontMockup?.url || firstMockup?.url || product.thumbnail_url;
   const webpUrl = frontMockup?.webpUrl || firstMockup?.webpUrl;
   
+  // Process variants for cart functionality
+  const variants = product.product_variants?.map((variant: any) => ({
+    id: variant.id,
+    name: `${variant.options?.color || 'Default'} - ${variant.options?.size || 'One Size'}`,
+    options: variant.options || {},
+    price: variant.retail_price || product.atrocitee_base_price || 0,
+    imageUrl: imageUrl
+  })) || [];
+  
+  // Use the first variant's price, or base price as fallback
+  const displayPrice = variants[0]?.price || product.atrocitee_base_price || 0;
+  
   // Ensure we preserve the featured flag
   return {
     ...product,
     imageUrl,
     webpUrl,
+    variants,
+    displayPrice,
     atrocitee_featured: product.atrocitee_featured === true
   };
 }) : [];
@@ -290,45 +307,19 @@ processedProducts.forEach((product, index) => {
                     <div id="featured">
                       <h2 class="text-2xl font-extrabold tracking-tight text-gray-900">Featured Products</h2>
                       <div class="mt-6 grid grid-cols-1 gap-y-10 gap-x-6 sm:grid-cols-2 lg:grid-cols-3 xl:gap-x-8">
-                        {processedProducts.filter((p: Product) => p && p.atrocitee_featured).map((product: Product) => {
-                          console.log(`Rendering featured product: ${product.name}, Featured: ${product.atrocitee_featured}, Image: ${product.imageUrl}`);
-                          return (
-                            <div class="group relative">
-                              <div class="w-full min-h-80 bg-gray-200 aspect-w-1 aspect-h-1 rounded-md overflow-hidden group-hover:opacity-75">
-                                {product.webpUrl ? (
-                                  <picture>
-                                    <source srcset={product.webpUrl} type="image/webp" />
-                                    <img
-                                      src={product.imageUrl || 'https://via.placeholder.com/300'}
-                                      alt={product.name}
-                                      class="w-full h-full object-center object-cover"
-                                    />
-                                  </picture>
-                                ) : (
-                                  <img
-                                    src={product.imageUrl || 'https://via.placeholder.com/300'}
-                                    alt={product.name}
-                                    class="w-full h-full object-center object-cover"
-                                  />
-                                )}
-                              </div>
-                              <div class="mt-4 flex justify-between">
-                                <div>
-                                  <h3 class="text-sm text-gray-700">
-                                    <a href={`/shop/product/${product.slug}`}>
-                                      <span aria-hidden="true" class="absolute inset-0" />
-                                      {product.name}
-                                    </a>
-                                  </h3>
-                                  <p class="mt-1 text-sm text-gray-500">{product.description}</p>
-                                </div>
-                                <p class="text-sm font-medium text-gray-900">
-                                  ${product.atrocitee_base_price?.toFixed(2) || '0.00'}
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        })}
+                        {processedProducts.filter((p: any) => p && p.atrocitee_featured).map((product: any) => (
+                          <ProductCard
+                            productId={product.id}
+                            productSlug={product.slug}
+                            name={product.name}
+                            price={product.displayPrice}
+                            imageUrl={product.imageUrl || 'https://via.placeholder.com/300'}
+                            description={product.description || ''}
+                            category="Featured"
+                            variants={product.variants}
+                            badge="featured"
+                          />
+                        ))}
                       </div>
                     </div>
                   )}
@@ -337,41 +328,18 @@ processedProducts.forEach((product, index) => {
                   <div class="mt-12">
                     <h2 class="text-2xl font-extrabold tracking-tight text-gray-900">All Products</h2>
                     <div class="mt-6 grid grid-cols-1 gap-y-10 gap-x-6 sm:grid-cols-2 lg:grid-cols-3 xl:gap-x-8">
-                      {processedProducts.map((product: Product) => (
-                        <div class="group relative">
-                          <div class="w-full min-h-80 bg-gray-200 aspect-w-1 aspect-h-1 rounded-md overflow-hidden group-hover:opacity-75">
-                            {product.webpUrl ? (
-                              <picture>
-                                <source srcset={product.webpUrl} type="image/webp" />
-                                <img
-                                  src={product.imageUrl || 'https://via.placeholder.com/300'}
-                                  alt={product.name}
-                                  class="w-full h-full object-center object-cover"
-                                />
-                              </picture>
-                            ) : (
-                              <img
-                                src={product.imageUrl || 'https://via.placeholder.com/300'}
-                                alt={product.name}
-                                class="w-full h-full object-center object-cover"
-                              />
-                            )}
-                          </div>
-                          <div class="mt-4 flex justify-between">
-                            <div>
-                              <h3 class="text-sm text-gray-700">
-                                <a href={`/shop/product/${product.slug}`}>
-                                  <span aria-hidden="true" class="absolute inset-0" />
-                                  {product.name}
-                                </a>
-                              </h3>
-                              <p class="mt-1 text-sm text-gray-500">{product.description}</p>
-                            </div>
-                            <p class="text-sm font-medium text-gray-900">
-                              ${product.atrocitee_base_price?.toFixed(2) || '0.00'}
-                            </p>
-                          </div>
-                        </div>
+                      {processedProducts.map((product: any) => (
+                        <ProductCard
+                          productId={product.id}
+                          productSlug={product.slug}
+                          name={product.name}
+                          price={product.displayPrice}
+                          imageUrl={product.imageUrl || 'https://via.placeholder.com/300'}
+                          description={product.description || ''}
+                          category="General"
+                          variants={product.variants}
+                          badge={product.atrocitee_featured ? "featured" : undefined}
+                        />
                       ))}
                     </div>
                   </div>

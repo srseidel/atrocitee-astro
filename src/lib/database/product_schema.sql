@@ -373,28 +373,79 @@ CREATE TABLE product_tags (
   UNIQUE(product_id, tag_id)
 );
 
--- 7. Orders Table
+-- 7. Orders Table (Updated for Stripe integration)
 CREATE TABLE orders (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES profiles(id),
-  status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'cancelled')),
-  total_amount DECIMAL(10, 2) NOT NULL,
-  shipping_address JSON,
-  billing_address JSON,
-  payment_intent_id TEXT,
+  
+  -- Payment information
+  stripe_payment_intent_id TEXT UNIQUE,
+  stripe_charge_id TEXT,
+  payment_status TEXT DEFAULT 'pending' CHECK (payment_status IN ('pending', 'paid', 'failed', 'refunded')),
+  
+  -- Customer information
+  customer_email TEXT NOT NULL,
+  customer_name TEXT NOT NULL,
+  user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  
+  -- Order status
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded')),
+  
+  -- Order totals (in USD)
+  subtotal DECIMAL(10,2) NOT NULL,
+  tax DECIMAL(10,2) NOT NULL DEFAULT 0,
+  shipping_cost DECIMAL(10,2) NOT NULL DEFAULT 0,
+  discount DECIMAL(10,2) NOT NULL DEFAULT 0,
+  total_amount DECIMAL(10,2) NOT NULL,
+  
+  -- Addresses (stored as JSONB for flexibility)
+  shipping_address JSONB NOT NULL,
+  billing_address JSONB NOT NULL,
+  
+  -- Product snapshot (complete product data at time of purchase)
+  items_snapshot JSONB NOT NULL,
+  
+  -- Charity information
   charity_id UUID REFERENCES charities(id),
   charity_amount DECIMAL(10, 2) DEFAULT 0,
+  
+  -- Fulfillment information
+  printful_order_id BIGINT,
+  printful_status TEXT,
+  tracking_number TEXT,
+  tracking_url TEXT,
+  
+  -- Timestamps
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  shipped_at TIMESTAMP WITH TIME ZONE,
+  delivered_at TIMESTAMP WITH TIME ZONE
 );
 
--- 8. Order Items Table
+-- 8. Order Items Table (Updated for better tracking)
 CREATE TABLE order_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-  product_id UUID NOT NULL REFERENCES products(id),
-  quantity INTEGER NOT NULL,
-  price_per_unit DECIMAL(10, 2) NOT NULL,
+  
+  -- Product information (snapshot at time of purchase)
+  product_id UUID NOT NULL,
+  product_slug TEXT NOT NULL,
+  product_name TEXT NOT NULL,
+  variant_id UUID NOT NULL,
+  variant_name TEXT NOT NULL,
+  variant_options JSONB NOT NULL, -- {color: "Black", size: "M"}
+  
+  -- Pricing and quantity
+  unit_price DECIMAL(10,2) NOT NULL,
+  quantity INTEGER NOT NULL CHECK (quantity > 0),
+  line_total DECIMAL(10,2) NOT NULL,
+  
+  -- Product details
+  image_url TEXT,
+  donation_amount DECIMAL(10,2),
+  
+  -- Fulfillment
+  printful_line_item_id BIGINT,
+  
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
