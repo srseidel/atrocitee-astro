@@ -5,15 +5,15 @@
  */
 
 import React from 'react';
-import { useCartCount, useCartOpen } from '@lib/hooks/useCart';
+import { useSecureCartCount, useSecureCartOpen } from '@lib/hooks/useSecureCart';
 
 interface CartIconProps {
   className?: string;
 }
 
 export default function CartIcon({ className = '' }: CartIconProps) {
-  const itemCount = useCartCount();
-  const { toggleCart } = useCartOpen();
+  const itemCount = useSecureCartCount();
+  const { toggleCart } = useSecureCartOpen();
 
   return (
     <button

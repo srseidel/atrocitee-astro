@@ -34,8 +34,11 @@ let isAdmin = false;
 let userEmail = '';
 
 try {
-  // Only attempt to check auth on the server
-  if (Astro.request.headers) {
+  // Only attempt to check auth when we have proper server context
+  // Skip during static generation/prerendering
+  const hasServerContext = Astro.request && Astro.request.headers && typeof Astro.request.headers.get === 'function';
+  
+  if (hasServerContext) {
     const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
     const { data: { user }, error } = await supabase.auth.getUser();
     isAuthenticated = !!user;

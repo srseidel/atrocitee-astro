@@ -2,7 +2,7 @@
 // @ts-nocheck - Disable TypeScript checking for Astro-specific attributes like 'class' vs 'className'
 
 import Layout from '@layouts/MainLayout.astro';
-import AddToCartButton from '@components/features/cart/AddToCartButton.tsx';
+import SecureAddToCartButton from '@components/features/cart/SecureAddToCartButton.tsx';
 import { createClient } from '@lib/supabase/client';
 import type { Database } from '@local-types/database/schema';
 import type { GetStaticPaths } from 'astro';
@@ -36,7 +36,9 @@ export const getStaticPaths = (async () => {
         in_stock,
         stock_level,
         mockup_settings,
-        options
+        options,
+        printful_id,
+        printful_external_id
       ),
       charities (
         name,
@@ -71,13 +73,27 @@ export const getStaticPaths = (async () => {
 const { product, category } = Astro.props;
 
 // Process variants for cart functionality
-const variants = product.product_variants?.map((variant: any) => ({
-  id: variant.id,
-  name: `${variant.options?.color || 'Default'} - ${variant.options?.size || 'One Size'}`,
-  options: variant.options || {},
-  price: variant.retail_price || product.atrocitee_base_price || 0,
-  in_stock: variant.in_stock
-})) || [];
+const variants = product.product_variants?.map((variant: any) => {
+  // Convert Printful options array to object format
+  const optionsObj: Record<string, string> = {};
+  if (variant.options && Array.isArray(variant.options)) {
+    variant.options.forEach((opt: any) => {
+      if (opt.id && opt.value) {
+        optionsObj[opt.id] = opt.value;
+      }
+    });
+  }
+  
+  return {
+    id: variant.id,
+    name: `${optionsObj.color || 'Default'} - ${optionsObj.size || 'One Size'}`,
+    options: optionsObj,
+    price: variant.retail_price || product.atrocitee_base_price || 0,
+    in_stock: variant.in_stock,
+    printful_id: variant.printful_id,
+    printful_external_id: variant.printful_external_id
+  };
+}) || [];
 
 // Get the first available variant as default
 const defaultVariant = variants.find(v => v.in_stock) || variants[0];
@@ -207,17 +223,9 @@ const mainImage = defaultVariant?.mockup_settings?.views?.find((v: any) => v.vie
         <!-- Add to Cart -->
         <div class="mt-10">
           {defaultVariant ? (
-            <AddToCartButton
+            <SecureAddToCartButton
               client:load
-              productId={product.id}
-              productSlug={product.slug}
-              productName={product.name}
               variantId={defaultVariant.id}
-              variantName={defaultVariant.name}
-              options={defaultVariant.options}
-              price={defaultVariant.price}
-              imageUrl={mainImage}
-              maxQuantity={99}
               disabled={!defaultVariant.in_stock}
             />
           ) : (

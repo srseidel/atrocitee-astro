@@ -54,7 +54,9 @@ try {
         in_stock,
         stock_level,
         mockup_settings,
-        options
+        options,
+        printful_id,
+        printful_external_id
       )
     `)
     .eq('published_status', true)
@@ -107,13 +109,27 @@ const processedProducts = products ? products.map(product => {
   const webpUrl = frontMockup?.webpUrl || firstMockup?.webpUrl;
   
   // Process variants for cart functionality
-  const variants = product.product_variants?.map((variant: any) => ({
-    id: variant.id,
-    name: `${variant.options?.color || 'Default'} - ${variant.options?.size || 'One Size'}`,
-    options: variant.options || {},
-    price: variant.retail_price || product.atrocitee_base_price || 0,
-    imageUrl: imageUrl
-  })) || [];
+  const variants = product.product_variants?.map((variant: any) => {
+    // Convert Printful options array to object format
+    const optionsObj: Record<string, string> = {};
+    if (variant.options && Array.isArray(variant.options)) {
+      variant.options.forEach((opt: any) => {
+        if (opt.id && opt.value) {
+          optionsObj[opt.id] = opt.value;
+        }
+      });
+    }
+    
+    return {
+      id: variant.id,
+      name: `${optionsObj.color || 'Default'} - ${optionsObj.size || 'One Size'}`,
+      options: optionsObj,
+      price: variant.retail_price || product.atrocitee_base_price || 0,
+      imageUrl: imageUrl,
+      printful_id: variant.printful_id,
+      printful_external_id: variant.printful_external_id
+    };
+  }) || [];
   
   // Use the first variant's price, or base price as fallback
   const displayPrice = variants[0]?.price || product.atrocitee_base_price || 0;

@@ -1,0 +1,80 @@
+---
+/**
+ * Checkout Cancel Page
+ * 
+ * Displays when user cancels checkout or payment fails
+ */
+
+import MainLayout from '@layouts/MainLayout.astro';
+
+export const prerender = false;
+
+const title = 'Checkout Cancelled - Atrocitee';
+const description = 'Your checkout was cancelled';
+---
+
+<MainLayout title={title} description={description}>
+  <main class="min-h-screen bg-gray-50 py-12">
+    <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="bg-white rounded-lg shadow-sm border p-8 text-center">
+        <!-- Cancel Icon -->
+        <div class="mx-auto flex items-center justify-center w-16 h-16 bg-orange-100 rounded-full mb-6">
+          <svg class="w-8 h-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.884-.833-2.664 0L4.232 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+          </svg>
+        </div>
+
+        <!-- Cancel Message -->
+        <h1 class="text-2xl font-bold text-gray-900 mb-2">Checkout Cancelled</h1>
+        <p class="text-gray-600 mb-8">
+          Your payment was cancelled. No charges were made to your account.
+        </p>
+
+        <!-- Help Information -->
+        <div class="bg-gray-50 rounded-lg p-6 mb-8">
+          <h2 class="text-lg font-semibold text-gray-900 mb-4">Need Help?</h2>
+          <div class="space-y-2 text-sm text-gray-600">
+            <p>• Your cart items are still saved and ready for checkout</p>
+            <p>• If you experienced technical difficulties, please try again</p>
+            <p>• Contact our support team if you continue to have issues</p>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="space-y-4">
+          <a 
+            href="/checkout" 
+            class="inline-block bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary-dark transition-colors"
+          >
+            Try Checkout Again
+          </a>
+          <div class="space-x-4">
+            <a 
+              href="/cart" 
+              class="text-primary hover:text-primary-dark font-medium"
+            >
+              Review Cart
+            </a>
+            <span class="text-gray-400">|</span>
+            <a 
+              href="/shop" 
+              class="text-primary hover:text-primary-dark font-medium"
+            >
+              Continue Shopping
+            </a>
+          </div>
+        </div>
+
+        <!-- Support -->
+        <div class="mt-8 pt-6 border-t border-gray-200">
+          <p class="text-sm text-gray-500">
+            Having trouble with checkout? 
+            <a href="/contact" class="text-primary hover:text-primary-dark font-medium">
+              Get help from our support team
+            </a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </main>
+</MainLayout>

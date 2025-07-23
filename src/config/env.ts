@@ -15,12 +15,16 @@ const ENV = {
   PUBLIC_SENTRY_DSN: import.meta.env.PUBLIC_SENTRY_DSN as string,
   
   // Stripe Configuration
-  PUBLIC_STRIPE_PUBLISHABLE_KEY: import.meta.env.STRIPE_PUBLIC_KEY as string,
+  PUBLIC_STRIPE_PUBLISHABLE_KEY: import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY as string,
   STRIPE_SECRET_KEY: import.meta.env.STRIPE_SECRET_KEY as string,
   
   // Printful API Integration
   PRINTFUL_API_KEY: import.meta.env.PRINTFUL_API_KEY as string,
   PUBLIC_PRINTFUL_WEBHOOK_SECRET: import.meta.env.PUBLIC_PRINTFUL_WEBHOOK_SECRET as string,
+  
+  // Test Mode Configuration
+  ENABLE_TEST_MODE: import.meta.env.ENABLE_TEST_MODE === 'true' || import.meta.env.NODE_ENV === 'development',
+  PRINTFUL_SANDBOX_MODE: import.meta.env.PRINTFUL_SANDBOX_MODE === 'true' || import.meta.env.NODE_ENV === 'development',
   
   // Cron and Scheduling
   CRON_SECRET: import.meta.env.CRON_SECRET as string,

@@ -1,0 +1,148 @@
+---
+/**
+ * Account Debug Page
+ * 
+ * Simple diagnostic page to check what's working with account data
+ */
+
+export const prerender = false;
+
+import Container from "@components/common/Container.astro";
+import MainLayout from "@layouts/MainLayout.astro";
+import { createServerSupabaseClient } from '@lib/supabase/client';
+
+let user = null;
+let profile = null;
+let charities = null;
+let errors = [];
+
+try {
+  // Use server client with cookies for authentication
+  const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
+  
+  // Get current user
+  const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+  if (authError) {
+    errors.push(`Auth Error: ${authError.message}`);
+  } else {
+    user = authUser;
+  }
+
+  // Try to get profile
+  if (user) {
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+    
+    if (profileError) {
+      errors.push(`Profile Error: ${profileError.message} (Code: ${profileError.code})`);
+      console.log('Full profile error:', profileError);
+    } else {
+      profile = profileData;
+    }
+  }
+
+  // Test profile table access in general
+  const { data: profileTest, error: profileTestError } = await supabase
+    .from('profiles')
+    .select('id, email, display_name')
+    .limit(1);
+  
+  if (profileTestError) {
+    errors.push(`Profile Table Test Error: ${profileTestError.message} (Code: ${profileTestError.code})`);
+  }
+
+  // Try to get charities
+  const { data: charitiesData, error: charitiesError } = await supabase
+    .from('charities')
+    .select('id, name, active')
+    .limit(5);
+  
+  if (charitiesError) {
+    errors.push(`Charities Error: ${charitiesError.message}`);
+  } else {
+    charities = charitiesData;
+  }
+
+} catch (error) {
+  errors.push(`General Error: ${error.message}`);
+}
+---
+
+<MainLayout title="Account Debug">
+  <Container>
+    <div class="py-8">
+      <h1 class="text-3xl font-bold mb-6">Account Debug Information</h1>
+      
+      {errors.length > 0 && (
+        <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <h2 class="font-semibold text-red-800 mb-2">Errors Found:</h2>
+          <ul class="list-disc list-inside space-y-1 text-red-700">
+            {errors.map((error) => (
+              <li>{error}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      
+      <div class="space-y-6">
+        <!-- User Info -->
+        <div class="bg-white shadow rounded-lg p-6">
+          <h2 class="text-xl font-semibold mb-4">User Authentication</h2>
+          {user ? (
+            <div class="space-y-2">
+              <p><strong>ID:</strong> {user.id}</p>
+              <p><strong>Email:</strong> {user.email}</p>
+              <p><strong>Created:</strong> {new Date(user.created_at).toLocaleString()}</p>
+              <p><strong>Metadata:</strong> {JSON.stringify(user.user_metadata)}</p>
+            </div>
+          ) : (
+            <p class="text-red-600">Not authenticated</p>
+          )}
+        </div>
+
+        <!-- Profile Info -->
+        <div class="bg-white shadow rounded-lg p-6">
+          <h2 class="text-xl font-semibold mb-4">Profile Data</h2>
+          {profile ? (
+            <div class="space-y-2">
+              <p><strong>Display Name:</strong> {profile.display_name || 'None'}</p>
+              <p><strong>First Name:</strong> {profile.first_name || 'None'}</p>
+              <p><strong>Last Name:</strong> {profile.last_name || 'None'}</p>
+              <p><strong>Email:</strong> {profile.email}</p>
+              <p><strong>Phone:</strong> {profile.phone || 'None'}</p>
+              <p><strong>Address:</strong> {profile.address_line1 || 'None'}</p>
+              <p><strong>Default Charity ID:</strong> {profile.default_charity_id || 'None'}</p>
+            </div>
+          ) : (
+            <p class="text-yellow-600">No profile found</p>
+          )}
+        </div>
+
+        <!-- Charities Info -->
+        <div class="bg-white shadow rounded-lg p-6">
+          <h2 class="text-xl font-semibold mb-4">Available Charities</h2>
+          {charities && charities.length > 0 ? (
+            <ul class="space-y-2">
+              {charities.map((charity) => (
+                <li>
+                  <strong>{charity.name}</strong> (ID: {charity.id}, Active: {charity.active ? 'Yes' : 'No'})
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p class="text-yellow-600">No charities found</p>
+          )}
+        </div>
+
+        <!-- Navigation -->
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p class="text-blue-800 mb-2">If everything looks good above, try:</p>
+          <a href="/account/setting" class="text-blue-600 hover:text-blue-800 underline">Go to Account Settings</a>
+        </div>
+      </div>
+    </div>
+  </Container>
+</MainLayout>

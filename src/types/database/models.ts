@@ -19,7 +19,20 @@ export interface Profile {
   state: string | null;
   postal_code: string | null;
   country: string | null;
+  default_charity_id: string | null; // UUID reference to charity
   role: 'user' | 'admin';
+  created_at: string;
+  updated_at: string;
+}
+
+// Charity types
+export interface Charity {
+  id: string; // UUID
+  name: string;
+  description: string | null;
+  website_url: string | null;
+  logo_url: string | null;
+  active: boolean;
   created_at: string;
   updated_at: string;
 }

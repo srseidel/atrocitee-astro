@@ -16,10 +16,24 @@ DROP TABLE IF EXISTS tags CASCADE;
 DROP TABLE IF EXISTS categories CASCADE;
 DROP TABLE IF EXISTS charities CASCADE;
 DROP TABLE IF EXISTS atrocitee_categories CASCADE;
+DROP TABLE IF EXISTS public_profiles CASCADE;
+DROP TABLE IF EXISTS profiles CASCADE;
 
 -- Grant schema usage first
 GRANT USAGE ON SCHEMA public TO authenticated;
 GRANT USAGE ON SCHEMA public TO service_role;
+
+-- Create extension for UUID generation if not exists
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Create timestamp update function if it doesn't exist
+CREATE OR REPLACE FUNCTION update_modified_column()
+RETURNS TRIGGER AS $$
+BEGIN
+   NEW.updated_at = now();
+   RETURN NEW;
+END;
+$$ language 'plpgsql';
 
 -- Grant sequence permissions
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
@@ -78,6 +92,43 @@ WITH CHECK (is_admin());
 GRANT SELECT ON atrocitee_categories TO anon;
 GRANT SELECT ON atrocitee_categories TO authenticated;
 GRANT ALL ON atrocitee_categories TO authenticated;
+
+-- 0. Profiles Table (for user account management)
+-- This table should be created first as other tables may reference it
+CREATE TABLE IF NOT EXISTS profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  first_name TEXT,
+  last_name TEXT,
+  display_name TEXT,
+  avatar_url TEXT,
+  email TEXT UNIQUE NOT NULL,
+  phone TEXT,
+  address_line1 TEXT,
+  address_line2 TEXT,
+  city TEXT,
+  state TEXT,
+  postal_code TEXT,
+  country TEXT,
+  default_charity_id UUID, -- Will add FK constraint after charities table is created
+  role TEXT DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- Add timestamps trigger for profiles
+CREATE OR REPLACE TRIGGER update_profiles_timestamp
+BEFORE UPDATE ON profiles
+FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
+
+-- Create a secure public view for profiles
+DROP VIEW IF EXISTS public_profiles;
+CREATE VIEW public_profiles AS
+  SELECT id, display_name, avatar_url, role
+  FROM profiles;
+
+-- Grant necessary permissions for profiles
+GRANT ALL ON profiles TO authenticated;
+GRANT SELECT ON public_profiles TO authenticated, anon;
 
 -- Insert initial core categories
 INSERT INTO atrocitee_categories (slug, name, description, is_active)
@@ -196,31 +247,28 @@ DROP POLICY IF EXISTS "Only admins can insert charities" ON charities;
 DROP POLICY IF EXISTS "Only admins can update charities" ON charities;
 DROP POLICY IF EXISTS "Only admins can delete charities" ON charities;
 
--- Create RLS policies for charities
-CREATE POLICY "Charities are viewable by everyone"
+-- Create simple charity policies that work without admin recursion
+-- Allow all authenticated users to read active charities (needed for dropdown)
+CREATE POLICY "Authenticated users can read active charities"
 ON charities
 FOR SELECT
-TO authenticated, anon
-USING (true);
-
-CREATE POLICY "Only admins can insert charities"
-ON charities
-FOR INSERT
 TO authenticated
-WITH CHECK (is_admin());
+USING (active = true);
 
-CREATE POLICY "Only admins can update charities"
+-- Allow anonymous users to read active charities too (for public pages)
+CREATE POLICY "Anonymous users can read active charities"
 ON charities
-FOR UPDATE
+FOR SELECT
+TO anon
+USING (active = true);
+
+-- Simple admin policies using the is_admin() function (defined below)
+CREATE POLICY "Admin users can manage charities"
+ON charities
+FOR ALL
 TO authenticated
 USING (is_admin())
 WITH CHECK (is_admin());
-
-CREATE POLICY "Only admins can delete charities"
-ON charities
-FOR DELETE
-TO authenticated
-USING (is_admin());
 
 -- Create a public view for charities that can be accessed during static site generation
 DROP VIEW IF EXISTS public_charities;
@@ -238,9 +286,27 @@ AS
 
 -- Grant access to both authenticated and anonymous users
 GRANT SELECT ON public_charities TO authenticated, anon;
+GRANT SELECT ON charities TO authenticated, anon;
 
 -- Add a helpful comment
 COMMENT ON VIEW public_charities IS 'Public charity information for display on product pages';
+
+-- Add foreign key constraint for profiles.default_charity_id now that charities table exists
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'profiles') THEN
+        -- Add foreign key constraint if it doesn't exist
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.table_constraints 
+            WHERE table_name = 'profiles' 
+            AND constraint_name = 'profiles_default_charity_id_fkey'
+        ) THEN
+            ALTER TABLE profiles 
+            ADD CONSTRAINT profiles_default_charity_id_fkey 
+            FOREIGN KEY (default_charity_id) REFERENCES charities(id) ON DELETE SET NULL;
+        END IF;
+    END IF;
+END $$;
 
 -- 4. Products Table
 CREATE TABLE products (
@@ -280,19 +346,22 @@ DROP POLICY IF EXISTS "Published products are viewable by everyone" ON products;
 DROP POLICY IF EXISTS "Authenticated users can view all products" ON products;
 DROP POLICY IF EXISTS "Admin users can manage all products" ON products;
 
--- Create RLS policies for products
-CREATE POLICY "Published products are viewable by everyone"
+-- Create RLS policies for products (updated for cart API compatibility)
+-- Allow everyone (including server-side API calls) to read published products
+CREATE POLICY "Everyone can view published products"
 ON products
 FOR SELECT
 TO public
 USING (published_status = true);
 
+-- Allow authenticated users to view all products
 CREATE POLICY "Authenticated users can view all products"
 ON products
 FOR SELECT
 TO authenticated
 USING (true);
 
+-- Admin policy for managing products
 CREATE POLICY "Admin users can manage all products"
 ON products
 FOR ALL
@@ -300,9 +369,9 @@ TO authenticated
 USING (is_admin())
 WITH CHECK (is_admin());
 
--- Grant necessary permissions
-GRANT SELECT ON products TO anon;
-GRANT SELECT ON products TO authenticated;
+-- Grant necessary permissions (updated for cart API compatibility)
+GRANT SELECT ON products TO anon, authenticated;
+GRANT SELECT ON product_variants TO anon, authenticated;
 GRANT ALL ON products TO authenticated;
 
 -- 5. Product Variants Table
@@ -576,8 +645,9 @@ DROP POLICY IF EXISTS "Public can view variants of published products" ON produc
 DROP POLICY IF EXISTS "Published variants are viewable by everyone" ON product_variants;
 DROP POLICY IF EXISTS "Authenticated users can view all variants" ON product_variants;
 
--- Create RLS policies for product_variants
-CREATE POLICY "Published variants are viewable by everyone"
+-- Create RLS policies for product_variants (updated for cart API compatibility)
+-- Allow everyone (including server-side API calls) to read variants of published products
+CREATE POLICY "Everyone can view published product variants"
 ON product_variants
 FOR SELECT
 TO public
@@ -589,12 +659,14 @@ USING (
   )
 );
 
+-- Allow authenticated users to view all variants (including unpublished)
 CREATE POLICY "Authenticated users can view all variants"
 ON product_variants
 FOR SELECT
 TO authenticated
 USING (true);
 
+-- Admin policy for managing variants
 CREATE POLICY "Admin users can manage product variants"
 ON product_variants
 FOR ALL
@@ -602,9 +674,7 @@ TO authenticated
 USING (is_admin())
 WITH CHECK (is_admin());
 
--- Grant necessary permissions
-GRANT SELECT ON product_variants TO anon;
-GRANT SELECT ON product_variants TO authenticated;
+-- Grant necessary permissions (already handled above)
 GRANT ALL ON product_variants TO authenticated;
 
 -- Enable RLS for printful_sync_history
@@ -649,6 +719,88 @@ CREATE POLICY "Admin users can manage mockup tasks" ON printful_mockup_tasks
 -- Add comment to track the changes
 COMMENT ON TABLE products IS 'Updated 2024-03-25: Renamed atrocitee_active to published_status for better clarity';
 COMMENT ON COLUMN products.published_status IS 'Indicates if the product is published (true) or unpublished (false) on the website';
+
+-- Add profiles table RLS policies for Account Settings functionality
+-- These policies were added to support the Account Settings page
+
+-- Setup RLS for profiles table (assuming it exists from auth schema)
+DO $$
+BEGIN
+    -- Only enable RLS if profiles table exists
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'profiles') THEN
+        ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+        
+        -- Drop existing policies if they exist to avoid conflicts
+        DROP POLICY IF EXISTS "Users can read own profile" ON profiles;
+        DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
+        DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
+        DROP POLICY IF EXISTS "Admins can read all profiles" ON profiles;
+        DROP POLICY IF EXISTS "Admins can update all profiles" ON profiles;
+        DROP POLICY IF EXISTS "Admins can delete profiles" ON profiles;
+        
+        -- Create simple, non-recursive policies for profiles
+        -- Users can read their own profile
+        CREATE POLICY "Users can read own profile"
+        ON profiles
+        FOR SELECT
+        TO authenticated
+        USING (id = auth.uid());
+        
+        -- Users can insert their own profile
+        CREATE POLICY "Users can insert own profile"
+        ON profiles
+        FOR INSERT
+        TO authenticated
+        WITH CHECK (id = auth.uid());
+        
+        -- Users can update their own profile
+        CREATE POLICY "Users can update own profile"
+        ON profiles
+        FOR UPDATE
+        TO authenticated
+        USING (id = auth.uid())
+        WITH CHECK (id = auth.uid());
+        
+        -- Add default_charity_id field to profiles if it doesn't exist
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'profiles' 
+            AND column_name = 'default_charity_id'
+        ) THEN
+            ALTER TABLE profiles 
+            ADD COLUMN default_charity_id UUID REFERENCES charities(id) ON DELETE SET NULL;
+            
+            -- Add an index for performance
+            CREATE INDEX idx_profiles_default_charity_id ON profiles(default_charity_id);
+            
+            -- Add a comment explaining the field
+            COMMENT ON COLUMN profiles.default_charity_id IS 'Default charity for user donations - can be overridden per order';
+        END IF;
+        
+        RAISE NOTICE 'Profiles table RLS policies configured successfully';
+    ELSE
+        RAISE NOTICE 'Profiles table not found - skipping RLS setup';
+    END IF;
+EXCEPTION 
+    WHEN OTHERS THEN 
+        RAISE NOTICE 'Error setting up profiles RLS: %', SQLERRM;
+END$$;
+
+-- Create an is_admin function that uses auth.jwt() to avoid recursion
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS boolean AS $$
+BEGIN
+  -- Check if the user has admin role in their JWT claims
+  -- This avoids querying the profiles table from within its own RLS policy
+  RETURN (auth.jwt() ->> 'role' = 'admin') OR 
+         (auth.jwt() ->> 'user_role' = 'admin') OR
+         (auth.jwt() -> 'app_metadata' ->> 'role' = 'admin') OR
+         (auth.jwt() -> 'user_metadata' ->> 'role' = 'admin');
+EXCEPTION WHEN OTHERS THEN
+  -- If there's any error accessing JWT, default to not admin
+  RETURN false;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Add indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_products_printful_id ON products(printful_id);
@@ -752,6 +904,7 @@ GRANT USAGE ON SCHEMA public TO authenticated;
 GRANT USAGE ON SCHEMA public TO service_role;
 
 -- Grant permissions to all tables
+GRANT ALL ON profiles TO authenticated;
 GRANT ALL ON atrocitee_categories TO authenticated;
 GRANT ALL ON printful_category_mapping TO authenticated;
 GRANT ALL ON categories TO authenticated;
@@ -788,19 +941,7 @@ CREATE POLICY "Public read access to active categories" ON categories
   FOR SELECT
   USING (active = true);
 
--- Create RLS policies for charities
-DROP POLICY IF EXISTS "Admin users can manage charities" ON charities;
-DROP POLICY IF EXISTS "Public read access to active charities" ON charities;
-
-CREATE POLICY "Admin users can manage charities" ON charities
-  FOR ALL
-  TO authenticated
-  USING (is_admin())
-  WITH CHECK (is_admin());
-
-CREATE POLICY "Public read access to active charities" ON charities
-  FOR SELECT
-  USING (active = true);
+-- RLS policies for charities already defined above - removing duplicate section
 
 -- Create RLS policies for orders
 DROP POLICY IF EXISTS "Admin users can manage all orders" ON orders;

@@ -1,0 +1,30 @@
+---
+/**
+ * Cart Page
+ * 
+ * Displays cart contents with quantity controls and checkout button
+ */
+
+import MainLayout from '@layouts/MainLayout.astro';
+import CartPage from '@components/features/cart/CartPage';
+
+export const prerender = false;
+
+const title = 'Shopping Cart - Atrocitee';
+const description = 'Review your cart and proceed to checkout';
+---
+
+<MainLayout title={title} description={description}>
+  <main class="min-h-screen bg-gray-50 py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Shopping Cart</h1>
+        <p class="mt-2 text-gray-600">Review your items and proceed to checkout</p>
+      </div>
+
+      <!-- Cart Contents -->
+      <CartPage client:load />
+    </div>
+  </main>
+</MainLayout>

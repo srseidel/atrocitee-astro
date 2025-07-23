@@ -1,0 +1,32 @@
+---
+/**
+ * Checkout Page
+ * 
+ * Handles the checkout process with Stripe payment integration.
+ * Must be server-rendered to handle authentication and cart validation.
+ */
+
+import MainLayout from '@layouts/MainLayout.astro';
+import { secureCartActions } from '@lib/stores/secureCart';
+import CheckoutForm from '@components/features/checkout/CheckoutForm';
+
+export const prerender = false;
+
+const title = 'Checkout - Atrocitee';
+const description = 'Complete your purchase securely with Stripe';
+---
+
+<MainLayout title={title} description={description}>
+  <main class="min-h-screen bg-gray-50 py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Checkout</h1>
+        <p class="mt-2 text-gray-600">Complete your purchase securely</p>
+      </div>
+
+      <!-- Checkout Form -->
+      <CheckoutForm client:load />
+    </div>
+  </main>
+</MainLayout>

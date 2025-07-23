@@ -1,7 +1,7 @@
 ---
 // @ts-nocheck - Disable TypeScript checking for Astro-specific attributes like 'class' vs 'className'
 import Layout from '@layouts/MainLayout.astro';
-import AddToCartButton from '@components/features/cart/AddToCartButton.tsx';
+import SecureAddToCartButton from '@components/features/cart/SecureAddToCartButton.tsx';
 import { parseMockupFilename, getViewLabel } from '@utils/helpers/mockups';
 import { 
   findVariant, 
@@ -27,7 +27,11 @@ export async function getStaticPaths() {
     .from('products')
     .select(`
       *,
-      variants:product_variants(*)
+      variants:product_variants(
+        *,
+        printful_id,
+        printful_external_id
+      )
     `)
     .eq('published_status', true);
 
@@ -147,10 +151,22 @@ export async function getStaticPaths() {
 // Get props from Astro
 const { product, processedVariants } = Astro.props;
 
-// Get URL parameters for color and size
-const url = new URL(Astro.request.url);
-const colorParam = url.searchParams.get('color') || '';
-const sizeParam = url.searchParams.get('size') || '';
+// Get URL parameters for color and size (handle prerendering case)
+let colorParam = '';
+let sizeParam = '';
+
+try {
+  // During prerendering, Astro.request.url might not be available
+  // This will default to empty strings for static generation
+  if (Astro.request && Astro.request.url) {
+    const url = new URL(Astro.request.url);
+    colorParam = url.searchParams.get('color') || '';
+    sizeParam = url.searchParams.get('size') || '';
+  }
+} catch (error) {
+  // If we can't access request during prerender, use defaults
+  console.log('Using default parameters for static generation');
+}
 
 // Find the selected variant based on URL parameters
 let selectedVariant = findVariant(colorParam, sizeParam, processedVariants);
@@ -205,7 +221,7 @@ const clientData = {
           <button id="toggle-debug" class="bg-blue-500 text-white px-2 py-1 rounded text-xs">Toggle Details</button>
         </div>
         <div>
-          <p>URL: {Astro.request.url}</p>
+          <p>URL: {typeof Astro.request !== 'undefined' && Astro.request.url ? Astro.request.url : 'Static build'}</p>
           <p>Color Param: {colorParam || 'None'}</p>
           <p>Size Param: {sizeParam || 'None'}</p>
           <p>Selected Variant: {selectedVariant?.id} ({selectedVariant?.options?.color || 'No color'}, {selectedVariant?.options?.size || 'No size'})</p>
@@ -328,17 +344,9 @@ const clientData = {
         {/* Add to Cart */}
         <div class="mb-6">
           {selectedVariant && (
-            <AddToCartButton
+            <SecureAddToCartButton
               client:load
-              productId={product.id}
-              productSlug={product.slug}
-              productName={product.name}
               variantId={selectedVariant.id}
-              variantName={`${selectedVariant.options.color} - ${selectedVariant.options.size}`}
-              options={selectedVariant.options}
-              price={selectedVariant.retail_price}
-              imageUrl={mainImage?.url}
-              maxQuantity={99}
               disabled={!selectedVariant.in_stock}
             />
           )}
@@ -476,6 +484,12 @@ const clientData = {
     if (variant.options.color) url.searchParams.set('color', variant.options.color);
     if (variant.options.size) url.searchParams.set('size', variant.options.size);
     window.history.replaceState({}, '', url.toString());
+
+    // Dispatch custom event to update React AddToCartButton component
+    const variantChangeEvent = new CustomEvent('variant-selected', {
+      detail: { variant }
+    });
+    window.dispatchEvent(variantChangeEvent);
   }
 
   // Update images for a variant
@@ -617,6 +631,12 @@ const clientData = {
   if (currentVariant) {
     updateUI(currentVariant);
     updateImages(currentVariant);
+    
+    // Dispatch initial variant selection event
+    const variantChangeEvent = new CustomEvent('variant-selected', {
+      detail: { variant: currentVariant }
+    });
+    window.dispatchEvent(variantChangeEvent);
   }
 
   // Debug toggle

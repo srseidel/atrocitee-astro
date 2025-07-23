@@ -6,19 +6,28 @@
  */
 
 import React from 'react';
-import { useCart } from '@lib/hooks/useCart';
+import { useSecureCart } from '@lib/hooks/useSecureCart';
 
 export default function CartDropdown() {
   const { 
     items, 
     totalItems, 
     totalPrice, 
-    isOpen, 
+    isOpen,
+    loading,
+    error,
     closeCart, 
     removeItem, 
-    updateQuantity,
-    formatPrice 
-  } = useCart();
+    updateQuantity
+  } = useSecureCart();
+  
+  // Format price utility function
+  const formatPrice = (price: number): string => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(price);
+  };
 
   if (!isOpen) return null;
 
@@ -51,7 +60,22 @@ export default function CartDropdown() {
 
         {/* Cart Items */}
         <div className="flex-1 overflow-y-auto p-4">
-          {items.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <p className="text-gray-500 mt-2">Loading cart...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-8">
+              <p className="text-red-500 mb-4">Error loading cart: {error}</p>
+              <button
+                onClick={closeCart}
+                className="text-primary hover:text-primary-dark font-medium"
+              >
+                Close
+              </button>
+            </div>
+          ) : items.length === 0 ? (
             <div className="text-center py-8">
               <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
@@ -112,14 +136,40 @@ export default function CartDropdown() {
 }
 
 interface CartItemProps {
-  item: any; // CartItem type
-  onUpdateQuantity: (id: string, quantity: number) => void;
-  onRemove: (id: string) => void;
+  item: any; // ValidatedCartItem type
+  onUpdateQuantity: (id: string, quantity: number) => Promise<void>;
+  onRemove: (id: string) => Promise<void>;
 }
 
 function CartItem({ item, onUpdateQuantity, onRemove }: CartItemProps) {
-  const increment = () => onUpdateQuantity(item.id, item.quantity + 1);
-  const decrement = () => onUpdateQuantity(item.id, item.quantity - 1);
+  const [isUpdating, setIsUpdating] = React.useState(false);
+  
+  const increment = async () => {
+    setIsUpdating(true);
+    try {
+      await onUpdateQuantity(item.id, item.quantity + 1);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+  
+  const decrement = async () => {
+    setIsUpdating(true);
+    try {
+      await onUpdateQuantity(item.id, item.quantity - 1);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+  
+  const handleRemove = async () => {
+    setIsUpdating(true);
+    try {
+      await onRemove(item.id);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   return (
     <div className="flex space-x-3">
@@ -150,18 +200,18 @@ function CartItem({ item, onUpdateQuantity, onRemove }: CartItemProps) {
         <div className="flex items-center space-x-2 mt-2">
           <button
             onClick={decrement}
-            disabled={item.quantity <= 1}
+            disabled={item.quantity <= 1 || isUpdating}
             className="w-6 h-6 rounded-full border border-gray-300 flex items-center justify-center text-gray-500 hover:text-gray-700 disabled:opacity-50"
             aria-label="Decrease quantity"
           >
             −
           </button>
           <span className="text-sm font-medium w-8 text-center">
-            {item.quantity}
+            {isUpdating ? '...' : item.quantity}
           </span>
           <button
             onClick={increment}
-            disabled={item.quantity >= (item.maxQuantity || 99)}
+            disabled={item.quantity >= (item.maxQuantity || 99) || isUpdating}
             className="w-6 h-6 rounded-full border border-gray-300 flex items-center justify-center text-gray-500 hover:text-gray-700 disabled:opacity-50"
             aria-label="Increase quantity"
           >
@@ -173,13 +223,18 @@ function CartItem({ item, onUpdateQuantity, onRemove }: CartItemProps) {
       {/* Remove Button */}
       <div className="flex-shrink-0">
         <button
-          onClick={() => onRemove(item.id)}
-          className="text-red-500 hover:text-red-700 p-1"
+          onClick={handleRemove}
+          disabled={isUpdating}
+          className="text-red-500 hover:text-red-700 p-1 disabled:opacity-50"
           aria-label={`Remove ${item.name} from cart`}
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
+          {isUpdating ? (
+            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          )}
         </button>
       </div>
     </div>

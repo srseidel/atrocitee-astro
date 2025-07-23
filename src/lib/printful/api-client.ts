@@ -6,7 +6,7 @@
  */
 
 import * as Sentry from '@sentry/astro';
-import { env } from '@lib/config/env';
+import env from '@config/env';
 
 import type { 
   PrintfulResponse, 
@@ -19,6 +19,7 @@ import type {
 
 // Configuration
 const API_BASE_URL = 'https://api.printful.com';
+const SANDBOX_API_BASE_URL = 'https://api.printful.com'; // Printful uses same URL with sandbox flag
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000; // Start with 1 second delay
 const RETRY_BACKOFF_FACTOR = 2; // Exponential backoff
@@ -56,14 +57,18 @@ export class PrintfulClient {
   private apiKey: string;
   private baseUrl: string;
   private headers: HeadersInit;
+  private sandboxMode: boolean;
 
-  constructor(apiKey = env.printful.apiKey, baseUrl = API_BASE_URL) {
+  constructor(apiKey = env.PRINTFUL_API_KEY, sandboxMode = env.PRINTFUL_SANDBOX_MODE) {
+    this.sandboxMode = sandboxMode;
+    
     // Add debug logging for environment variables
     // eslint-disable-next-line no-console
     console.log('[Printful] Environment check:', {
       apiKeyExists: !!apiKey,
       apiKeyLength: apiKey ? apiKey.length : 0,
-      nodeEnv: env.sentry.environment
+      nodeEnv: env.NODE_ENV,
+      sandboxMode: this.sandboxMode
     });
 
     if (!apiKey) {
@@ -72,15 +77,17 @@ export class PrintfulClient {
     }
 
     this.apiKey = apiKey;
-    this.baseUrl = baseUrl;
+    this.baseUrl = sandboxMode ? SANDBOX_API_BASE_URL : API_BASE_URL;
     this.headers = {
       'Authorization': `Bearer ${this.apiKey}`,
       'Content-Type': 'application/json',
       'X-PF-API-Location': 'us-east',
+      // Add sandbox header when in sandbox mode
+      ...(this.sandboxMode && { 'X-PF-Sandbox': '1' }),
     };
 
     // eslint-disable-next-line no-console
-    console.log("Printful API client initialized");
+    console.log(`[Printful] API client initialized in ${sandboxMode ? 'SANDBOX' : 'PRODUCTION'} mode`);
   }
 
   /**

@@ -1,46 +1,33 @@
 ---
+/**
+ * Account Settings Page
+ * 
+ * Comprehensive user account management including profile, address, and preferences
+ */
+
 // Mark as server-rendered (required for authentication)
 export const prerender = false;
 
 import Container from "@components/common/Container.astro";
-
 import MainLayout from "@layouts/MainLayout.astro";
+import AccountSettingsForm from "@components/features/account/AccountSettingsForm";
+
+const title = "Account Settings - Atrocitee";
+const description = "Manage your account profile, address, and preferences";
 ---
 
-<MainLayout title="Account Settings">
+<MainLayout title={title} description={description}>
   <Container>
     <div class="py-8">
-      <h1 class="text-3xl font-bold mb-6">Account Settings</h1>
-      
-      <div class="bg-white rounded-lg shadow p-6">
-        <div class="mb-8">
-          <h2 class="text-xl font-semibold mb-4">Profile Information</h2>
-          
-          <!-- Placeholder for profile settings form -->
-          <div class="space-y-4">
-            <div class="form-group">
-              <label class="form-label" for="name">Full Name</label>
-              <input type="text" id="name" class="form-input" placeholder="Your full name" />
-            </div>
-            
-            <div class="form-group">
-              <label class="form-label" for="email">Email Address</label>
-              <input type="email" id="email" class="form-input" disabled />
-              <p class="text-sm text-neutral-500 mt-1">To change your email, please contact support.</p>
-            </div>
-            
-            <button class="btn btn-primary mt-4">Save Changes</button>
-          </div>
-        </div>
-        
-        <div class="pt-6 border-t border-neutral-200">
-          <h2 class="text-xl font-semibold mb-4">Password</h2>
-          
-          <div class="space-y-4">
-            <button class="btn btn-outline">Change Password</button>
-          </div>
-        </div>
+      <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Account Settings</h1>
+        <p class="text-gray-600">
+          Manage your profile information, shipping address, and account preferences.
+        </p>
       </div>
+      
+      <!-- React Account Settings Form -->
+      <AccountSettingsForm client:load />
     </div>
   </Container>
 </MainLayout> 

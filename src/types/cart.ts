@@ -14,8 +14,8 @@ export interface CartItem {
   imageUrl?: string; // Main product image
   maxQuantity?: number; // Inventory limit
   // Critical for Printful order fulfillment
-  printful_variant_id?: number; // Printful catalog variant ID
-  printful_sync_variant_id?: number; // Printful sync variant ID
+  printful_id?: number; // Printful catalog variant ID (from database)
+  printful_external_id?: string; // Printful external reference ID
 }
 
 export interface CartState {

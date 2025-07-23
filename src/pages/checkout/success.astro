@@ -1,0 +1,73 @@
+---
+/**
+ * Checkout Success Page
+ * 
+ * Displays order confirmation after successful payment
+ */
+
+import MainLayout from '@layouts/MainLayout.astro';
+
+export const prerender = false;
+
+const title = 'Order Confirmed - Atrocitee';
+const description = 'Your order has been confirmed and is being processed';
+---
+
+<MainLayout title={title} description={description}>
+  <main class="min-h-screen bg-gray-50 py-12">
+    <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="bg-white rounded-lg shadow-sm border p-8 text-center">
+        <!-- Success Icon -->
+        <div class="mx-auto flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-6">
+          <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+        </div>
+
+        <!-- Success Message -->
+        <h1 class="text-2xl font-bold text-gray-900 mb-2">Order Confirmed!</h1>
+        <p class="text-gray-600 mb-8">
+          Thank you for your purchase. Your order has been confirmed and is being processed.
+        </p>
+
+        <!-- Order Details -->
+        <div class="bg-gray-50 rounded-lg p-6 mb-8">
+          <h2 class="text-lg font-semibold text-gray-900 mb-4">What's Next?</h2>
+          <div class="space-y-2 text-sm text-gray-600">
+            <p>• You'll receive an email confirmation shortly</p>
+            <p>• Your order will be processed and shipped within 3-5 business days</p>
+            <p>• You'll receive tracking information once your order ships</p>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="space-y-4">
+          <a 
+            href="/shop" 
+            class="inline-block bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary-dark transition-colors"
+          >
+            Continue Shopping
+          </a>
+          <div>
+            <a 
+              href="/account" 
+              class="text-primary hover:text-primary-dark font-medium"
+            >
+              View Your Orders
+            </a>
+          </div>
+        </div>
+
+        <!-- Support -->
+        <div class="mt-8 pt-6 border-t border-gray-200">
+          <p class="text-sm text-gray-500">
+            Questions about your order? 
+            <a href="/contact" class="text-primary hover:text-primary-dark font-medium">
+              Contact our support team
+            </a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </main>
+</MainLayout>

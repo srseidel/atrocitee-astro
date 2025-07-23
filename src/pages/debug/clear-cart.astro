@@ -1,0 +1,117 @@
+---
+/**
+ * Debug Cart Clearing Page
+ * 
+ * Simple page to clear corrupted cart data
+ */
+
+export const prerender = false;
+
+import MainLayout from '@layouts/MainLayout.astro';
+import Container from '@components/common/Container.astro';
+---
+
+<MainLayout title="Clear Cart">
+  <Container>
+    <div class="py-8">
+      <h1 class="text-3xl font-bold mb-6">Clear Cart Debug</h1>
+      
+      <div class="space-y-4">
+        <div class="bg-white shadow rounded-lg p-6">
+          <h2 class="text-xl font-semibold mb-4">Current Cart Status</h2>
+          <div id="cart-status">
+            <p>Loading cart data...</p>
+          </div>
+        </div>
+
+        <div class="bg-white shadow rounded-lg p-6">
+          <h2 class="text-xl font-semibold mb-4">Actions</h2>
+          <div class="space-x-4">
+            <button 
+              id="clear-cart-btn" 
+              class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+            >
+              Clear Cart Data
+            </button>
+            <button 
+              id="refresh-status-btn" 
+              class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            >
+              Refresh Status
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p class="text-blue-800">
+            This page helps clear corrupted cart data. Use this if you're seeing cart validation errors.
+          </p>
+        </div>
+      </div>
+    </div>
+  </Container>
+</MainLayout>
+
+<script>
+  function displayCartStatus() {
+    const statusDiv = document.getElementById('cart-status');
+    if (!statusDiv) return;
+    
+    // Check localStorage for cart data
+    const cartData = localStorage.getItem('atrocitee-secure-cart');
+    
+    if (!cartData) {
+      statusDiv.innerHTML = '<p class="text-green-600">Cart is empty</p>';
+      return;
+    }
+    
+    try {
+      const parsedData = JSON.parse(cartData);
+      statusDiv.innerHTML = `
+        <div>
+          <p><strong>Items in cart:</strong> ${Array.isArray(parsedData) ? parsedData.length : 'Invalid data'}</p>
+          <pre class="bg-gray-100 p-2 rounded mt-2 text-sm overflow-x-auto">${JSON.stringify(parsedData, null, 2)}</pre>
+        </div>
+      `;
+      
+      // Check for invalid variant IDs
+      if (Array.isArray(parsedData)) {
+        const invalidItems = parsedData.filter(item => 
+          !item.variantId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
+        );
+        
+        if (invalidItems.length > 0) {
+          statusDiv.innerHTML += `
+            <div class="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+              <p class="text-red-800 font-semibold">⚠️ Found ${invalidItems.length} invalid variant IDs</p>
+              <p class="text-red-600 text-sm">These are causing cart validation to fail.</p>
+            </div>
+          `;
+        }
+      }
+    } catch (error) {
+      statusDiv.innerHTML = `<p class="text-red-600">Error reading cart data: ${error.message}</p>`;
+    }
+  }
+  
+  function clearCart() {
+    // Clear localStorage
+    localStorage.removeItem('atrocitee-secure-cart');
+    
+    // Also clear any other cart-related data
+    localStorage.removeItem('cart');
+    
+    // Update display
+    displayCartStatus();
+    
+    alert('Cart data cleared! You may need to refresh the page.');
+  }
+  
+  // Event listeners
+  document.getElementById('clear-cart-btn')?.addEventListener('click', clearCart);
+  document.getElementById('refresh-status-btn')?.addEventListener('click', displayCartStatus);
+  
+  // Initial display
+  displayCartStatus();
+</script>
+</MainLayout>
