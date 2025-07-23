@@ -8,6 +8,8 @@ import React, { useState, useEffect } from 'react';
 import { createBrowserSupabaseClient } from '@lib/supabase/client';
 import AddressInput from '@components/common/AddressInput';
 import PhoneInput from '@components/common/PhoneInput';
+import SecureInput from '@components/common/SecureInput';
+import { validateFormData, containsSuspiciousContent } from '@lib/validation/input-sanitizer';
 
 interface Profile {
   id: string;
@@ -50,6 +52,7 @@ export default function AccountSettingsForm() {
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [isAddressValid, setIsAddressValid] = useState(true);
   const [isPhoneValid, setIsPhoneValid] = useState(true);
+  const [validationStates, setValidationStates] = useState<Record<string, boolean>>({});
   
   const supabase = createBrowserSupabaseClient();
 
@@ -137,7 +140,22 @@ export default function AccountSettingsForm() {
   const updateProfile = async (updates: Partial<Profile>) => {
     if (!profile) return;
 
+    // Check for suspicious content before updating
+    for (const [key, value] of Object.entries(updates)) {
+      if (typeof value === 'string' && containsSuspiciousContent(value)) {
+        setMessage({ 
+          type: 'error', 
+          text: `Security alert: Invalid content detected in ${key} field.` 
+        });
+        return;
+      }
+    }
+
     setProfile(prev => prev ? { ...prev, ...updates } : null);
+  };
+
+  const handleValidationChange = (field: string, isValid: boolean) => {
+    setValidationStates(prev => ({ ...prev, [field]: isValid }));
   };
 
   const saveProfile = async () => {
@@ -154,23 +172,75 @@ export default function AccountSettingsForm() {
       return;
     }
 
+    // Check all field validations
+    const allFieldsValid = Object.values(validationStates).every(isValid => isValid !== false);
+    if (!allFieldsValid) {
+      setMessage({ type: 'error', text: 'Please fix all validation errors before saving.' });
+      return;
+    }
+
+    // Comprehensive security validation before saving
+    const profileData = {
+      first_name: profile.first_name || '',
+      last_name: profile.last_name || '',
+      display_name: profile.display_name || '',
+      phone: profile.phone || '',
+      address_line1: profile.address_line1 || '',
+      address_line2: profile.address_line2 || '',
+      city: profile.city || '',
+      state: profile.state || '',
+      postal_code: profile.postal_code || ''
+    };
+
+    const fieldTypes = {
+      first_name: 'name' as const,
+      last_name: 'name' as const,
+      display_name: 'displayName' as const,
+      phone: 'phone' as const,
+      address_line1: 'address' as const,
+      address_line2: 'address' as const,
+      city: 'city' as const,
+      state: 'state' as const,
+      postal_code: 'postalCode' as const
+    };
+
+    const validation = validateFormData(profileData, fieldTypes, {
+      first_name: { required: false, maxLength: 100 },
+      last_name: { required: false, maxLength: 100 },
+      display_name: { required: false, maxLength: 50 },
+      phone: { required: false, maxLength: 20 },
+      address_line1: { required: false, maxLength: 200 },
+      address_line2: { required: false, maxLength: 200 },
+      city: { required: false, maxLength: 100 },
+      state: { required: false, maxLength: 2 },
+      postal_code: { required: false, maxLength: 12 }
+    });
+
+    if (validation.hasSecurityRisks || !validation.isValid) {
+      setMessage({ 
+        type: 'error', 
+        text: 'Security validation failed. Please check your input for invalid characters.' 
+      });
+      return;
+    }
+
     try {
       setSaving(true);
       setMessage(null);
 
-      // Update profile in database
+      // Update profile in database using sanitized data
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
-          first_name: profile.first_name,
-          last_name: profile.last_name,
-          display_name: profile.display_name,
-          phone: profile.phone,
-          address_line1: profile.address_line1,
-          address_line2: profile.address_line2,
-          city: profile.city,
-          state: profile.state,
-          postal_code: profile.postal_code,
+          first_name: validation.sanitizedData.first_name || null,
+          last_name: validation.sanitizedData.last_name || null,
+          display_name: validation.sanitizedData.display_name || null,
+          phone: validation.sanitizedData.phone || null,
+          address_line1: validation.sanitizedData.address_line1 || null,
+          address_line2: validation.sanitizedData.address_line2 || null,
+          city: validation.sanitizedData.city || null,
+          state: validation.sanitizedData.state || null,
+          postal_code: validation.sanitizedData.postal_code || null,
           country: profile.country,
           default_charity_id: profile.default_charity_id,
           updated_at: new Date().toISOString(),
@@ -282,15 +352,15 @@ export default function AccountSettingsForm() {
 
           {/* Display Name */}
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Display Name
-            </label>
-            <input
-              type="text"
+            <SecureInput
               value={profile.display_name || ''}
-              onChange={(e) => updateProfile({ display_name: e.target.value || null })}
+              onChange={(value) => updateProfile({ display_name: value || null })}
+              onValidationChange={(isValid) => handleValidationChange('display_name', isValid)}
+              fieldType="displayName"
+              label="Display Name"
               placeholder="How you'd like to be addressed"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              maxLength={50}
+              showValidation={true}
             />
             <p className="text-sm text-gray-500 mt-1">
               This name will be shown on your account and any public interactions.
@@ -299,29 +369,29 @@ export default function AccountSettingsForm() {
 
           {/* First Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              First Name
-            </label>
-            <input
-              type="text"
+            <SecureInput
               value={profile.first_name || ''}
-              onChange={(e) => updateProfile({ first_name: e.target.value || null })}
+              onChange={(value) => updateProfile({ first_name: value || null })}
+              onValidationChange={(isValid) => handleValidationChange('first_name', isValid)}
+              fieldType="name"
+              label="First Name"
               placeholder="Your first name"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              maxLength={100}
+              showValidation={true}
             />
           </div>
 
           {/* Last Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Last Name
-            </label>
-            <input
-              type="text"
+            <SecureInput
               value={profile.last_name || ''}
-              onChange={(e) => updateProfile({ last_name: e.target.value || null })}
+              onChange={(value) => updateProfile({ last_name: value || null })}
+              onValidationChange={(isValid) => handleValidationChange('last_name', isValid)}
+              fieldType="name"
+              label="Last Name"
               placeholder="Your last name"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              maxLength={100}
+              showValidation={true}
             />
           </div>
 
