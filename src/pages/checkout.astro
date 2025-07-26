@@ -7,20 +7,7 @@
  */
 
 import MainLayout from '@layouts/MainLayout.astro';
-import { secureCartActions } from '@lib/stores/secureCart';
 import CheckoutForm from '@components/features/checkout/CheckoutForm';
-import CheckoutFormDebug from '@components/features/checkout/CheckoutFormDebug';
-import SimpleCheckoutTest from '@components/features/checkout/SimpleCheckoutTest';
-import ActualCartTest from '@components/features/checkout/ActualCartTest';
-import CheckoutFormSimple from '@components/features/checkout/CheckoutFormSimple';
-import ImportTest from '@components/features/checkout/ImportTest';
-import StripeKeyTest from '@components/features/checkout/StripeKeyTest';
-import NetworkTest from '@components/features/checkout/NetworkTest';
-import DirectStripeTest from '@components/features/checkout/DirectStripeTest';
-import SimpleStripeLoader from '@components/features/checkout/SimpleStripeLoader';
-import CSPTest from '@components/features/checkout/CSPTest';
-import ReactTest from '@components/test/ReactTest';
-import { ErrorBoundary } from '@components/common/ErrorBoundary';
 
 export const prerender = false;
 
@@ -29,40 +16,6 @@ const description = 'Complete your purchase securely with Stripe';
 ---
 
 <MainLayout title={title} description={description}>
-  <!-- Allow Stripe.js with proper CSP -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com; script-src-elem 'self' 'unsafe-inline' https://js.stripe.com; frame-src https://js.stripe.com https://checkout.stripe.com; connect-src 'self' https://api.stripe.com; style-src 'self' 'unsafe-inline'" slot="head">
-  
-  <!-- Load Stripe.js synchronously -->
-  <script src="https://js.stripe.com/v3/"></script>
-  
-  <script>
-    // Debug script loading
-    console.log('Stripe script executed, window.Stripe:', typeof window.Stripe);
-    
-    // If Stripe isn't available, try manual loading
-    if (typeof window.Stripe === 'undefined') {
-      console.log('Stripe not found, attempting manual load...');
-      
-      function loadStripeScript() {
-        return new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = 'https://js.stripe.com/v3/';
-          script.onload = () => {
-            console.log('Manual Stripe script loaded, window.Stripe:', typeof window.Stripe);
-            resolve(window.Stripe);
-          };
-          script.onerror = (err) => {
-            console.error('Failed to load Stripe script:', err);
-            reject(err);
-          };
-          document.head.appendChild(script);
-        });
-      }
-      
-      loadStripeScript().catch(console.error);
-    }
-  </script>
-  
   <main class="min-h-screen bg-gray-50 py-12">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
       <!-- Header -->
@@ -72,75 +25,7 @@ const description = 'Complete your purchase securely with Stripe';
       </div>
 
       <!-- Checkout Form -->
-      <div id="checkout-container">
-        <!-- Static fallback to test if React is loading -->
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 text-sm">
-          <strong>Loading Status:</strong> If you see this message and nothing below, React components are not loading.
-        </div>
-        
-        <!-- Test React component -->
-        <ReactTest client:only="react" />
-        
-        <!-- Simple test -->
-        <SimpleCheckoutTest client:only="react" />
-        
-        <!-- Actual cart test -->
-        <ActualCartTest client:only="react" />
-        
-        <!-- Import test -->
-        <ImportTest client:only="react" />
-        
-        <!-- Stripe key test -->
-        <StripeKeyTest client:only="react" />
-        
-        <!-- Network test -->
-        <NetworkTest client:only="react" />
-        
-        <!-- Direct Stripe test -->
-        <DirectStripeTest client:only="react" />
-        
-        <!-- Simple Stripe loader -->
-        <SimpleStripeLoader client:only="react" />
-        
-        <!-- CSP Test -->
-        <CSPTest client:only="react" />
-        
-        <!-- Simplified checkout form -->
-        <CheckoutFormSimple client:only="react" />
-        
-        <!-- Original Checkout Form (should work now) -->
-        <div class="mt-8 border-t pt-8">
-          <h2 class="text-lg font-semibold mb-4">🎯 Original CheckoutForm Test</h2>
-          <ErrorBoundary client:only="react">
-            <CheckoutForm client:only="react" />
-          </ErrorBoundary>
-        </div>
-        
-        <!-- Enhanced fallback content -->
-        <div id="checkout-fallback" class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center mt-4">
-          <h2 class="text-lg font-semibold text-yellow-800 mb-2">Loading Checkout...</h2>
-          <p class="text-yellow-600 mb-2">If this message persists, there may be a JavaScript loading issue.</p>
-          <p class="text-sm text-yellow-500">Check the browser console (F12) for errors.</p>
-        </div>
-        
-        <noscript>
-          <div class="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-            <h2 class="text-lg font-semibold text-red-800 mb-2">JavaScript Required</h2>
-            <p class="text-red-600">Please enable JavaScript to complete your checkout.</p>
-          </div>
-        </noscript>
-      </div>
-      
-      <!-- JavaScript to hide fallback when React loads -->
-      <script>
-        // Hide the fallback once React components load
-        setTimeout(() => {
-          const fallback = document.getElementById('checkout-fallback');
-          if (fallback) {
-            fallback.style.display = 'none';
-          }
-        }, 3000); // Hide after 3 seconds
-      </script>
+      <CheckoutForm client:only="react" />
     </div>
   </main>
 </MainLayout>

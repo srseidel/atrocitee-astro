@@ -107,19 +107,33 @@ export const createServerSupabaseClient = ({
           getAll() {
             if (!request) return [];
             const cookieHeader = request.headers.get('cookie') || '';
+            if (!cookieHeader) return [];
+            
             return cookieHeader
               .split(';')
               .map(cookie => cookie.trim())
               .filter(Boolean)
               .map(cookie => {
                 const [name, ...rest] = cookie.split('=');
-                return { name, value: rest.join('=') };
-              });
+                return { 
+                  name: name?.trim() || '', 
+                  value: decodeURIComponent(rest.join('=') || '') 
+                };
+              })
+              .filter(cookie => cookie.name && cookie.value);
           },
           setAll(cookiesToSet) {
             try {
-              cookiesToSet.forEach(({ name, value, options }) => {
-                cookies.set(name, value, options);
+              cookiesToSet.forEach(({ name, value, options = {} }) => {
+                const cookieOptions = {
+                  path: '/',
+                  sameSite: 'lax' as const,
+                  secure: process.env.NODE_ENV === 'production',
+                  httpOnly: false,
+                  maxAge: 60 * 60 * 24 * 7, // 7 days
+                  ...options
+                };
+                cookies.set(name, value, cookieOptions);
               });
             } catch (error) {
               console.error('Error setting cookies:', error);

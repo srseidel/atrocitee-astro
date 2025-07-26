@@ -125,7 +125,8 @@ export const authMiddleware: MiddlewareHandler = async (context, next) => {
     const supabase = createServerSupabaseClient({ cookies, request });
 
     // Get user session
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
 
     // Add user to locals so it's available in all routes
     context.locals.user = user;
@@ -216,14 +217,18 @@ export const getUser = async (Astro: AstroGlobal) => {
     const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
     const { data: { user }, error } = await supabase.auth.getUser();
     
-    if (error || !user) {
-      return null;
+    if (error) {
+      // Throw auth errors so they can be handled upstream
+      if (error.message?.includes('Auth session missing')) {
+        throw new Error('Authentication session expired');
+      }
+      throw error;
     }
     
     return user;
   } catch (error) {
     console.error('Error in getUser:', error);
-    return null;
+    throw error; // Re-throw so calling code can handle appropriately
   }
 };
 

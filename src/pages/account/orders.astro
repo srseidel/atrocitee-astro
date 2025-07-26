@@ -16,10 +16,23 @@ import MainLayout from "@layouts/MainLayout.astro";
 import OrdersList from "@components/features/orders/OrdersList";
 import OrderStats from "@components/features/orders/OrderStats";
 
-// Check authentication
-const user = await getUser(Astro);
-if (!user) {
-  return redirectIfNotAuthenticated(Astro);
+// Check authentication with better error handling
+let user;
+try {
+  user = await getUser(Astro);
+  if (!user) {
+    return redirectIfNotAuthenticated(Astro);
+  }
+} catch (authError) {
+  console.error('Auth error in orders page:', authError);
+  // Clear any stale auth cookies and redirect to login
+  try {
+    Astro.cookies.delete('sb-access-token', { path: '/' });
+    Astro.cookies.delete('sb-refresh-token', { path: '/' });
+  } catch (e) {
+    // Ignore cookie deletion errors
+  }
+  return Astro.redirect('/auth/login');
 }
 
 // Fetch user orders and statistics

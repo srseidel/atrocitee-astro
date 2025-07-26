@@ -132,11 +132,12 @@ export default function CheckoutForm() {
       }
 
       setOrderResult(data);
-      
-      // Clear cart after successful order
-      clearCart();
-      
       setStep('success');
+      
+      // Clear cart after a longer delay to prevent auth conflicts
+      setTimeout(() => {
+        clearCart();
+      }, 3000);
     } catch (error) {
       console.error('Error confirming payment:', error);
       setProcessingError(error instanceof Error ? error.message : 'Failed to confirm payment');
@@ -258,12 +259,20 @@ export default function CheckoutForm() {
             <p className="text-sm text-green-600 mt-1">
               You will receive a confirmation email shortly.
             </p>
-            <button
-              onClick={() => window.location.href = '/shop'}
-              className="mt-4 btn btn-primary"
-            >
-              Continue Shopping
-            </button>
+            <div className="flex space-x-3 mt-4">
+              <button
+                onClick={() => window.location.href = '/account/orders'}
+                className="btn btn-secondary"
+              >
+                View Orders
+              </button>
+              <button
+                onClick={() => window.location.href = '/shop'}
+                className="btn btn-primary"
+              >
+                Continue Shopping
+              </button>
+            </div>
           </div>
         )}
 

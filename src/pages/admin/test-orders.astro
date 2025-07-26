@@ -140,6 +140,81 @@ const description = 'Test the complete order flow in a safe environment';
     <!-- Test Order Panel -->
     <TestOrderPanel client:load environmentStatusJson={JSON.stringify(environmentStatus)} />
 
+    <!-- Debugging Components Section -->
+    <div class="bg-white shadow rounded-lg p-6">
+      <h2 class="text-lg font-semibold text-gray-900 mb-4">Debugging Components</h2>
+      <p class="text-gray-600 mb-6">
+        These components help debug various aspects of the checkout system and are only available in the admin area.
+      </p>
+      
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Stripe Testing -->
+        <div class="space-y-4">
+          <h3 class="text-md font-medium text-gray-900">Stripe Integration Testing</h3>
+          
+          <!-- Stripe Key Test -->
+          <div class="border rounded-lg p-4">
+            <h4 class="font-medium text-gray-900 mb-2">Stripe Configuration Test</h4>
+            <div id="stripe-key-test"></div>
+          </div>
+          
+          <!-- Direct Stripe Test -->
+          <div class="border rounded-lg p-4">
+            <h4 class="font-medium text-gray-900 mb-2">Direct Stripe Loading Test</h4>
+            <div id="direct-stripe-test"></div>
+          </div>
+          
+          <!-- Simple Stripe Loader -->
+          <div class="border rounded-lg p-4">
+            <h4 class="font-medium text-gray-900 mb-2">Stripe Script Loader Test</h4>
+            <div id="simple-stripe-loader"></div>
+          </div>
+        </div>
+
+        <!-- Cart & Checkout Testing -->
+        <div class="space-y-4">
+          <h3 class="text-md font-medium text-gray-900">Cart & Checkout Testing</h3>
+          
+          <!-- Actual Cart Test -->
+          <div class="border rounded-lg p-4">
+            <h4 class="font-medium text-gray-900 mb-2">Cart Validation Test</h4>
+            <div id="actual-cart-test"></div>
+          </div>
+          
+          <!-- Simple Checkout Test -->
+          <div class="border rounded-lg p-4">
+            <h4 class="font-medium text-gray-900 mb-2">Simple Checkout Test</h4>
+            <div id="simple-checkout-test"></div>
+          </div>
+          
+          <!-- Checkout Form Debug -->
+          <div class="border rounded-lg p-4">
+            <h4 class="font-medium text-gray-900 mb-2">Checkout Form Debug</h4>
+            <div id="checkout-form-debug"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Network & CSP Testing -->
+      <div class="mt-6 space-y-4">
+        <h3 class="text-md font-medium text-gray-900">Network & Security Testing</h3>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Network Test -->
+          <div class="border rounded-lg p-4">
+            <h4 class="font-medium text-gray-900 mb-2">Network Connectivity Test</h4>
+            <div id="network-test"></div>
+          </div>
+          
+          <!-- CSP Test -->
+          <div class="border rounded-lg p-4">
+            <h4 class="font-medium text-gray-900 mb-2">Content Security Policy Test</h4>
+            <div id="csp-test"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Documentation -->
     <div class="bg-white shadow rounded-lg p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">Test Documentation</h2>
@@ -190,3 +265,67 @@ const description = 'Test the complete order flow in a safe environment';
     </div>
   </main>
 </AdminLayout>
+
+<script>
+  // Load debugging components dynamically
+  async function loadDebugComponents() {
+    try {
+      const [
+        { default: React },
+        { createRoot },
+        { default: StripeKeyTest },
+        { default: DirectStripeTest },
+        { default: SimpleStripeLoader },
+        { default: ActualCartTest },
+        { default: SimpleCheckoutTest },
+        { default: CheckoutFormDebug },
+        { default: NetworkTest },
+        { default: CSPTest }
+      ] = await Promise.all([
+        import('react'),
+        import('react-dom/client'),
+        import('@components/features/checkout/StripeKeyTest'),
+        import('@components/features/checkout/DirectStripeTest'),
+        import('@components/features/checkout/SimpleStripeLoader'),
+        import('@components/features/checkout/ActualCartTest'),
+        import('@components/features/checkout/SimpleCheckoutTest'),
+        import('@components/features/checkout/CheckoutFormDebug'),
+        import('@components/features/checkout/NetworkTest'),
+        import('@components/features/checkout/CSPTest')
+      ]);
+
+      const { createElement } = React;
+
+      // Render all debug components
+      const components = [
+        { id: 'stripe-key-test', component: StripeKeyTest },
+        { id: 'direct-stripe-test', component: DirectStripeTest },
+        { id: 'simple-stripe-loader', component: SimpleStripeLoader },
+        { id: 'actual-cart-test', component: ActualCartTest },
+        { id: 'simple-checkout-test', component: SimpleCheckoutTest },
+        { id: 'checkout-form-debug', component: CheckoutFormDebug },
+        { id: 'network-test', component: NetworkTest },
+        { id: 'csp-test', component: CSPTest }
+      ];
+
+      components.forEach(({ id, component }) => {
+        const container = document.getElementById(id);
+        if (container) {
+          const root = createRoot(container);
+          root.render(createElement(component));
+        }
+      });
+
+      console.log('Debug components loaded successfully');
+    } catch (error) {
+      console.error('Error loading debug components:', error);
+    }
+  }
+
+  // Load components when page is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadDebugComponents);
+  } else {
+    loadDebugComponents();
+  }
+</script>
