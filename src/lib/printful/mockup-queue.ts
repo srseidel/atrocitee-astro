@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { PrintfulService } from './service';
+import { debug } from '@lib/utils/debug';
 
 // Queue type definitions
 interface MockupTask {
@@ -70,7 +71,7 @@ export async function addTask(task: Omit<MockupTask, 'id' | 'createdAt' | 'updat
           updated_at: newTask.updatedAt.toISOString()
         });
     } catch (error) {
-      console.error('Error storing task in database:', error);
+      debug.criticalError('Error storing mockup task in database', error, { taskId: task.id, variantId: task.variantId });
     }
   }
   
@@ -193,7 +194,7 @@ export async function processQueue(): Promise<void> {
       // Get the PrintfulService instance
       const printfulService = PrintfulService.getInstance();
       
-      console.log(`Creating mockup task for variant ${nextTask.printfulVariantId}, view: ${nextTask.view}`);
+      debug.log('Creating mockup task', { printfulVariantId: nextTask.printfulVariantId, view: nextTask.view, taskId: nextTask.id });
       
       // Call the Printful API to create a mockup task
       const mockupTask = await printfulService.createMockupGenerationTask(
@@ -213,7 +214,7 @@ export async function processQueue(): Promise<void> {
         }
       );
       
-      console.log(`Mockup task created successfully: ${mockupTask.task_key}`);
+      debug.log('Mockup task created successfully', { taskKey: mockupTask.task_key, taskId: nextTask.id });
       
       // Update task with the Printful task key
       nextTask.status = 'completed';
@@ -245,7 +246,7 @@ export async function processQueue(): Promise<void> {
           retryAfterSeconds = parseInt(match[1], 10);
         }
       } catch (parseError) {
-        console.error('Failed to parse retry-after value', parseError);
+        debug.warn('Failed to parse retry-after value', { error: parseError, retryAfterValue: retryAfter });
       }
       
       // Update task to rate limited
@@ -291,7 +292,7 @@ export async function processQueue(): Promise<void> {
     processQueue();
   }, 100);
 } catch (error) {
-  console.error('Error processing queue:', error);
+  debug.criticalError('Error processing mockup queue', error);
   isProcessing = false;
 }
 }

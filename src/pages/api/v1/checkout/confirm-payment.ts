@@ -8,6 +8,7 @@ import type { APIRoute } from 'astro';
 import { stripe } from '@lib/stripe/config';
 import { createServerSupabaseClient } from '@lib/supabase/client';
 import { PrintfulOrderService } from '@lib/printful/order-service';
+import { debug } from '@lib/utils/debug';
 import type { CartItem } from '@local-types/cart';
 
 export const prerender = false;
@@ -39,6 +40,7 @@ interface ConfirmPaymentRequest {
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   try {
+    debug.api('POST', '/api/v1/checkout/confirm-payment', null, 'Processing payment confirmation');
     const body: ConfirmPaymentRequest = await request.json();
     
     // Validate request
@@ -68,7 +70,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       const { data: { user } } = await supabase.auth.getUser();
       userId = user?.id || null;
     } catch (error) {
-      console.log('No authenticated user for this order');
+      debug.log('No authenticated user for this order');
     }
 
     // Create order record
@@ -114,15 +116,15 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       .single();
 
     if (orderError) {
-      console.error('Error creating order:', orderError);
+      debug.criticalError('Error creating order', orderError, { paymentIntentId: body.paymentIntentId });
       return new Response(
         JSON.stringify({ error: 'Failed to create order record' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Order created:', order.id);
-    console.log('Cart items received:', JSON.stringify(body.items, null, 2));
+    debug.log('Order created', { orderId: order.id });
+    debug.log('Cart items received', { itemCount: body.items.length, items: body.items });
 
     // Create order items (map cart structure to order structure)
     const orderItems = body.items.map(item => ({
@@ -140,7 +142,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       donation_amount: 0 // Default to 0 for now
     }));
 
-    console.log('Order items to insert:', JSON.stringify(orderItems, null, 2));
+    debug.log('Order items to insert', { itemCount: orderItems.length, orderItems });
 
     const { error: itemsError, data: insertedItems } = await supabase
       .from('order_items')
@@ -148,17 +150,16 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       .select();
 
     if (itemsError) {
-      console.error('Error creating order items:', itemsError);
-      console.error('Failed orderItems data:', JSON.stringify(orderItems, null, 2));
+      debug.criticalError('Error creating order items', itemsError, { orderItems });
       // Continue anyway - items are in the snapshot
     } else {
-      console.log('Order items created successfully:', insertedItems?.length || 0, 'items');
+      debug.log('Order items created successfully', { itemCount: insertedItems?.length || 0 });
     }
 
     // Submit order to Printful for fulfillment
     let printfulSubmissionError = null;
     try {
-      console.log('Submitting order to Printful...');
+      debug.log('Submitting order to Printful', { orderId: order.id });
       const printfulService = new PrintfulOrderService();
       
       // Convert local order to Printful format
@@ -179,13 +180,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         .eq('id', order.id);
 
       if (updateError) {
-        console.error('Error updating order with Printful info:', updateError);
+        debug.criticalError('Error updating order with Printful info', updateError, { orderId: order.id, printfulOrderId: printfulOrder.id });
       } else {
-        console.log('Order successfully submitted to Printful:', printfulOrder.id);
+        debug.log('Order successfully submitted to Printful', { orderId: order.id, printfulOrderId: printfulOrder.id });
       }
       
     } catch (error) {
-      console.error('Error submitting order to Printful:', error);
+      debug.criticalError('Error submitting order to Printful', error, { orderId: order.id });
       printfulSubmissionError = error instanceof Error ? error.message : 'Unknown Printful error';
       
       // Don't fail the entire checkout - order was paid and created
@@ -202,17 +203,19 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     
     // TODO: Send order confirmation email
     
+    const successResponse = {
+      success: true,
+      orderId: order.id,
+      orderNumber: order.id.slice(-8).toUpperCase(), // Last 8 chars as order number
+      message: 'Order confirmed successfully',
+      printful: {
+        submitted: !printfulSubmissionError,
+        error: printfulSubmissionError
+      }
+    };
+    debug.api('POST', '/api/v1/checkout/confirm-payment', 200, successResponse);
     return new Response(
-      JSON.stringify({
-        success: true,
-        orderId: order.id,
-        orderNumber: order.id.slice(-8).toUpperCase(), // Last 8 chars as order number
-        message: 'Order confirmed successfully',
-        printful: {
-          submitted: !printfulSubmissionError,
-          error: printfulSubmissionError
-        }
-      }),
+      JSON.stringify(successResponse),
       {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -220,7 +223,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     );
 
   } catch (error) {
-    console.error('Error confirming payment:', error);
+    debug.criticalError('Error confirming payment', error, { paymentIntentId: body?.paymentIntentId });
+    debug.api('POST', '/api/v1/checkout/confirm-payment', 500, { error: 'Failed to confirm payment' });
     
     return new Response(
       JSON.stringify({ 

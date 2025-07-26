@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { debug } from '@lib/utils/debug';
 
 import { signUp } from '@lib/supabase/client';
 
@@ -39,7 +40,7 @@ export default function RegisterForm() {
       }
     } catch (err) {
       setError('An unexpected error occurred');
-      console.error(err);
+      debug.criticalError('Registration form error', err, { email: email ? 'provided' : 'missing' });
     } finally {
       setLoading(false);
     }

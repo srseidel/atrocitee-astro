@@ -1,5 +1,6 @@
 // Sentry configuration and utility functions
 import * as Sentry from '@sentry/astro';
+import { debug } from '@lib/utils/debug';
 
 import { env } from '../env';
 
@@ -19,8 +20,7 @@ export function initSentry(): void {
       },
     });
   }
-  // eslint-disable-next-line no-console
-  console.log("Sentry initialized");
+  debug.log('Sentry initialized', { environment: env.sentry.environment, dsnPresent: !!env.sentry.dsn });
 }
 
 // Custom error tracking for specific scenarios
@@ -30,8 +30,7 @@ export function captureError(error: Error, context?: Record<string, unknown>): v
       custom: context 
     } 
   });
-  // eslint-disable-next-line no-console
-  console.log("Sentry error:", error);
+  debug.log('Sentry error captured', { error: error.message, context });
 }
 
 // Set user information when a user logs in
@@ -61,22 +60,23 @@ export function addBreadcrumb(message: string, category: string, level: 'info' |
 // For the MVP, we'll focus on error tracking
 export function trackPerformance<T>(name: string, operation: () => Promise<T>): Promise<T> {
   // Simple timing implementation without Sentry transaction API
-  console.time(name);
+  const startTime = performance.now();
   
   return operation()
     .then(result => {
-      console.timeEnd(name);
+      const duration = performance.now() - startTime;
+      debug.performance(name, duration);
       return result;
     })
     .catch(error => {
-      console.timeEnd(name);
+      const duration = performance.now() - startTime;
+      debug.performance(name, duration, { error: true });
       Sentry.captureException(error, { 
         contexts: { 
           operation: { name }
         } 
       });
-      // eslint-disable-next-line no-console
-      console.log("Sentry error:", error);
+      debug.log('Sentry performance error captured', { error: error.message, operationName: name });
       throw error;
     });
 } 

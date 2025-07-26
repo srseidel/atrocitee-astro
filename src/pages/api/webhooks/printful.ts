@@ -8,6 +8,7 @@ import type { APIRoute } from 'astro';
 import { createServerSupabaseClient } from '@lib/supabase/client';
 import { PrintfulOrderService } from '@lib/printful/order-service';
 import { env } from '@lib/config/env';
+import { debug } from '@lib/utils/debug';
 import crypto from 'crypto';
 
 export const prerender = false;
@@ -45,7 +46,7 @@ interface PrintfulWebhookData {
 }
 
 export const POST: APIRoute = async ({ request }) => {
-  console.log('Printful webhook received');
+  debug.api('POST', '/api/webhooks/printful', null, 'Webhook received');
   
   try {
     // Verify webhook signature
@@ -53,7 +54,7 @@ export const POST: APIRoute = async ({ request }) => {
     const body = await request.text();
     
     if (!signature) {
-      console.error('Missing Printful webhook signature');
+      debug.criticalError('Missing Printful webhook signature', new Error('No signature header'), { headers: Object.keys(headers) });
       return new Response('Missing signature', { status: 401 });
     }
 
@@ -64,24 +65,24 @@ export const POST: APIRoute = async ({ request }) => {
       .digest('hex');
     
     if (signature !== expectedSignature) {
-      console.error('Invalid Printful webhook signature');
+      debug.criticalError('Invalid Printful webhook signature', new Error('Signature mismatch'), { providedSignature: signature?.substring(0, 10) + '...' });
       return new Response('Invalid signature', { status: 401 });
     }
 
-    console.log('Webhook signature verified');
+    debug.log('Webhook signature verified');
 
     // Parse the webhook data
     const webhookData: PrintfulWebhookData = JSON.parse(body);
-    console.log('Webhook type:', webhookData.type);
+    debug.log('Webhook received', { type: webhookData.type, externalId: webhookData.data?.order?.external_id });
 
     // Only handle order-related webhooks
     if (!webhookData.type.startsWith('order_')) {
-      console.log('Ignoring non-order webhook:', webhookData.type);
+      debug.log('Ignoring non-order webhook', { type: webhookData.type });
       return new Response('OK', { status: 200 });
     }
 
     const order = webhookData.data.order;
-    console.log(`Processing order ${order.external_id} with status ${order.status}`);
+    debug.log('Processing order webhook', { externalId: order.external_id, status: order.status, printfulId: order.id });
 
     // Create Supabase client for webhook context
     const supabase = createServerSupabaseClient({
@@ -104,7 +105,7 @@ export const POST: APIRoute = async ({ request }) => {
         order as any
       );
       
-      console.log(`Successfully updated order ${order.external_id}`);
+      debug.log('Successfully updated order from webhook', { externalId: order.external_id, newStatus: localStatus });
       
       // Log the webhook event
       await supabase
@@ -120,7 +121,7 @@ export const POST: APIRoute = async ({ request }) => {
         });
         
     } catch (error) {
-      console.error('Error processing webhook:', error);
+      debug.criticalError('Error processing webhook', error, { externalId: order.external_id, webhookType: webhookData.type });
       
       // Log the webhook error
       await supabase
@@ -143,7 +144,7 @@ export const POST: APIRoute = async ({ request }) => {
     return new Response('OK', { status: 200 });
 
   } catch (error) {
-    console.error('Webhook processing error:', error);
+    debug.criticalError('Webhook processing error', error, { bodyLength: body?.length });
     return new Response('Server error', { status: 500 });
   }
 };

@@ -6,6 +6,7 @@
  */
 
 import { useStore } from '@nanostores/react';
+import { debug } from '@lib/utils/debug';
 import { 
   secureCartItems, 
   validatedCartItems, 
@@ -68,7 +69,7 @@ export function useSecureAddToCart() {
         await secureCartActions.addItem(variantId, quantity);
         return true;
       } catch (error) {
-        console.error('Failed to add to cart:', error);
+        debug.criticalError('Failed to add to cart', error, { variantId, quantity });
         return false;
       }
     },

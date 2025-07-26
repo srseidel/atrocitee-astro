@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { debug } from '@lib/utils/debug';
 
 import { createBrowserSupabaseClient } from '@lib/supabase/client';
 
@@ -61,7 +62,7 @@ export default function ResetPasswordForm() {
       }
     } catch (err) {
       setError('An unexpected error occurred');
-      console.error(err);
+      debug.criticalError('Password reset form error', err);
     } finally {
       setLoading(false);
     }

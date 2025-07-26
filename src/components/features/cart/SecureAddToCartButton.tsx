@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSecureAddToCart } from '@lib/hooks/useSecureCart';
+import { debug } from '@lib/utils/debug';
 
 interface SecureAddToCartButtonProps {
   variantId: string;
@@ -58,7 +59,7 @@ export default function SecureAddToCartButton({
         setTimeout(() => setJustAdded(false), 2000);
       }
     } catch (error) {
-      console.error('Failed to add to cart:', error);
+      debug.criticalError('Failed to add to cart from SecureAddToCartButton', error, { variantId });
     } finally {
       setIsAdding(false);
     }

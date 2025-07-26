@@ -1,5 +1,6 @@
 import { isAdmin } from '@lib/auth/middleware';
 import { createServerSupabaseClient } from '@lib/supabase/client';
+import { debug } from '@lib/utils/debug';
 
 import { CORE_CATEGORIES } from 'src/types/database/models';
 
@@ -60,7 +61,7 @@ export const POST: APIRoute = async ({ params, request, cookies }) => {
       status: 200,
     });
   } catch (error) {
-    console.error('Error updating product:', error);
+    debug.criticalError('Error updating product', error, { productId: id });
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
     });
@@ -82,7 +83,7 @@ export const DELETE: APIRoute = async ({ params, request, cookies }) => {
     // Verify admin access
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      console.error('Delete request unauthorized: No user found');
+      debug.criticalError('Delete request unauthorized: No user found', new Error('No user found'), { productId: id });
       return new Response(JSON.stringify({ error: 'Unauthorized - Not authenticated' }), {
         status: 401,
       });
@@ -92,20 +93,20 @@ export const DELETE: APIRoute = async ({ params, request, cookies }) => {
     const { data: adminCheck, error: adminError } = await supabase.rpc('is_admin');
     
     if (adminError) {
-      console.error('Error checking admin status:', adminError);
+      debug.criticalError('Error checking admin status for delete request', adminError, { userId: user.id, productId: id });
       return new Response(JSON.stringify({ error: 'Error checking admin status' }), {
         status: 500,
       });
     }
 
     if (!adminCheck) {
-      console.error('Delete request unauthorized: User is not admin', { userId: user.id });
+      debug.criticalError('Delete request unauthorized: User is not admin', new Error('User not admin'), { userId: user.id, productId: id });
       return new Response(JSON.stringify({ error: 'Unauthorized - Not admin' }), {
         status: 401,
       });
     }
 
-    console.log('Starting product deletion:', { productId: id, userId: user.id });
+    debug.log('Starting product deletion', { productId: id, userId: user.id });
 
     // Start a transaction to delete everything related to this product
     const { error: deleteError } = await supabase
@@ -114,11 +115,11 @@ export const DELETE: APIRoute = async ({ params, request, cookies }) => {
       .eq('id', id);
 
     if (deleteError) {
-      console.error('Error deleting product:', deleteError);
+      debug.criticalError('Error deleting product from database', deleteError, { productId: id, userId: user.id });
       throw deleteError;
     }
 
-    console.log('Product deleted successfully:', { productId: id });
+    debug.log('Product deleted successfully', { productId: id, userId: user.id });
 
     return new Response(JSON.stringify({ 
       success: true,
@@ -130,7 +131,7 @@ export const DELETE: APIRoute = async ({ params, request, cookies }) => {
       }
     });
   } catch (error) {
-    console.error('Error deleting product:', error);
+    debug.criticalError('Error deleting product', error, { productId: id });
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : 'Unknown error deleting product'

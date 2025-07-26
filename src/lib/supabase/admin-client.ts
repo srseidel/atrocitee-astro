@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { env } from '@lib/config/env';
+import { debug } from '@lib/utils/debug';
 
 import type { AstroCookies } from 'astro';
 import type { TypedSupabaseClient } from '../../types/supabase';
@@ -39,7 +40,7 @@ export const createAdminSupabaseClient = ({
               cookies.set(name, value, options);
             });
           } catch (error) {
-            console.error('Error setting cookies:', error);
+            debug.criticalError('Error setting admin client cookies', error, { cookieKey: name });
           }
         }
       }

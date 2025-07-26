@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createBrowserSupabaseClient } from '@lib/supabase/client';
+import { debug } from '@lib/utils/debug';
 import AddressInput from '@components/common/AddressInput';
 import PhoneInput from '@components/common/PhoneInput';
 import SecureInput from '@components/common/SecureInput';
@@ -83,7 +84,7 @@ export default function AccountSettingsForm() {
         .single();
 
       if (profileError && profileError.code !== 'PGRST116') {
-        console.error('Profile error:', profileError);
+        debug.criticalError('Profile loading error', profileError, { userId: user.id });
       }
 
       // If no profile exists, create a basic one
@@ -103,7 +104,7 @@ export default function AccountSettingsForm() {
           .single();
 
         if (createError) {
-          console.error('Error creating profile:', createError);
+          debug.criticalError('Error creating user profile', createError, { userId: user.id });
           setProfile(newProfile as Profile);
         } else {
           setProfile(createdProfile);
@@ -124,13 +125,13 @@ export default function AccountSettingsForm() {
         .order('name');
 
       if (charitiesError) {
-        console.error('Charities error:', charitiesError);
+        debug.criticalError('Error loading charities', charitiesError);
       } else {
         setCharities(charitiesData || []);
       }
 
     } catch (error) {
-      console.error('Error loading user data:', error);
+      debug.criticalError('Error loading user data', error);
       setMessage({ type: 'error', text: 'Failed to load account information' });
     } finally {
       setLoading(false);
@@ -256,15 +257,13 @@ export default function AccountSettingsForm() {
         });
 
         if (authError) {
-          console.error('Auth metadata update error:', authError);
+          debug.criticalError('Auth metadata update error', authError, { userId: user.id });
         }
       }
 
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
     } catch (error) {
-      console.error('Error saving profile:', error);
-      console.error('Profile data:', profile);
-      console.error('User data:', user);
+      debug.criticalError('Error saving profile', error, { userId: user?.id, hasProfile: !!profile });
       
       // Show more detailed error message
       const errorMessage = error?.message || error?.toString() || 'Unknown error occurred';
@@ -292,7 +291,7 @@ export default function AccountSettingsForm() {
         text: 'Password reset email sent! Check your inbox for instructions.' 
       });
     } catch (error) {
-      console.error('Error sending password reset:', error);
+      debug.criticalError('Error sending password reset', error, { email: user?.email });
       setMessage({ type: 'error', text: 'Failed to send password reset email. Please try again.' });
     } finally {
       setSaving(false);

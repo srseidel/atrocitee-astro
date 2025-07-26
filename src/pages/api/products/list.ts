@@ -6,6 +6,7 @@
 
 import type { APIRoute } from 'astro';
 import { createClient } from '@lib/supabase/client';
+import { debug } from '@lib/utils/debug';
 
 export const prerender = false;
 
@@ -29,7 +30,7 @@ export const GET: APIRoute = async ({ request }) => {
       .range(offset, offset + limit - 1);
 
     if (productsError) {
-      console.error('Products query error:', productsError);
+      debug.criticalError('Error fetching products from database', productsError, { limit, category });
       return new Response(
         JSON.stringify({
           success: false,
@@ -78,7 +79,7 @@ export const GET: APIRoute = async ({ request }) => {
     );
     
   } catch (error) {
-    console.error('Products API error:', error);
+    debug.criticalError('Products API error', error);
     return new Response(
       JSON.stringify({
         success: false,

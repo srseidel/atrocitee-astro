@@ -6,6 +6,7 @@
 
 import type { APIRoute } from 'astro';
 import { stripe } from '@lib/stripe/config';
+import { debug } from '@lib/utils/debug';
 import type { CartItem } from '@local-types/cart';
 
 export const prerender = false;
@@ -96,7 +97,7 @@ export const POST: APIRoute = async ({ request }) => {
     );
 
   } catch (error) {
-    console.error('Error creating payment intent:', error);
+    debug.criticalError('Error creating payment intent', error, { amount, itemCount: body.items?.length });
     
     return new Response(
       JSON.stringify({ 

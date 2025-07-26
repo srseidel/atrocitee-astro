@@ -9,6 +9,7 @@ import type { APIRoute } from 'astro';
 import { createServerSupabaseClient } from '@lib/supabase/client';
 import { generateMockupFilename } from '@utils/helpers/mockups';
 import { generateMockupUrls } from '@utils/helpers/product-helpers';
+import { debug } from '@lib/utils/debug';
 
 /**
  * Generate mockup image URL for cart item based on variant options
@@ -31,7 +32,7 @@ function generateCartItemImageUrl(
     const { webpUrl } = generateMockupUrls(productSlug, filename);
     return webpUrl;
   } catch (error) {
-    console.error('Error generating mockup URL:', error);
+    debug.criticalError('Error generating mockup URL', error, { productSlug, options });
     return fallbackUrl || '';
   }
 }
@@ -39,25 +40,26 @@ function generateCartItemImageUrl(
 export const POST: APIRoute = async ({ request, cookies }) => {
   try {
     const requestBody = await request.json();
-    console.log('Cart validation request received:', requestBody);
+    debug.api('POST', '/api/cart/validate', null, 'Cart validation request');
+    debug.log('Cart validation request received', { itemCount: requestBody?.items?.length });
     
     const { items } = requestBody;
     
     if (!items || !Array.isArray(items)) {
-      console.error('Invalid cart items received:', items);
+      debug.criticalError('Invalid cart items received', new Error('Invalid cart data'), { items });
       return new Response(
         JSON.stringify({ error: 'Invalid cart items' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
     
-    console.log('Validating', items.length, 'cart items');
+    debug.log('Validating cart items', { itemCount: items.length });
 
     const supabase = createServerSupabaseClient({ cookies, request });
     const validatedItems = [];
 
     for (const item of items) {
-      console.log('Validating cart item:', {
+      debug.log('Validating cart item', {
         variantId: item.variantId,
         quantity: item.quantity
       });
@@ -65,7 +67,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       // Skip invalid UUIDs
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(item.variantId)) {
-        console.warn('Skipping invalid variant ID:', item.variantId);
+        debug.warn('Skipping invalid variant ID', { variantId: item.variantId, productSlug: item.productSlug });
         continue; // Skip this item instead of failing the entire request
       }
       
@@ -92,8 +94,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         .single();
 
       if (error || !variant) {
-        console.error('Variant lookup error:', error);
-        console.error('Looking for variant ID:', item.variantId);
+        debug.criticalError('Variant lookup error', error, { variantId: item.variantId, productSlug: item.productSlug });
         return new Response(
           JSON.stringify({ 
             error: `Invalid variant: ${item.variantId}`,
@@ -103,7 +104,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         );
       }
       
-      console.log('Found variant:', {
+      debug.log('Found variant', {
         id: variant.id,
         productName: variant.products?.name,
         published: variant.products?.published_status,
@@ -165,8 +166,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     );
 
   } catch (error) {
-    console.error('Cart validation error:', error);
-    console.error('Error details:', {
+    debug.criticalError('Cart validation error', error, {
       message: error.message,
       stack: error.stack,
       name: error.name

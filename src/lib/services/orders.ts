@@ -5,6 +5,7 @@
  */
 
 import { createServerSupabaseClient } from '@lib/supabase/client';
+import { debug } from '@lib/utils/debug';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface OrderItem {
@@ -89,7 +90,7 @@ export async function getUserOrders(userId: string, supabase: SupabaseClient): P
       .order('created_at', { ascending: false });
 
     if (ordersError) {
-      console.error('Error fetching user orders:', ordersError);
+      debug.criticalError('Error fetching user orders', ordersError, { userId });
       throw new Error('Failed to fetch orders');
     }
 
@@ -101,7 +102,7 @@ export async function getUserOrders(userId: string, supabase: SupabaseClient): P
 
     return transformedOrders;
   } catch (error) {
-    console.error('Error in getUserOrders:', error);
+    debug.criticalError('Error in getUserOrders', error, { userId });
     throw error;
   }
 }
@@ -140,7 +141,7 @@ export async function getOrderById(orderId: string, userId: string, supabase: Su
       if (error.code === 'PGRST116') {
         return null; // Order not found
       }
-      console.error('Error fetching order:', error);
+      debug.criticalError('Error fetching order', error, { orderId, userId });
       throw new Error('Failed to fetch order');
     }
 
@@ -149,7 +150,7 @@ export async function getOrderById(orderId: string, userId: string, supabase: Su
       items: order.order_items || []
     };
   } catch (error) {
-    console.error('Error in getOrderById:', error);
+    debug.criticalError('Error in getOrderById', error, { orderId, userId });
     throw error;
   }
 }
@@ -174,7 +175,7 @@ export async function getUserOrderStats(userId: string, supabase: SupabaseClient
       .eq('user_id', userId);
 
     if (error) {
-      console.error('Error fetching order stats:', error);
+      debug.criticalError('Error fetching order stats', error, { userId });
       throw new Error('Failed to fetch order statistics');
     }
 
@@ -193,7 +194,7 @@ export async function getUserOrderStats(userId: string, supabase: SupabaseClient
 
     return stats;
   } catch (error) {
-    console.error('Error in getUserOrderStats:', error);
+    debug.criticalError('Error in getUserOrderStats', error, { userId });
     throw error;
   }
 }

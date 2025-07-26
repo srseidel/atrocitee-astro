@@ -5,6 +5,7 @@
  */
 
 import { PrintfulClient } from './api-client';
+import { debug } from '@lib/utils/debug';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface PrintfulOrderItem {

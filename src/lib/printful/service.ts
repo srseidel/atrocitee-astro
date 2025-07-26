@@ -6,6 +6,7 @@
  */
 
 import * as Sentry from '@sentry/astro';
+import { debug } from '@lib/utils/debug';
 
 import type { 
   PrintfulProduct,
@@ -161,7 +162,7 @@ export class PrintfulService {
     }
 
     // eslint-disable-next-line no-console
-    console.log("Printful service initialized");
+    debug.log('Printful service initialized');
   }
 
   public static getInstance(): PrintfulService {
@@ -180,7 +181,7 @@ export class PrintfulService {
     };
 
     // eslint-disable-next-line no-console
-    console.log('[DEBUG] Making Printful API request:', {
+    debug.log('Making Printful API request', {
       url,
       method: options.method || 'GET',
       hasAuthHeader: !!headers.Authorization,
@@ -192,7 +193,7 @@ export class PrintfulService {
       const responseText = await response.text();
       
       // eslint-disable-next-line no-console
-      console.log('[DEBUG] Printful API response:', {
+      debug.log('Printful API response', {
         status: response.status,
         statusText: response.statusText,
         headers: Object.fromEntries(response.headers.entries()),
@@ -206,7 +207,7 @@ export class PrintfulService {
       return JSON.parse(responseText);
     } catch (error) {
       // eslint-disable-next-line no-console
-      console.log('[DEBUG] Printful API request failed:', {
+      debug.criticalError('Printful API request failed', error, {
         error,
         errorMessage: error instanceof Error ? error.message : 'Unknown error',
         errorStack: error instanceof Error ? error.stack : undefined
@@ -248,22 +249,22 @@ export class PrintfulService {
       // 2. Looking up the related catalog product by external_id or other attributes
       // 3. Returning the correct catalog ID
       
-      console.log(`Using product ID ${syncProductId} as catalog ID for mockup generation`);
+      debug.log('Using product ID as catalog ID for mockup generation', { syncProductId });
       
       // Try to use the catalog products endpoint to validate the ID
       try {
         const response = await this.fetch<any>(`/catalog/products/${syncProductId}`);
         if (response && response.result && response.result.id) {
-          console.log(`Confirmed catalog ID ${response.result.id} for product ${syncProductId}`);
+          debug.log('Confirmed catalog ID for product', { catalogId: response.result.id, syncProductId });
           return response.result.id;
         }
       } catch (catalogError) {
-        console.warn(`Could not validate catalog ID, using original ID: ${syncProductId}`);
+        debug.warn('Could not validate catalog ID, using original ID', { syncProductId, error: catalogError });
       }
       
       return syncProductId;
     } catch (error) {
-      console.error(`Error getting catalog ID for product ${syncProductId}:`, error);
+      debug.criticalError('Error getting catalog ID for product', error, { syncProductId });
       // Return the original ID as a fallback
       return syncProductId;
     }

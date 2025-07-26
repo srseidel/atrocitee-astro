@@ -7,6 +7,7 @@
 
 import type { APIRoute } from 'astro';
 import { validateFormData, containsSuspiciousContent, deepSanitize } from '@lib/validation/input-sanitizer';
+import { debug } from '@lib/utils/debug';
 
 export const prerender = false;
 
@@ -87,7 +88,7 @@ export const POST: APIRoute = async ({ request }) => {
     });
 
   } catch (error) {
-    console.error('Input security validation error:', error);
+    debug.criticalError('Input security validation error', error, { requestDataKeys: Object.keys(body?.data || {}) });
     
     return new Response(JSON.stringify({
       error: 'Input validation service temporarily unavailable',

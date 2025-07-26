@@ -1,5 +1,6 @@
 import { createBrowserClient } from '@supabase/ssr';
 import { useState } from 'react';
+import { debug } from '@lib/utils/debug';
 
 interface AuthError {
   message: string;
@@ -54,7 +55,7 @@ export default function LoginForm() {
       }
     } catch (err) {
       setError('An unexpected error occurred');
-      console.error(err);
+      debug.criticalError('Login form error', err, { email: email ? 'provided' : 'missing' });
     } finally {
       setLoading(false);
     }

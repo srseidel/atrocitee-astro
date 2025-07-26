@@ -1,0 +1,209 @@
+---
+/**
+ * Admin Debug Utility Test Page
+ * 
+ * Admin-only tool for testing the debug utility in different modes and scenarios
+ * Requires admin authentication to access
+ */
+
+import MainLayout from '@layouts/MainLayout.astro';
+import { debug, perfTimer, debugStatus } from '@lib/utils/debug';
+
+export const prerender = false;
+
+// Test the debug utility server-side
+console.log('=== DEBUG UTILITY TEST START ===');
+console.log('Debug Status:', debugStatus);
+
+// Test basic logging
+debug.log('Testing debug.log - should only show in debug mode');
+debug.info('Testing debug.info - informational message');
+debug.warn('Testing debug.warn - warning message');
+debug.error('Testing debug.error - development error');
+
+// Test specialized logging
+debug.api('GET', '/test-endpoint', 200, { testData: 'success' });
+debug.db('SELECT', 'test_table', { rows: 5 });
+debug.auth('TEST_LOGIN', 'test@example.com', { role: 'user' });
+debug.performance('Test operation', 123.45, { items: 10 });
+
+// Test critical error (should always be handled)
+debug.criticalError('Test critical error', new Error('This is a test error'), { 
+  context: 'debug-testing',
+  userId: 'test-user-123'
+});
+
+// Test user error
+debug.userError('Test user-facing error', new Error('Technical details'), {
+  action: 'test-action',
+  timestamp: new Date().toISOString()
+});
+
+// Test performance timer
+const timer = perfTimer('Server-side test operation');
+// Simulate some work
+await new Promise(resolve => setTimeout(resolve, 50));
+const duration = timer.end({ operation: 'test-delay' });
+
+// Test sensitive data sanitization
+debug.log('Testing sensitive data handling:', {
+  username: 'testuser',
+  password: 'secret123',
+  apiKey: 'sk_test_12345',
+  token: 'bearer_token_xyz',
+  normalData: 'this should show'
+});
+
+debug.criticalError('Testing sensitive data in critical error', new Error('Test error'), {
+  password: 'should-be-hidden',
+  secret: 'also-hidden',
+  publicInfo: 'this-should-show'
+});
+
+console.log('=== DEBUG UTILITY TEST END ===');
+
+const title = 'Admin Debug Utility Test';
+const description = 'Admin-only tool for testing the debug utility functionality';
+---
+
+<MainLayout title={title} description={description}>
+  <main class="min-h-screen bg-gray-50 py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Admin Debug Utility Test</h1>
+        <p class="mt-2 text-gray-600">Admin-only tool for testing environment-aware logging</p>
+        <div class="mt-2">
+          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+            Admin Only
+          </span>
+        </div>
+      </div>
+
+      <!-- Debug Status -->
+      <div class="bg-white rounded-lg shadow-sm border p-6 mb-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Environment Status</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-gray-50 p-4 rounded">
+            <h3 class="font-medium text-gray-900">Debug Mode</h3>
+            <p class="text-sm text-gray-600">{debugStatus.isEnabled ? 'Enabled' : 'Disabled'}</p>
+          </div>
+          <div class="bg-gray-50 p-4 rounded">
+            <h3 class="font-medium text-gray-900">Production Mode</h3>
+            <p class="text-sm text-gray-600">{debugStatus.isProduction ? 'Yes' : 'No'}</p>
+          </div>
+          <div class="bg-gray-50 p-4 rounded">
+            <h3 class="font-medium text-gray-900">Current Mode</h3>
+            <p class="text-sm text-gray-600">{debugStatus.mode}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Environment Variables -->
+      <div class="bg-white rounded-lg shadow-sm border p-6 mb-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Environment Variables</h2>
+        <div class="space-y-2 font-mono text-sm">
+          <div>ENABLE_TEST_MODE: {import.meta.env.ENABLE_TEST_MODE || 'undefined'}</div>
+          <div>DEV: {import.meta.env.DEV}</div>
+          <div>PROD: {import.meta.env.PROD}</div>
+          <div>NODE_ENV: {import.meta.env.NODE_ENV || 'undefined'}</div>
+        </div>
+      </div>
+
+      <!-- Test Instructions -->
+      <div class="bg-white rounded-lg shadow-sm border p-6 mb-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Test Instructions</h2>
+        <div class="space-y-4">
+          <div>
+            <h3 class="font-medium text-gray-900">Debug Mode Test (ENABLE_TEST_MODE=true)</h3>
+            <p class="text-sm text-gray-600 mt-1">
+              Check browser console - you should see detailed debug output with [DEBUG], [INFO], [API], [DB], etc. prefixes
+            </p>
+          </div>
+          <div>
+            <h3 class="font-medium text-gray-900">Production Mode Test (ENABLE_TEST_MODE=false)</h3>
+            <p class="text-sm text-gray-600 mt-1">
+              Check browser console - you should see NO debug output, only critical errors if any
+            </p>
+          </div>
+          <div>
+            <h3 class="font-medium text-gray-900">Server Logs</h3>
+            <p class="text-sm text-gray-600 mt-1">
+              Check terminal/server console for server-side debug output behavior
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Client-side Test Button -->
+      <div class="bg-white rounded-lg shadow-sm border p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Client-side Test</h2>
+        <button 
+          id="test-client-debug" 
+          class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          Run Client-side Debug Test
+        </button>
+        <div id="test-results" class="mt-4 p-4 bg-gray-50 rounded hidden">
+          <h3 class="font-medium text-gray-900 mb-2">Test Results</h3>
+          <div id="test-output" class="font-mono text-sm"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Client-side debug test
+    document.getElementById('test-client-debug')?.addEventListener('click', async () => {
+      const resultsDiv = document.getElementById('test-results');
+      const outputDiv = document.getElementById('test-output');
+      
+      if (resultsDiv && outputDiv) {
+        resultsDiv.classList.remove('hidden');
+        outputDiv.innerHTML = 'Running client-side debug tests...<br>';
+        
+        try {
+          // Import debug utility
+          const { debug, perfTimer, debugStatus } = await import('@lib/utils/debug');
+          
+          outputDiv.innerHTML += `Debug Status: ${JSON.stringify(debugStatus)}<br>`;
+          
+          // Test logging
+          debug.log('Client-side debug.log test');
+          debug.info('Client-side debug.info test');
+          debug.warn('Client-side debug.warn test');
+          debug.error('Client-side debug.error test');
+          
+          // Test specialized logging
+          debug.api('POST', '/client-test', 201, { success: true });
+          debug.performance('Client operation', 45.2, { type: 'button-click' });
+          
+          // Test performance timer
+          const timer = perfTimer('Client-side operation');
+          await new Promise(resolve => setTimeout(resolve, 100));
+          const duration = timer.end({ operation: 'async-delay' });
+          
+          // Test critical error
+          debug.criticalError('Client-side test error', new Error('Client test'), {
+            browser: navigator.userAgent,
+            timestamp: new Date().toISOString()
+          });
+          
+          // Test sensitive data handling
+          debug.log('Client sensitive data test:', {
+            username: 'clientuser',
+            password: 'clientsecret',
+            publicData: 'safe-to-show'
+          });
+          
+          outputDiv.innerHTML += 'All client-side tests completed. Check browser console for output.<br>';
+          outputDiv.innerHTML += `Performance timer result: ${duration}ms<br>`;
+          
+        } catch (error) {
+          outputDiv.innerHTML += `Error: ${error.message}<br>`;
+          console.error('Client-side test error:', error);
+        }
+      }
+    });
+  </script>
+</MainLayout>

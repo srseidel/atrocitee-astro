@@ -1,6 +1,7 @@
 import { createServerClient, createBrowserClient } from '@supabase/ssr';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { env } from '@lib/config/env';
+import { debug } from '@lib/utils/debug';
 
 import type { TypedSupabaseClient } from '../../types/supabase';
 import type { CookieOptions } from '@supabase/ssr';
@@ -51,7 +52,7 @@ export const createClient = (): SupabaseClient => {
 export const createBrowserSupabaseClient = (): SupabaseClient | MockSupabaseClient => {
   // During build, return a mock client if environment variables are missing
   if (isBuild && (!import.meta.env.PUBLIC_SUPABASE_URL || !import.meta.env.PUBLIC_SUPABASE_ANON_KEY)) {
-    console.warn('Supabase client created with placeholder credentials during build');
+    debug.warn('Supabase client created with placeholder credentials during build');
     // Return a minimal mock client for build time
     const mockClient = {
       auth: {
@@ -125,25 +126,40 @@ export const createServerSupabaseClient = ({
           setAll(cookiesToSet) {
             try {
               cookiesToSet.forEach(({ name, value, options = {} }) => {
-                const cookieOptions = {
-                  path: '/',
-                  sameSite: 'lax' as const,
-                  secure: process.env.NODE_ENV === 'production',
-                  httpOnly: false,
-                  maxAge: 60 * 60 * 24 * 7, // 7 days
-                  ...options
-                };
-                cookies.set(name, value, cookieOptions);
+                try {
+                  const cookieOptions = {
+                    path: '/',
+                    sameSite: 'lax' as const,
+                    secure: process.env.NODE_ENV === 'production',
+                    httpOnly: false,
+                    maxAge: 60 * 60 * 24 * 7, // 7 days
+                    ...options
+                  };
+                  cookies.set(name, value, cookieOptions);
+                } catch (cookieError) {
+                  // Silently ignore cookie setting errors when response is already sent
+                  // This commonly happens with Supabase auth token refresh during SSR
+                  if (cookieError instanceof Error && 
+                      (cookieError.message.includes('already been sent') || 
+                       cookieError.message.includes('cannot be altered') ||
+                       cookieError.message.includes('ResponseSentError') ||
+                       cookieError.name === 'ResponseSentError')) {
+                    // Response already sent - ignore this error silently
+                    return;
+                  }
+                  // Log other unexpected cookie errors for debugging
+                  debug.warn(`Could not set cookie ${name}`, { error: cookieError?.message || cookieError });
+                }
               });
             } catch (error) {
-              console.error('Error setting cookies:', error);
+              debug.criticalError('Error setting cookies', error);
             }
           }
         }
       }
     );
   } catch (error) {
-    console.error('Error creating Supabase client:', error);
+    debug.criticalError('Error creating Supabase client', error);
     throw error;
   }
 };
@@ -194,7 +210,7 @@ export async function checkAdminStatus(supabase: ReturnType<typeof createServerS
   const { data, error } = await supabase.rpc('is_admin', { user_id: userId });
   
   if (error) {
-    console.error('Error checking admin status:', error);
+    debug.criticalError('Error checking admin status', error, { userId });
     return false;
   }
   

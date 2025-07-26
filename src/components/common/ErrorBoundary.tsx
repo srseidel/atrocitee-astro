@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/astro';
 import React, { Component, type ErrorInfo, type ReactNode } from 'react';
+import { debug } from '@lib/utils/debug';
 
 interface Props {
   children: ReactNode;
@@ -22,7 +23,10 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error("Uncaught error:", error, errorInfo);
+    debug.criticalError('React component error boundary triggered', error, { 
+      componentStack: errorInfo.componentStack,
+      errorBoundary: true 
+    });
     
     // Send to Sentry
     Sentry.captureException(error, {

@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import { loadStripe } from '@stripe/stripe-js';
 import env from '@config/env';
+import { debug } from '@lib/utils/debug';
 
 // Validate Stripe keys format
 function validateStripeKeys() {
@@ -19,7 +20,11 @@ function validateStripeKeys() {
   // In development, prefer test keys but allow live keys with warning
   if (env.NODE_ENV === 'development') {
     if (isLiveSecretKey || isLivePublishableKey) {
-      console.warn('⚠️  Warning: Using live Stripe keys in development mode!');
+      debug.warn('Using live Stripe keys in development mode', { 
+        environment: env.NODE_ENV,
+        hasLiveSecretKey: isLiveSecretKey,
+        hasLivePublishableKey: isLivePublishableKey 
+      });
     }
   }
 

@@ -5,6 +5,7 @@ import { defineConfig } from 'astro/config';
 import tailwind from '@astrojs/tailwind';
 import react from '@astrojs/react';
 import node from '@astrojs/node';
+import cloudflare from '@astrojs/cloudflare';
 import sentry from '@sentry/astro';
 
 // Get environment
@@ -26,8 +27,12 @@ export default defineConfig({
     }),
   ],
   output: 'server', // Always use server output to support both static and SSR pages
-  adapter: node({
+  adapter: isDev ? node({
     mode: 'standalone',
+  }) : cloudflare({
+    platformProxy: {
+      enabled: true,
+    },
   }),
   prefetch: {
     prefetchAll: true,

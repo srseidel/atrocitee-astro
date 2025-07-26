@@ -8,6 +8,7 @@
 
 import { atom, computed } from 'nanostores';
 import { persistentAtom } from '@nanostores/persistent';
+import { debug } from '@lib/utils/debug';
 
 // Types for secure cart
 export interface SecureCartItem {
@@ -95,7 +96,7 @@ async function validateCartItems() {
       throw new Error(data.error || 'Validation failed');
     }
   } catch (error) {
-    console.error('Cart validation error:', error);
+    debug.criticalError('Cart validation error', error, { itemCount: items.length });
     cartValidationError.set(error instanceof Error ? error.message : 'Unknown error');
   } finally {
     cartValidationLoading.set(false);

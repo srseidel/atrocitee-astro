@@ -10,7 +10,10 @@ pages_build_output_dir = "dist"
 # Define non-secret environment variables here
 [vars]
 PUBLIC_SUPABASE_URL = "https://ssvvvpedcdyssmojaoln.supabase.co"
-#PUBLIC_SUPABASE_ANON_KEY = "" # Consider using secrets for this
+PUBLIC_SHOW_DEBUG = "false"
+PRINTFUL_SANDBOX_MODE = "false"
+ENABLE_TEST_MODE = "false"
+PRINTFUL_API_BASE_URL = "https://api.printful.com"
 
 # Preview environment variables
 [env.preview]

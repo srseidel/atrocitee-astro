@@ -7,6 +7,7 @@
 
 import * as Sentry from '@sentry/astro';
 import env from '@config/env';
+import { debug } from '@lib/utils/debug';
 
 import type { 
   PrintfulResponse, 
@@ -64,7 +65,7 @@ export class PrintfulClient {
     
     // Add debug logging for environment variables
     // eslint-disable-next-line no-console
-    console.log('[Printful] Environment check:', {
+    debug.log('Printful environment check', {
       apiKeyExists: !!apiKey,
       apiKeyLength: apiKey ? apiKey.length : 0,
       nodeEnv: env.NODE_ENV,
@@ -73,7 +74,7 @@ export class PrintfulClient {
 
     if (!apiKey) {
       // eslint-disable-next-line no-console
-      console.error('[Printful] ERROR: API key is missing or empty');
+      debug.criticalError('Printful API key is missing or empty', new Error('Missing API key'), { apiKeyPresent: false });
     }
 
     this.apiKey = apiKey;
@@ -87,7 +88,7 @@ export class PrintfulClient {
     };
 
     // eslint-disable-next-line no-console
-    console.log(`[Printful] API client initialized in ${sandboxMode ? 'SANDBOX' : 'PRODUCTION'} mode`);
+    debug.log('Printful API client initialized', { mode: sandboxMode ? 'SANDBOX' : 'PRODUCTION', apiKeyPresent: !!apiKey });
   }
 
   /**
@@ -108,7 +109,7 @@ export class PrintfulClient {
         'missing_api_key'
       );
       // eslint-disable-next-line no-console
-      console.error('[Printful] Authentication error:', error);
+      debug.criticalError('Printful authentication error', error);
       throw error;
     }
     
@@ -120,7 +121,7 @@ export class PrintfulClient {
     };
 
     // eslint-disable-next-line no-console
-    console.log(`[Printful] Making request to: ${endpoint}`);
+    debug.log('Making Printful API request', { endpoint, method: options?.method || 'GET' });
 
     try {
       const response = await fetch(url, requestOptions);
@@ -128,9 +129,9 @@ export class PrintfulClient {
       
       // Debug HTTP status and response
       // eslint-disable-next-line no-console
-      console.log(`[Printful] Response status: ${response.status}`);
+      debug.log('Printful API response', { endpoint, status: response.status });
       // eslint-disable-next-line no-console
-      console.log(`[Printful] Raw response: ${responseText}`);
+      debug.log('Printful API raw response', { endpoint, responseLength: responseText.length });
       
       // Parse the response as JSON
       let data: PrintfulResponse<T>;
@@ -138,7 +139,7 @@ export class PrintfulClient {
         data = JSON.parse(responseText);
       } catch (parseError) {
         // eslint-disable-next-line no-console
-        console.error('[Printful] Error parsing JSON response:', parseError);
+        debug.criticalError('Error parsing Printful JSON response', parseError, { endpoint, responseLength: responseText.length });
         throw new PrintfulApiError(
           `Failed to parse Printful API response: ${parseError instanceof Error ? parseError.message : 'Unknown parsing error'}`,
           500,
@@ -178,7 +179,7 @@ export class PrintfulClient {
         const delayMs = RETRY_DELAY_MS * Math.pow(RETRY_BACKOFF_FACTOR, MAX_RETRIES - retries);
         
         // eslint-disable-next-line no-console
-        console.warn(`[Printful] Request failed, retrying in ${delayMs}ms...`, { endpoint, error });
+        debug.warn('Printful request failed, retrying', { endpoint, delayMs, attempt: attempt + 1, error: error.message });
         
         // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, delayMs));

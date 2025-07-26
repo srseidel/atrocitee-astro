@@ -39,22 +39,30 @@ try {
   const hasServerContext = Astro.request && Astro.request.headers && typeof Astro.request.headers.get === 'function';
   
   if (hasServerContext) {
-    const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
-    const { data: { user }, error } = await supabase.auth.getUser();
-    isAuthenticated = !!user;
-    
-    // If authenticated, check if user is admin
-    if (isAuthenticated && user) {
-      isAdmin = user.app_metadata?.role === 'admin' || 
-                user.app_metadata?.is_admin === true ||
-                (await supabase
-                  .from('profiles')
-                  .select('role')
-                  .eq('id', user.id)
-                  .single()
-                )?.data?.role === 'admin';
+    try {
+      const supabase = createServerSupabaseClient({ cookies: Astro.cookies, request: Astro.request });
+      const { data: { user }, error } = await supabase.auth.getUser();
+      isAuthenticated = !!user;
+      
+      // If authenticated, check if user is admin
+      if (isAuthenticated && user) {
+        isAdmin = user.app_metadata?.role === 'admin' || 
+                  user.app_metadata?.is_admin === true ||
+                  (await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('id', user.id)
+                    .single()
+                  )?.data?.role === 'admin';
+      }
+      userEmail = user?.email || '';
+    } catch (supabaseError) {
+      // Supabase client creation or auth check failed
+      // This is common during SSR when cookies are being set after response
+      isAuthenticated = false;
+      isAdmin = false;
+      userEmail = '';
     }
-    userEmail = user?.email || '';
   }
 } catch (error) {
   // If there's an error or we're in static mode, default to not authenticated

@@ -120,6 +120,16 @@ src/
 - Never expose admin logic in client-side code
 - Always verify admin status server-side before serving admin content
 
+### Security Considerations for Logging
+- **NEVER log sensitive data** in any environment:
+  - Passwords, API keys, tokens, secrets
+  - Credit card numbers, SSNs, personal data
+  - Internal system paths or database schemas
+- **Use debug utility** instead of console.log to ensure production safety
+- **Sanitization**: Debug utility automatically strips sensitive patterns
+- **Sentry Integration**: Critical errors sent to Sentry with sanitized data
+- **Environment separation**: Debug logs only in `ENABLE_TEST_MODE=true`
+
 ### Client-Side Interactivity
 - **Product Pages**: Use React components with `client:*` directives for variants, cart preview
 - **Admin/API/Account Pages**: Avoid client-side state management (security requirement)
@@ -229,19 +239,80 @@ Two approaches for development testing:
 - Step-by-step testing guide
 - Integration with existing cart/checkout system
 
+## Debug Utility & Logging
+
+### Environment-Aware Logging
+The codebase uses a centralized debug utility that respects the `ENABLE_TEST_MODE` environment variable:
+
+```typescript
+import { debug } from '@lib/utils/debug';
+
+// Development logging (only when ENABLE_TEST_MODE=true or DEV=true)
+debug.log('Debug information');
+debug.info('Informational message');
+debug.warn('Warning message');
+debug.error('Development error');
+
+// Specialized logging
+debug.api('POST', '/api/orders', 200, { orderId: '123' });
+debug.db('INSERT', 'orders', orderData);
+debug.auth('LOGIN', 'user@example.com');
+debug.performance('Order creation', 156.2, { items: 3 });
+
+// Critical errors (always handled)
+debug.criticalError('Payment failed', error, { orderId: '123' });
+debug.userError('Order not found', technicalError, context);
+```
+
+### Debug Modes
+- **Development** (`ENABLE_TEST_MODE=true` or `DEV=true`):
+  - All debug output to console
+  - Full error details with stack traces
+  - Performance timing information
+  - API request/response logging
+
+- **Production** (`ENABLE_TEST_MODE=false` and `PROD=true`):
+  - No debug console output
+  - Critical errors sent to Sentry with sanitized data
+  - Clean user-facing error messages
+  - Sensitive data automatically stripped from logs
+
+### Environment Variables
+```bash
+# Development/Testing
+ENABLE_TEST_MODE=true          # Enable all debug output
+NODE_ENV=development           # Development mode
+
+# Production  
+ENABLE_TEST_MODE=false         # Disable debug output, enable Sentry
+NODE_ENV=production            # Production mode
+```
+
+### Performance Timing
+```typescript
+import { perfTimer } from '@lib/utils/debug';
+
+const timer = perfTimer('Database operation');
+await performDatabaseOperation();
+const duration = timer.end({ recordsProcessed: 150 });
+```
+
 ## Common Patterns
 
 ### Error Handling
 ```typescript
-// Always implement comprehensive error handling
+// Always use debug utility instead of console.log
+import { debug } from '@lib/utils/debug';
+
 try {
   const result = await operation();
   if (!isValidType(result)) {
     throw new Error('Invalid data received');
   }
+  debug.log('Operation succeeded:', result);
   return result;
 } catch (error) {
-  console.error('Operation failed:', error);
+  debug.criticalError('Operation failed', error, { context: 'user-action' });
   return fallbackValue;
 }
 ```

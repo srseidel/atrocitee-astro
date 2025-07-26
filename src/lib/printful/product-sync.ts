@@ -1,5 +1,6 @@
 import { createAdminSupabaseClient } from '@lib/supabase/admin-client';
 import { PrintfulService } from './service';
+import { debug } from '@lib/utils/debug';
 import type { AstroCookies } from 'astro';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -87,7 +88,7 @@ export class PrintfulProductSync {
   }
 
   private async handleDatabaseError(error: any, operation: string): Promise<never> {
-    console.error(`[Sync] Database error during ${operation}:`, error);
+    debug.criticalError('Database error during sync operation', error, { operation });
     
     // Log error to sync history
     try {
@@ -103,7 +104,7 @@ export class PrintfulProductSync {
           products_failed: 1
         });
     } catch (logError) {
-      console.error('[Sync] Failed to log error to sync history:', logError);
+      debug.criticalError('Failed to log error to sync history', logError);
     }
     
     throw error;
@@ -165,22 +166,22 @@ export class PrintfulProductSync {
     try {
       // Get all products from Printful
       const products = await this.printfulService.getProducts();
-      console.log(`[Sync] Found ${products.length} products to sync`);
+      debug.log('Found products to sync', { productCount: products.length });
       
       // Process each product
       for (const product of products) {
         try {
           // Get product variants
           const variants = await this.printfulService.getProductVariants(product.id);
-          console.log(`[Sync] Product ${product.id} (${product.name}) has ${variants.length} variants`);
+          debug.log('Processing product with variants', { productId: product.id, productName: product.name, variantCount: variants.length });
           
           // Add debug logging for variant names
-          console.log('[Sync] Variant names:', variants.map(v => ({
+          debug.log('Variant details', { variants: variants.map(v => ({
             id: v.id,
             name: v.name,
             options: v.options,
             files: v.files
-          })));
+          })) });
           
           // Check if product exists in our database
           const { data: existingProduct, error: selectError } = await this.supabase
@@ -196,7 +197,7 @@ export class PrintfulProductSync {
           let productId: string;
 
           if (existingProduct) {
-            console.log(`[Sync] Updating existing product ${product.id} (${product.name})`);
+            debug.log('Updating existing product', { productId: product.id, productName: product.name });
             // Update existing product
             const { error: updateError } = await this.supabase
               .from('products')
@@ -212,12 +213,12 @@ export class PrintfulProductSync {
             }
             productId = existingProduct.id;
           } else {
-            console.log(`[Sync] Creating new product ${product.id} (${product.name})`);
+            debug.log('Creating new product', { productId: product.id, productName: product.name });
             // Calculate default base price from first variant if creating new product
             let defaultBasePrice = null;
             if (variants.length > 0) {
               defaultBasePrice = parseFloat(variants[0].retail_price);
-              console.log(`[Sync] Setting default base price to ${defaultBasePrice} from first variant`);
+              debug.log('Setting default base price from first variant', { defaultBasePrice, productId: product.id });
             }
 
             // Create new product
@@ -249,7 +250,7 @@ export class PrintfulProductSync {
           }
 
           // Process variants
-          console.log(`[Sync] Processing ${variants.length} variants for product ${productId}`);
+          debug.log('Processing product variants', { variantCount: variants.length, productId });
           for (const variant of variants) {
             try {
               // Check if variant exists
@@ -298,14 +299,14 @@ export class PrintfulProductSync {
                 throw variantError;
               }
             } catch (error) {
-              console.error(`[Sync] Failed to sync variant ${variant.id} for product ${product.id}:`, error);
+              debug.criticalError('Failed to sync variant', error, { variantId: variant.id, productId: product.id });
               failedCount++;
             }
           }
 
           syncedCount++;
         } catch (error) {
-          console.error(`[Sync] Failed to sync product ${product.id}:`, error);
+          debug.criticalError('Failed to sync product', error, { productId: product.id });
           failedCount++;
         }
       }
@@ -326,7 +327,7 @@ export class PrintfulProductSync {
         });
 
       if (historyError) {
-        console.error('[Sync] Failed to log sync history:', historyError);
+        debug.criticalError('Failed to log sync history', historyError);
       }
 
       return {
@@ -341,7 +342,7 @@ export class PrintfulProductSync {
       };
 
     } catch (error) {
-      console.error('[Sync] Fatal error during sync:', error);
+      debug.criticalError('Fatal error during product sync', error);
       
       // Log error to sync history
       try {
@@ -357,7 +358,7 @@ export class PrintfulProductSync {
             products_failed: failedCount + 1
           });
       } catch (logError) {
-        console.error('[Sync] Failed to log sync history:', logError);
+        debug.criticalError('Failed to log sync history after fatal error', logError);
       }
 
       throw error;

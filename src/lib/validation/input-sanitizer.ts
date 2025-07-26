@@ -9,6 +9,8 @@
  * - Other malicious input patterns
  */
 
+import { debug } from '@lib/utils/debug';
+
 // Dangerous patterns that should be blocked
 const DANGEROUS_PATTERNS = [
   // SQL injection patterns
@@ -211,7 +213,7 @@ export function validateFormData(
     const fieldType = fieldTypes[fieldName];
     if (!fieldType) {
       // Skip unknown fields but log a warning
-      console.warn(`Unknown field type for field: ${fieldName}`);
+      debug.warn('Unknown field type for validation', { fieldName, fieldType: typeof value });
       sanitizedData[fieldName] = String(value || '').trim();
       continue;
     }

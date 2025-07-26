@@ -6,6 +6,7 @@
 
 import type { APIRoute } from 'astro';
 import { createClient } from '@lib/supabase/client';
+import { debug } from '@lib/utils/debug';
 
 export const prerender = false;
 
@@ -21,7 +22,7 @@ export const GET: APIRoute = async () => {
       .order('name');
 
     if (error) {
-      console.error('Charities query error:', error);
+      debug.criticalError('Error fetching charities from database', error);
       return new Response(
         JSON.stringify({
           success: false,
@@ -47,7 +48,7 @@ export const GET: APIRoute = async () => {
     );
     
   } catch (error) {
-    console.error('Charities API error:', error);
+    debug.criticalError('Charities API error', error);
     return new Response(
       JSON.stringify({
         success: false,
