@@ -4,7 +4,7 @@
  * Handles Stripe payment processing with Elements
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   useStripe,
   useElements,
@@ -51,6 +51,7 @@ export default function PaymentForm({
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState<string>('');
+
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -111,6 +112,17 @@ export default function PaymentForm({
     <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border p-6">
       <h2 className="text-lg font-semibold text-gray-900 mb-6">Payment Information</h2>
       
+      {/* Debug Info - Only in development */}
+      {import.meta.env.DEV && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded text-sm">
+          <strong>PaymentForm Debug:</strong>
+          <br />• Stripe loaded: {stripe ? 'Yes' : 'No'}
+          <br />• Elements loaded: {elements ? 'Yes' : 'No'} 
+          <br />• Client Secret: {clientSecret ? `${clientSecret.substring(0, 20)}...` : 'Missing'}
+          <br />• Customer Info: {customerInfo ? 'Present' : 'Missing'}
+        </div>
+      )}
+      
       {/* Customer Summary */}
       <div className="mb-6 p-4 bg-gray-50 rounded-lg">
         <h3 className="text-sm font-medium text-gray-900 mb-2">Order Details</h3>
@@ -125,14 +137,26 @@ export default function PaymentForm({
         </p>
       </div>
 
-      {/* Payment Element */}
+      {/* Payment Element Container */}
       <div className="mb-6">
-        <PaymentElement
-          options={{
-            layout: 'tabs',
-            paymentMethodOrder: ['card', 'apple_pay', 'google_pay'],
-          }}
-        />
+        <div className="border border-gray-200 rounded-lg p-4 min-h-[200px] bg-gray-50">
+          {!stripe || !elements ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                <p className="text-sm text-gray-600">Loading payment form...</p>
+              </div>
+            </div>
+          ) : (
+            <PaymentElement
+              id="payment-element"
+              options={{
+                layout: 'tabs',
+                paymentMethodOrder: ['card', 'apple_pay', 'google_pay'],
+              }}
+            />
+          )}
+        </div>
       </div>
 
       {/* Error Message */}

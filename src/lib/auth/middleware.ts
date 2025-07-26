@@ -70,7 +70,7 @@ const ADMIN_ROUTE_PATTERN = /^\/admin\//;
 const ACCOUNT_ROUTE_PATTERN = /^\/account(\/|$)/;
 const ADMIN_API_ROUTE_PATTERN = /^\/api\/v1\/(admin|tags)\//;
 const ACCOUNT_SETTINGS_PATH = '/account/setting';
-const ACCOUNT_ORDER_PATH = '/account/order';
+const ACCOUNT_ORDER_PATH = '/account/orders';
 const AUTH_PATHS = ['/auth/login', '/auth/signin', '/auth/signup', '/auth/reset-password', '/auth/forgot-password'];
 
 // Helper function to check if a user is an admin

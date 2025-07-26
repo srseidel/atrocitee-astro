@@ -1,0 +1,83 @@
+---
+/**
+ * My Orders Page
+ * 
+ * Displays user order history with statistics and detailed order information
+ */
+
+// Mark as server-rendered (required for authentication)
+export const prerender = false;
+
+import { redirectIfNotAuthenticated, getUser } from "@lib/auth/middleware";
+import { createServerSupabaseClient } from '@lib/supabase/client';
+import { getUserOrders, getUserOrderStats } from '@lib/services/orders';
+import Container from "@components/common/Container.astro";
+import MainLayout from "@layouts/MainLayout.astro";
+import OrdersList from "@components/features/orders/OrdersList";
+import OrderStats from "@components/features/orders/OrderStats";
+
+// Check authentication
+const user = await getUser(Astro);
+if (!user) {
+  return redirectIfNotAuthenticated(Astro);
+}
+
+// Fetch user orders and statistics
+let orders = [];
+let stats = { totalOrders: 0, totalSpent: 0, totalDonated: 0, ordersByStatus: {} };
+let error = null;
+
+try {
+  const supabase = createServerSupabaseClient({ 
+    cookies: Astro.cookies, 
+    request: Astro.request 
+  });
+  
+  // Fetch orders and stats in parallel
+  const [ordersResult, statsResult] = await Promise.all([
+    getUserOrders(user.id, supabase),
+    getUserOrderStats(user.id, supabase)
+  ]);
+  
+  orders = ordersResult;
+  stats = statsResult;
+  
+  console.log('Orders loaded:', orders.length, 'orders found');
+  console.log('Stats loaded:', stats);
+} catch (err) {
+  console.error('Error loading orders:', err);
+  error = 'Failed to load orders. Please try again later.';
+}
+---
+
+<MainLayout title="Your Orders">
+  <Container>
+    <div class="py-8">
+      <!-- Page Header -->
+      <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Your Orders</h1>
+        <p class="text-gray-600 mt-2">Track and manage all your purchases</p>
+      </div>
+
+      {error && (
+        <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div class="flex items-center">
+            <svg class="w-5 h-5 text-red-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <p class="text-red-800">{error}</p>
+          </div>
+        </div>
+      )}
+
+      <!-- Order Statistics -->
+      <OrderStats client:load stats={stats} />
+
+      <!-- Orders List -->
+      <div>
+        <h2 class="text-xl font-semibold text-gray-900 mb-6">Order History</h2>
+        <OrdersList client:load orders={orders} />
+      </div>
+    </div>
+  </Container>
+</MainLayout> 

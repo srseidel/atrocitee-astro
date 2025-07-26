@@ -71,11 +71,9 @@ export default defineConfig({
     define: {
       'process.env.NODE_ENV': JSON.stringify(isDev ? 'development' : 'production'),
     },
-    // Disable CSP in development
+    // Temporarily disable CSP to allow Stripe.js
     server: {
-      headers: isDev ? {
-        'Content-Security-Policy': "script-src 'self' 'unsafe-inline' 'unsafe-eval';"
-      } : {},
+      headers: isDev ? {} : {},
     },
   },
 });

@@ -356,4 +356,21 @@ export class PrintfulClient {
     const response = await this.request<any>(`/mockup-generator/task?task_key=${taskKey}`);
     return response.result;
   }
+
+  /**
+   * Submit an order to Printful
+   */
+  async submitOrder<T>(orderData: unknown): Promise<PrintfulResponse<T>> {
+    return await this.request<T>('/orders', {
+      method: 'POST',
+      body: JSON.stringify(orderData)
+    });
+  }
+
+  /**
+   * Get order status from Printful
+   */
+  async getOrder<T>(orderId: number): Promise<PrintfulResponse<T>> {
+    return await this.request<T>(`/orders/${orderId}`);
+  }
 } 

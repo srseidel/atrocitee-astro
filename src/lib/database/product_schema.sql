@@ -9,6 +9,7 @@ DROP TABLE IF EXISTS product_variants CASCADE;
 DROP TABLE IF EXISTS product_tags CASCADE;
 DROP TABLE IF EXISTS order_items CASCADE;
 DROP TABLE IF EXISTS orders CASCADE;
+DROP TABLE IF EXISTS webhook_logs CASCADE;
 DROP TABLE IF EXISTS backup_status CASCADE;
 DROP TABLE IF EXISTS printful_category_mapping CASCADE;
 DROP TABLE IF EXISTS products CASCADE;
@@ -520,6 +521,20 @@ CREATE TABLE order_items (
 );
 
 -- 9. Backup Status Table
+-- Webhook logs table for tracking external service webhooks
+CREATE TABLE webhook_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  source TEXT NOT NULL, -- 'printful', 'stripe', etc.
+  event_type TEXT NOT NULL,
+  event_id TEXT NOT NULL,
+  order_id TEXT,
+  status TEXT NOT NULL, -- 'processed', 'error', 'ignored'
+  payload JSONB NOT NULL,
+  error_message TEXT,
+  processed_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  UNIQUE(source, event_id)
+);
+
 CREATE TABLE backup_status (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   backup_type TEXT NOT NULL,
@@ -919,6 +934,7 @@ GRANT ALL ON backup_status TO authenticated;
 GRANT ALL ON printful_sync_history TO authenticated;
 GRANT ALL ON printful_product_changes TO authenticated;
 GRANT ALL ON printful_mockup_tasks TO authenticated;
+GRANT ALL ON webhook_logs TO authenticated;
 
 -- Enable RLS for all tables
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
@@ -926,6 +942,7 @@ ALTER TABLE charities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE backup_status ENABLE ROW LEVEL SECURITY;
+ALTER TABLE webhook_logs ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies for categories
 DROP POLICY IF EXISTS "Admin users can manage categories" ON categories;
@@ -987,6 +1004,15 @@ CREATE POLICY "Users can manage their own order items" ON order_items
 DROP POLICY IF EXISTS "Admin users can manage backup status" ON backup_status;
 
 CREATE POLICY "Admin users can manage backup status" ON backup_status
+  FOR ALL
+  TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin());
+
+-- Create RLS policies for webhook_logs
+DROP POLICY IF EXISTS "Admin users can manage webhook logs" ON webhook_logs;
+
+CREATE POLICY "Admin users can manage webhook logs" ON webhook_logs
   FOR ALL
   TO authenticated
   USING (is_admin())

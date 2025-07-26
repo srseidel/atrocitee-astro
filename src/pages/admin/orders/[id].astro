@@ -1,0 +1,236 @@
+---
+import { createServerSupabaseClient } from "@lib/supabase/client";
+import { getOrderById } from "@lib/services/orders";
+import AdminLayout from "@layouts/AdminLayout.astro";
+
+// Server-side rendering for authentication
+export const prerender = false;
+
+// Get the order ID from the URL
+const { id } = Astro.params;
+
+if (!id) {
+  return Astro.redirect('/admin/orders');
+}
+
+const supabase = createServerSupabaseClient({ 
+  cookies: Astro.cookies,
+  request: Astro.request
+});
+
+// Get order details (we'll fetch by ID without user restriction for admin)
+const { data: order, error: orderError } = await supabase
+  .from('orders')
+  .select(`
+    *,
+    order_items (
+      id,
+      product_id,
+      product_slug,
+      product_name,
+      variant_id,
+      variant_name,
+      variant_options,
+      unit_price,
+      quantity,
+      line_total,
+      image_url,
+      donation_amount
+    )
+  `)
+  .eq('id', id)
+  .single();
+
+if (orderError) {
+  console.error('Error fetching order:', orderError);
+}
+---
+
+<AdminLayout title={`Order ${id?.substring(0, 8)}...`}>
+  <div class="container mx-auto p-6">
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-3xl font-bold">Order Details</h1>
+      <div class="flex space-x-3">
+        <a href="/admin/orders" class="btn btn-secondary">← Back to Orders</a>
+      </div>
+    </div>
+    
+    {orderError && (
+      <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+        <p class="text-red-800">Error loading order: {orderError.message}</p>
+      </div>
+    )}
+    
+    {!order && !orderError && (
+      <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+        <p class="text-yellow-800">Order not found</p>
+      </div>
+    )}
+    
+    {order && (
+      <div class="space-y-6">
+        <!-- Order Summary -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <div>
+              <label class="text-sm font-medium text-gray-500">Order ID</label>
+              <p class="text-sm font-mono">{order.id}</p>
+            </div>
+            <div>
+              <label class="text-sm font-medium text-gray-500">Date</label>
+              <p class="text-sm">{new Date(order.created_at).toLocaleDateString()}</p>
+            </div>
+            <div>
+              <label class="text-sm font-medium text-gray-500">Status</label>
+              <p class="text-sm">
+                <span class={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                  ${order.status === 'delivered' ? 'bg-green-100 text-green-800' : 
+                    order.status === 'shipped' ? 'bg-blue-100 text-blue-800' :
+                    order.status === 'processing' ? 'bg-yellow-100 text-yellow-800' : 
+                    order.status === 'cancelled' ? 'bg-red-100 text-red-800' : 
+                    'bg-gray-100 text-gray-800'}`}>
+                  {order.status}
+                </span>
+              </p>
+            </div>
+            <div>
+              <label class="text-sm font-medium text-gray-500">Payment Status</label>
+              <p class="text-sm">
+                <span class={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                  ${order.payment_status === 'paid' ? 'bg-green-100 text-green-800' : 
+                    order.payment_status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
+                    order.payment_status === 'failed' ? 'bg-red-100 text-red-800' :
+                    'bg-gray-100 text-gray-800'}`}>
+                  {order.payment_status}
+                </span>
+              </p>
+            </div>
+          </div>
+          
+          <!-- Customer Information -->
+          <div class="border-t pt-6">
+            <h3 class="text-lg font-semibold mb-4">Customer Information</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label class="text-sm font-medium text-gray-500">Name</label>
+                <p class="text-sm">{order.customer_name}</p>
+              </div>
+              <div>
+                <label class="text-sm font-medium text-gray-500">Email</label>
+                <p class="text-sm">{order.customer_email}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Order Items -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <h3 class="text-lg font-semibold mb-4">Order Items</h3>
+          <div class="space-y-4">
+            {order.order_items?.map((item) => (
+              <div class="border-b pb-4 last:border-b-0">
+                <div class="flex items-start space-x-4">
+                  {item.image_url ? (
+                    <img
+                      src={item.image_url}
+                      alt={item.product_name}
+                      class="w-16 h-16 object-cover rounded-lg"
+                    />
+                  ) : (
+                    <div class="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center">
+                      <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                  )}
+                  
+                  <div class="flex-1">
+                    <h4 class="text-sm font-medium">{item.product_name}</h4>
+                    <p class="text-sm text-gray-500">
+                      {Object.entries(item.variant_options || {}).map(([key, value]) => `${key}: ${value}`).join(', ')}
+                    </p>
+                    <div class="flex items-center justify-between mt-2">
+                      <div class="flex items-center space-x-4 text-sm text-gray-600">
+                        <span>Qty: {item.quantity}</span>
+                        <span>${item.unit_price.toFixed(2)} each</span>
+                      </div>
+                      <span class="text-sm font-semibold">${item.line_total.toFixed(2)}</span>
+                    </div>
+                    
+                    {item.donation_amount && item.donation_amount > 0 && (
+                      <div class="mt-2 text-xs text-green-600">
+                        <span class="inline-flex items-center">
+                          <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                          </svg>
+                          ${item.donation_amount.toFixed(2)} donated to charity
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        <!-- Order Summary -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <h3 class="text-lg font-semibold mb-4">Order Summary</h3>
+          <div class="space-y-2">
+            <div class="flex justify-between">
+              <span>Subtotal:</span>
+              <span>${order.subtotal.toFixed(2)}</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Tax:</span>
+              <span>${order.tax.toFixed(2)}</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Shipping:</span>
+              <span>${order.shipping_cost.toFixed(2)}</span>
+            </div>
+            {order.discount > 0 && (
+              <div class="flex justify-between text-green-600">
+                <span>Discount:</span>
+                <span>-${order.discount.toFixed(2)}</span>
+              </div>
+            )}
+            {order.charity_amount && order.charity_amount > 0 && (
+              <div class="flex justify-between text-green-600">
+                <span>Charity Donation:</span>
+                <span>${order.charity_amount.toFixed(2)}</span>
+              </div>
+            )}
+            <div class="border-t pt-2 flex justify-between font-semibold text-lg">
+              <span>Total:</span>
+              <span>${order.total_amount.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Shipping Address -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <h3 class="text-lg font-semibold mb-4">Shipping Address</h3>
+          <div class="text-sm">
+            <p>{order.shipping_address.line1}</p>
+            {order.shipping_address.line2 && <p>{order.shipping_address.line2}</p>}
+            <p>{order.shipping_address.city}, {order.shipping_address.state} {order.shipping_address.postal_code}</p>
+            <p>{order.shipping_address.country}</p>
+          </div>
+          
+          {order.tracking_number && (
+            <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm font-medium text-blue-900">Tracking Number</p>
+                  <p class="text-sm text-blue-700">{order.tracking_number}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+  </div>
+</AdminLayout>

@@ -15,7 +15,8 @@ Atrocitee is an e-commerce platform selling politically-themed merchandise where
 - **Styling**: Tailwind CSS with custom design system
 - **Components**: React (for interactive components)
 - **Product Management**: Printful API (print-on-demand)
-- **Payments**: Stripe (planned)
+- **Payments**: Stripe (integrated with test & production modes)
+- **Order Fulfillment**: Printful API (sandbox & production environments)
 - **Hosting**: Cloudflare Pages
 - **Monitoring**: Sentry error tracking
 
@@ -96,7 +97,8 @@ src/
 ├── lib/
 │   ├── auth/           # Authentication logic and middleware
 │   ├── database/       # Database schemas and migrations
-│   ├── printful/       # Printful API integration
+│   ├── printful/       # Printful API integration & order fulfillment
+│   ├── stripe/         # Stripe payment processing
 │   ├── supabase/       # Supabase client configurations
 │   └── monitoring/     # Sentry configuration
 ├── pages/
@@ -150,13 +152,82 @@ Key types are defined in `src/types/database/models.ts`:
 - `ProductVariant` - Product variants with options
 - `Category` - Product categories with core constants
 
-## Printful Integration
+## Printful Integration & Order Fulfillment
 
 Located in `src/lib/printful/`:
-- `api-client.ts` - Main API client
+- `api-client.ts` - Main API client with sandbox/production support
 - `product-sync.ts` - Product synchronization
 - `service.ts` - Business logic layer
 - `mockup-queue.ts` - Mockup generation queue
+- `order-service.ts` - Complete order fulfillment system
+
+### Order Fulfillment Flow
+1. **Cart → Stripe Payment**: Customer completes purchase via Stripe
+2. **Order Creation**: Local order record created in Supabase
+3. **Printful Submission**: Order automatically submitted to Printful for fulfillment
+4. **Status Updates**: Real-time status updates via Printful webhooks
+5. **Customer Tracking**: Order status visible in customer's "My Orders" page
+
+### Environment Configuration
+- **Development**: Automatically uses Printful sandbox mode
+- **Production**: Uses production Printful environment
+- **Testing**: `/test-checkout` page for end-to-end testing with real products
+
+## Stripe Payment Integration
+
+Located in `src/lib/stripe/` and `src/pages/api/v1/checkout/`:
+- Complete payment processing with test/production modes
+- Integration with Printful order fulfillment
+- Automatic order creation after successful payment
+- Support for authenticated and guest checkout
+
+## Order Management System
+
+### Database Schema
+Key order-related tables:
+- `orders` - Main order records with Stripe/Printful integration
+- `order_items` - Individual items with product snapshots
+- `webhook_logs` - Tracking webhook events from external services
+
+### Order Status Flow
+```
+paid → processing → shipped → delivered
+  ↓        ↓          ↓         ↓
+Stripe   Printful   Tracking  Complete
+```
+
+### My Orders Page (`/account/orders`)
+- **Server-rendered** with `prerender = false`
+- Real-time order status from Printful webhooks
+- Order history with detailed item information
+- Development testing buttons for order creation
+
+### Admin Order Management
+- `/admin/orders` - All orders overview
+- `/admin/orders/[id]` - Individual order details
+- Integration with Printful status tracking
+- Webhook event logging and monitoring
+
+## Testing & Development
+
+### Test Order Creation
+Two approaches for development testing:
+
+1. **Simple Test Orders** (Blue button):
+   - Creates local database records only
+   - Fast for UI testing
+   - No external API calls
+
+2. **Complete Printful Orders** (Green button):
+   - Full end-to-end flow with Printful sandbox
+   - Real webhook integration
+   - Actual fulfillment pipeline testing
+
+### End-to-End Testing (`/test-checkout`)
+- **Development only** - redirects in production
+- Displays real products with Printful integration status
+- Step-by-step testing guide
+- Integration with existing cart/checkout system
 
 ## Common Patterns
 

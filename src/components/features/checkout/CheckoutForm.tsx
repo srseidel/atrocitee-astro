@@ -9,16 +9,13 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements } from '@stripe/react-stripe-js';
 import { useSecureCart } from '@lib/hooks/useSecureCart';
 import OrderSummary from './OrderSummary';
 import CustomerForm from './CustomerForm';
 import PaymentForm from './PaymentForm';
+import StripeWrapper from './StripeWrapper';
 import LoadingSpinner from '@components/common/LoadingSpinner';
 
-// Load Stripe
-const stripePromise = loadStripe(import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
 interface CustomerInfo {
   email: string;
@@ -42,7 +39,7 @@ interface CustomerInfo {
 }
 
 export default function CheckoutForm() {
-  const { items, totalPrice, loading, error, validateCart } = useSecureCart();
+  const { items, totalPrice, loading, error, validateCart, clearCart } = useSecureCart();
   const [step, setStep] = useState<'cart' | 'customer' | 'payment' | 'processing' | 'success' | 'error'>('cart');
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [clientSecret, setClientSecret] = useState<string>('');
@@ -95,6 +92,10 @@ export default function CheckoutForm() {
         throw new Error(data.error || 'Failed to create payment intent');
       }
 
+      if (!data.clientSecret) {
+        throw new Error('No client secret received from payment intent');
+      }
+
       setClientSecret(data.clientSecret);
       setPaymentIntentId(data.paymentIntentId);
       setStep('payment');
@@ -131,6 +132,10 @@ export default function CheckoutForm() {
       }
 
       setOrderResult(data);
+      
+      // Clear cart after successful order
+      clearCart();
+      
       setStep('success');
     } catch (error) {
       console.error('Error confirming payment:', error);
@@ -220,7 +225,7 @@ export default function CheckoutForm() {
 
         {/* Payment Form */}
         {step === 'payment' && clientSecret && (
-          <Elements stripe={stripePromise} options={{ clientSecret }}>
+          <StripeWrapper clientSecret={clientSecret}>
             <PaymentForm
               clientSecret={clientSecret}
               customerInfo={customerInfo!}
@@ -228,7 +233,7 @@ export default function CheckoutForm() {
               onError={handlePaymentError}
               onBack={() => setStep('customer')}
             />
-          </Elements>
+          </StripeWrapper>
         )}
 
         {/* Processing State */}
