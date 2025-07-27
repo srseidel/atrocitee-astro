@@ -256,18 +256,21 @@ export function containsSuspiciousContent(input: string): boolean {
 }
 
 /**
- * Escape HTML to prevent XSS
+ * Sanitize HTML to prevent XSS
  */
 export function sanitizeHtml(unsafe: string): string {
   if (!unsafe || typeof unsafe !== 'string') return '';
   
-  return unsafe
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;');
+  const htmlEscapeMap: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#x27;',
+    '/': '&#x2F;'
+  };
+  
+  return unsafe.replace(/[&<>"'/]/g, (char) => htmlEscapeMap[char] || char);
 }
 
 /**
