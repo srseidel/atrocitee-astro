@@ -13,7 +13,7 @@ const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL || 'https://placeholder-
 const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
 
 // Check if we're in build/SSG mode
-const isBuild = process.env.NODE_ENV === 'production' && import.meta.env.SSR && !import.meta.env.DEV;
+const isBuild = import.meta.env.PROD && import.meta.env.SSR && !import.meta.env.DEV;
 
 // Mock client type for build time
 interface MockSupabaseClient {
@@ -130,7 +130,7 @@ export const createServerSupabaseClient = ({
                   const cookieOptions = {
                     path: '/',
                     sameSite: 'lax' as const,
-                    secure: process.env.NODE_ENV === 'production',
+                    secure: import.meta.env.PROD,
                     httpOnly: false,
                     maxAge: 60 * 60 * 24 * 7, // 7 days
                     ...options

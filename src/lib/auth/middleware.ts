@@ -37,7 +37,7 @@ const astroCookiesAdapter = (cookies: AstroCookies): {
       cookies.set(key, value, { 
         path: '/',
         sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
+        secure: import.meta.env.PROD,
         maxAge: options.maxAge || 60 * 60 * 24 * 7, // Default to 7 days if not specified
         ...options // Allow overriding defaults
       });

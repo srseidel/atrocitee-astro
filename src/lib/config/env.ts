@@ -15,7 +15,7 @@ export const env = {
   // Sentry
   sentry: {
     dsn: import.meta.env.PUBLIC_SENTRY_DSN,
-    environment: import.meta.env.NODE_ENV || 'development',
+    environment: import.meta.env.PROD ? 'production' : 'development',
   },
   
   // App
@@ -23,7 +23,7 @@ export const env = {
     isDev: import.meta.env.DEV,
     isProd: import.meta.env.PROD,
     isSSR: import.meta.env.SSR,
-    isBuild: process.env.NODE_ENV === 'production' && import.meta.env.SSR && !import.meta.env.DEV,
+    isBuild: import.meta.env.PROD && import.meta.env.SSR && !import.meta.env.DEV,
   },
 } as const;
 

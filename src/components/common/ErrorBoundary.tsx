@@ -46,7 +46,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="text-red-700">
             An error occurred while rendering this component. Please try refreshing the page.
           </p>
-          {this.state.error && process.env.NODE_ENV === 'development' && (
+          {this.state.error && import.meta.env.DEV && (
             <pre className="mt-2 p-2 bg-red-100 rounded text-sm overflow-auto">
               {this.state.error.toString()}
             </pre>
