@@ -9,7 +9,7 @@ import cloudflare from '@astrojs/cloudflare';
 import sentry from '@sentry/astro';
 
 // Get environment
-const isDev = process.env.NODE_ENV !== 'production';
+const isDev = !process.env.PROD && process.env.NODE_ENV !== 'production';
 
 export default defineConfig({
   site: 'https://atrocitee.com',
@@ -47,8 +47,9 @@ export default defineConfig({
       external: [
         'node:fs', 'node:path', 'node:child_process', 'fs', 'path', 'child_process',
         'url', 'worker_threads', 'diagnostics_channel', 'events', 'async_hooks',
+        'escape-html', 'escape-string-regexp',
       ],
-      noExternal: [],
+      noExternal: ['@lib/*'],
     },
     build: {
       commonjsOptions: { transformMixedEsModules: true },
