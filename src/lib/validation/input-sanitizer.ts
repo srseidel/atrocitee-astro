@@ -258,7 +258,7 @@ export function containsSuspiciousContent(input: string): boolean {
 /**
  * Escape HTML to prevent XSS
  */
-export function escapeHtml(unsafe: string): string {
+export function sanitizeHtml(unsafe: string): string {
   if (!unsafe || typeof unsafe !== 'string') return '';
   
   return unsafe
@@ -275,7 +275,7 @@ export function escapeHtml(unsafe: string): string {
  */
 export function deepSanitize(obj: any): any {
   if (typeof obj === 'string') {
-    return escapeHtml(obj.trim());
+    return sanitizeHtml(obj.trim());
   }
   
   if (typeof obj === 'object' && obj !== null) {
