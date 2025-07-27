@@ -6,7 +6,7 @@
  */
 
 import type { APIRoute } from 'astro';
-import { validateFormData, containsSuspiciousContent, deepSanitize } from '@lib/validation/input-sanitizer-simple';
+import { validateFormData, containsSuspiciousContent, deepSanitize } from '@lib/validation/input-sanitizer';
 import { debug } from '@lib/utils/debug';
 
 export const prerender = false;
