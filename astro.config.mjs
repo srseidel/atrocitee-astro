@@ -18,13 +18,16 @@ export default defineConfig({
     react({
       include: ['**/react/*', '**/components/**/*.tsx', '**/features/**/*.tsx'],
     }),
-    sentry({
+    // Only enable Sentry in production and when DSN is provided
+    ...(process.env.SENTRY_DSN && !isDev ? [sentry({
       dsn: process.env.SENTRY_DSN,
       environment: process.env.NODE_ENV,
       release: process.env.SENTRY_RELEASE,
-      enabled: !isDev, // Only enable Sentry in production
       tracesSampleRate: 1.0,
-    }),
+      sourceMapsUploadOptions: {
+        enabled: false, // Disable source map uploads to avoid conflicts
+      },
+    })] : []),
   ],
   output: 'server', // Always use server output to support both static and SSR pages
   adapter: isDev ? node({
@@ -53,50 +56,6 @@ export default defineConfig({
     build: {
       commonjsOptions: { transformMixedEsModules: true },
       rollupOptions: {
-        plugins: [
-          {
-            name: 'rename-escape-conflict',
-            generateBundle(options, bundle) {
-              // Fix the escape variable conflict by renaming conflicting imports
-              Object.values(bundle).forEach((chunk) => {
-                if (chunk.type === 'chunk' && chunk.code) {
-                  // Replace conflicting escape variable declarations
-                  chunk.code = chunk.code.replace(
-                    /const escape = /g,
-                    'const escapeVar = '
-                  );
-                  chunk.code = chunk.code.replace(
-                    /let escape = /g,
-                    'let escapeVar = '
-                  );
-                  chunk.code = chunk.code.replace(
-                    /var escape = /g,
-                    'var escapeVar = '
-                  );
-                  // Handle export statements
-                  chunk.code = chunk.code.replace(
-                    /export \{ escape \}/g,
-                    'export { escapeVar as escape }'
-                  );
-                  chunk.code = chunk.code.replace(
-                    /export \{ escape as /g,
-                    'export { escapeVar as '
-                  );
-                  // Replace references to the renamed variable
-                  chunk.code = chunk.code.replace(
-                    /\bescape\(/g,
-                    'escapeVar('
-                  );
-                  // Handle import statements
-                  chunk.code = chunk.code.replace(
-                    /import \{ escape \}/g,
-                    'import { escape as escapeVar }'
-                  );
-                }
-              });
-            }
-          }
-        ],
         output: {
           chunkFileNames: 'chunks/[name]-[hash].js',
           manualChunks(id) {
