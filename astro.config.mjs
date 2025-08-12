@@ -9,7 +9,7 @@ import cloudflare from '@astrojs/cloudflare';
 import sentry from '@sentry/astro';
 
 // Get environment
-const isDev = !process.env.PROD && process.env.NODE_ENV !== 'production';
+const isDev = process.env.NODE_ENV !== 'production';
 
 export default defineConfig({
   site: 'https://atrocitee.com',
@@ -41,67 +41,57 @@ export default defineConfig({
   vite: {
     resolve: { alias: {} },
     optimizeDeps: {
-      exclude: ['node:fs', 'node:path', 'fs', 'path', 'node:child_process', 'child_process', 'escape-html', 'send'],
-      esbuildOptions: {
-        define: {
-          global: 'globalThis'
-        }
-      }
+      exclude: ['node:fs', 'node:path', 'fs', 'path', 'node:child_process', 'child_process'],
     },
     ssr: {
       external: [
         'node:fs', 'node:path', 'node:child_process', 'fs', 'path', 'child_process',
         'url', 'worker_threads', 'diagnostics_channel', 'events', 'async_hooks',
-        'escape-html', 'send', '@astrojs/node', 'ws', 'websocket',
-        // Externalize modules that access browser APIs
-        '@nanostores/persistent', '@nanostores/react',
-        // Externalize Supabase realtime that uses WebSockets
-        '@supabase/realtime-js', '@supabase/gotrue-js'
       ],
-      noExternal: ['@lib/*'],
+      noExternal: [],
     },
     build: {
       commonjsOptions: { transformMixedEsModules: true },
       rollupOptions: {
-        external: ['escape-html', 'send', '@supabase/realtime-js', '@supabase/gotrue-js'],
         plugins: [
           {
-            name: 'fix-escape-conflict',
+            name: 'rename-escape-conflict',
             generateBundle(options, bundle) {
-              // Find and fix escape variable conflicts in generated bundles
-              Object.keys(bundle).forEach(fileName => {
-                if (bundle[fileName].type === 'chunk') {
-                  let code = bundle[fileName].code;
-                  // Replace problematic escape import aliasing
-                  code = code.replace(/(\w+) as escape/g, '$1 as escapeUtil');
-                  code = code.replace(/import\s*\{([^}]*)\s+f\s+as\s+escape([^}]*)\}/g, 'import {$1 f as escapeUtil$2}');
-                  bundle[fileName].code = code;
-                }
-              });
-            }
-          },
-          {
-            name: 'ssr-browser-polyfills',
-            generateBundle(options, bundle) {
-              Object.keys(bundle).forEach(fileName => {
-                if (bundle[fileName].type === 'chunk' && fileName.includes('_worker.js')) {
-                  // Add browser polyfills only to worker chunks that run during SSR
-                  const polyfills = `
-// Browser API polyfills for SSR
-if (typeof globalThis !== 'undefined' && typeof globalThis.window === 'undefined') {
-  globalThis.window = {
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    location: { href: '', origin: '', pathname: '/' },
-    navigator: { userAgent: 'SSR' },
-    document: { addEventListener: () => {}, removeEventListener: () => {} }
-  };
-  globalThis.document = globalThis.window.document;
-  globalThis.navigator = globalThis.window.navigator;
-  globalThis.location = globalThis.window.location;
-}
-`;
-                  bundle[fileName].code = polyfills + bundle[fileName].code;
+              // Fix the escape variable conflict by renaming conflicting imports
+              Object.values(bundle).forEach((chunk) => {
+                if (chunk.type === 'chunk' && chunk.code) {
+                  // Replace conflicting escape variable declarations
+                  chunk.code = chunk.code.replace(
+                    /const escape = /g,
+                    'const escapeVar = '
+                  );
+                  chunk.code = chunk.code.replace(
+                    /let escape = /g,
+                    'let escapeVar = '
+                  );
+                  chunk.code = chunk.code.replace(
+                    /var escape = /g,
+                    'var escapeVar = '
+                  );
+                  // Handle export statements
+                  chunk.code = chunk.code.replace(
+                    /export \{ escape \}/g,
+                    'export { escapeVar as escape }'
+                  );
+                  chunk.code = chunk.code.replace(
+                    /export \{ escape as /g,
+                    'export { escapeVar as '
+                  );
+                  // Replace references to the renamed variable
+                  chunk.code = chunk.code.replace(
+                    /\bescape\(/g,
+                    'escapeVar('
+                  );
+                  // Handle import statements
+                  chunk.code = chunk.code.replace(
+                    /import \{ escape \}/g,
+                    'import { escape as escapeVar }'
+                  );
                 }
               });
             }
@@ -113,8 +103,7 @@ if (typeof globalThis !== 'undefined' && typeof globalThis.window === 'undefined
             if (id.includes('node_modules/astro/dist/core/middleware')) return 'astro-middleware';
             if (id.includes('node:') || id.includes('node_modules/node-')) return 'node-modules';
             if (id.includes('astro_type_script_index')) return 'astro-scripts';
-            if (id.includes('escape-html') || id.includes('send')) return 'problematic-deps';
-          }
+          },
         },
         onwarn(warning, warn) {
           if (

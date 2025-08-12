@@ -5,7 +5,7 @@ import ProductCard from '@components/features/products/ProductCard.astro';
 import type { Database } from '@local-types/database/schema';
 import { createClient } from '@lib/supabase/client';
 
-// Enable prerendering for SEO and performance
+// Enable prerendering
 export const prerender = true;
 
 interface ProductVariant {
@@ -134,10 +134,9 @@ const processedProducts = products ? products.map(product => {
   // Use the first variant's price, or base price as fallback
   const displayPrice = variants[0]?.price || product.atrocitee_base_price || 0;
   
-  // Ensure we preserve the featured flag and decode any URL-encoded names
+  // Ensure we preserve the featured flag
   return {
     ...product,
-    name: product.name ? decodeURIComponent(product.name) : product.name,
     imageUrl,
     webpUrl,
     variants,

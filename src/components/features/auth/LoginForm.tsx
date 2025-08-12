@@ -1,5 +1,5 @@
+import { createBrowserClient } from '@supabase/ssr';
 import { useState } from 'react';
-import { createBrowserSupabaseClient } from '@lib/supabase/client';
 import { debug } from '@lib/utils/debug';
 
 interface AuthError {
@@ -18,7 +18,10 @@ export default function LoginForm() {
     setError(null);
 
     try {
-      const supabase = createBrowserSupabaseClient();
+      const supabase = createBrowserClient(
+        import.meta.env.PUBLIC_SUPABASE_URL,
+        import.meta.env.PUBLIC_SUPABASE_ANON_KEY
+      );
 
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email,

@@ -120,12 +120,9 @@ const options = Object.entries(variantOptions).reduce((acc: Record<string, strin
 const mainImage = defaultVariant?.mockup_settings?.views?.find((v: any) => v.view === 'front')?.url || 
                   defaultVariant?.mockup_settings?.views?.[0]?.url || 
                   product.thumbnail_url;
-
-// Decode product name if URL encoded
-const displayName = product.name ? decodeURIComponent(product.name) : product.name;
 ---
 
-<Layout title={displayName}>
+<Layout title={product.name}>
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
     {/* Breadcrumb */}
     <nav class="flex mb-8" aria-label="Breadcrumb">
@@ -149,7 +146,7 @@ const displayName = product.name ? decodeURIComponent(product.name) : product.na
               <path d="M5.555 17.776l8-16 .894.448-8 16-.894-.448z" />
             </svg>
             <span class="ml-2 text-gray-500" aria-current="page">
-              {displayName}
+              {product.name}
             </span>
           </div>
         </li>
@@ -162,7 +159,7 @@ const displayName = product.name ? decodeURIComponent(product.name) : product.na
         <div class="aspect-w-1 aspect-h-1 rounded-lg bg-gray-100 overflow-hidden">
           <img
             src={product.thumbnail_url || 'https://via.placeholder.com/600'}
-            alt={displayName}
+            alt={product.name}
             class="w-full h-full object-center object-cover"
           />
         </div>
@@ -176,7 +173,7 @@ const displayName = product.name ? decodeURIComponent(product.name) : product.na
                 <div class="aspect-w-1 aspect-h-1 rounded-lg bg-gray-100 overflow-hidden">
                   <img
                     src={file.preview_url}
-                    alt={`${displayName} - ${variant.name || ''}`}
+                    alt={`${product.name} - ${variant.name || ''}`}
                     class="w-full h-full object-center object-cover"
                   />
                 </div>
@@ -188,7 +185,7 @@ const displayName = product.name ? decodeURIComponent(product.name) : product.na
 
       <!-- Product info -->
       <div class="mt-10 px-4 sm:px-0 sm:mt-16 lg:mt-0">
-        <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">{displayName}</h1>
+        <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">{product.name}</h1>
         
         <div class="mt-3">
           <h2 class="sr-only">Product information</h2>
@@ -227,7 +224,7 @@ const displayName = product.name ? decodeURIComponent(product.name) : product.na
         <div class="mt-10">
           {defaultVariant ? (
             <SecureAddToCartButton
-              client:only="react"
+              client:load
               variantId={defaultVariant.id}
               disabled={!defaultVariant.in_stock}
             />

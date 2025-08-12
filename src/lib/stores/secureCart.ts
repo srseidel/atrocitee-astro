@@ -33,15 +33,26 @@ export interface ValidatedCartItem {
 }
 
 // Only store variant IDs and quantities (secure)
-// Check if we're in browser environment before enabling persistence
-const isBrowser = typeof window !== 'undefined' && typeof window.addEventListener === 'function';
+export const secureCartItems = atom<SecureCartItem[]>([]);
 
-export const secureCartItems = isBrowser 
-  ? persistentAtom<SecureCartItem[]>('atrocitee-secure-cart', [], {
+// Initialize persistent storage only in browser
+if (typeof window !== 'undefined') {
+  import('@nanostores/persistent').then(({ persistentAtom }) => {
+    const persistentCart = persistentAtom<SecureCartItem[]>('atrocitee-secure-cart', [], {
       encode: JSON.stringify,
       decode: JSON.parse,
-    })
-  : atom<SecureCartItem[]>([]);  // Fallback to regular atom during SSR
+    });
+    
+    // Sync with persistent storage
+    secureCartItems.set(persistentCart.get());
+    secureCartItems.subscribe((value) => {
+      persistentCart.set(value);
+    });
+    persistentCart.subscribe((value) => {
+      secureCartItems.set(value);
+    });
+  });
+}
 
 // Cache for validated items (not persisted)
 export const validatedCartItems = atom<ValidatedCartItem[]>([]);
@@ -205,8 +216,11 @@ export const secureCartActions = {
 };
 
 // Initialize validation on first load (browser only)
-if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-  validateCartItems();
+if (typeof window !== 'undefined') {
+  // Delay validation to ensure persistent storage is loaded
+  setTimeout(() => {
+    validateCartItems();
+  }, 100);
 }
 
 // Helper functions

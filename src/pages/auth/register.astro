@@ -14,7 +14,19 @@ export const prerender = true;
       <h1 class="text-3xl font-bold mb-8 text-center">Create an Account</h1>
       <div class="card">
         <div class="card-body p-6">
-          <RegisterForm client:only="react" />
+          <RegisterForm client:only="react">
+            <div class="space-y-4">
+              <div>
+                <label class="form-label">Email</label>
+                <input type="email" class="form-input" placeholder="Enter your email" disabled />
+              </div>
+              <div>
+                <label class="form-label">Password</label>
+                <input type="password" class="form-input" placeholder="Create a password" disabled />
+              </div>
+              <button class="btn btn-primary w-full" disabled>Loading...</button>
+            </div>
+          </RegisterForm>
         </div>
       </div>
     </div>
