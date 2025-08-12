@@ -1,5 +1,5 @@
-import { createBrowserClient } from '@supabase/ssr';
 import { useState, type FormEvent } from 'react';
+import { createBrowserSupabaseClient } from '@lib/supabase/client';
 
 export default function ForgotPasswordForm(): React.ReactElement {
   const [email, setEmail] = useState('');
@@ -12,10 +12,7 @@ export default function ForgotPasswordForm(): React.ReactElement {
     setMessage('');
 
     try {
-      const supabase = createBrowserClient(
-        import.meta.env.PUBLIC_SUPABASE_URL,
-        import.meta.env.PUBLIC_SUPABASE_ANON_KEY
-      );
+      const supabase = createBrowserSupabaseClient();
 
       const { error } = await supabase.auth.signInWithOtp({
         email,

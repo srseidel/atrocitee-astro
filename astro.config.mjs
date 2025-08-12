@@ -54,7 +54,7 @@ export default defineConfig({
         'url', 'worker_threads', 'diagnostics_channel', 'events', 'async_hooks',
         'escape-html', 'send', '@astrojs/node', 'ws', 'websocket'
       ],
-      noExternal: ['@lib/*'],
+      noExternal: ['@lib/*', '@supabase/supabase-js'],
     },
     build: {
       commonjsOptions: { transformMixedEsModules: true },
@@ -77,89 +77,33 @@ export default defineConfig({
             }
           },
           {
-            name: 'browser-polyfills',
+            name: 'minimal-ssr-polyfills',
             generateBundle(options, bundle) {
-              // Add comprehensive browser API polyfills to all chunks during build
               Object.keys(bundle).forEach(fileName => {
-                if (bundle[fileName].type === 'chunk') {
+                if (bundle[fileName].type === 'chunk' && (fileName.includes('_worker.js') || fileName.includes('chunks/client'))) {
+                  // Add minimal polyfills to worker and client files for SSR
                   const polyfills = `
-// Browser API polyfills for SSR/prerendering
-(function() {
-  if (typeof globalThis !== 'undefined') {
-    // Define window if not present
-    if (typeof globalThis.window === 'undefined') {
-      globalThis.window = {
-        ...globalThis,
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        dispatchEvent: () => true,
-        location: { href: '', origin: '', pathname: '/' },
-        navigator: { userAgent: 'Node.js' },
-        localStorage: {
-          getItem: () => null,
-          setItem: () => {},
-          removeItem: () => {},
-          clear: () => {}
-        },
-        sessionStorage: {
-          getItem: () => null,
-          setItem: () => {},
-          removeItem: () => {},
-          clear: () => {}
-        }
-      };
-    }
-    if (typeof globalThis.self === 'undefined') {
-      globalThis.self = globalThis;
-    }
-    if (typeof globalThis.document === 'undefined') {
-      globalThis.document = {
-        createElement: () => ({}),
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        querySelector: () => null,
-        querySelectorAll: () => []
-      };
-    }
-    // Mock WebSocket if not present
-    if (typeof globalThis.WebSocket === 'undefined') {
-      globalThis.WebSocket = class MockWebSocket {
-        constructor() { this.readyState = 3; }
-        addEventListener() {}
-        removeEventListener() {}
-        send() {}
-        close() {}
-      };
-    }
-    // Mock EventSource if not present
-    if (typeof globalThis.EventSource === 'undefined') {
-      globalThis.EventSource = class MockEventSource {
-        constructor() { this.readyState = 2; }
-        addEventListener() {}
-        removeEventListener() {}
-        close() {}
-      };
-    }
-    // Mock other common browser APIs
-    if (typeof globalThis.localStorage === 'undefined') {
-      globalThis.localStorage = {
-        getItem: () => null,
-        setItem: () => {},
-        removeItem: () => {},
-        clear: () => {}
-      };
-    }
-    if (typeof globalThis.sessionStorage === 'undefined') {
-      globalThis.sessionStorage = globalThis.localStorage;
-    }
-    if (typeof globalThis.navigator === 'undefined') {
-      globalThis.navigator = { userAgent: 'Node.js' };
-    }
-    if (typeof globalThis.location === 'undefined') {
-      globalThis.location = { href: '', origin: '', pathname: '/' };
-    }
-  }
-})();
+// Minimal SSR polyfills for missing browser APIs
+if (typeof globalThis !== 'undefined' && typeof globalThis.window === 'undefined') {
+  globalThis.window = globalThis;
+  globalThis.WebSocket = class MockWebSocket {
+    constructor() { this.readyState = 3; }
+    addEventListener() {}
+    removeEventListener() {}
+    send() {}
+    close() {}
+  };
+  globalThis.EventSource = class MockEventSource {
+    constructor() { this.readyState = 2; }
+    addEventListener() {}
+    removeEventListener() {}
+    close() {}
+  };
+  globalThis.document = globalThis.document || {
+    addEventListener: () => {},
+    removeEventListener: () => {}
+  };
+}
 `;
                   bundle[fileName].code = polyfills + bundle[fileName].code;
                 }

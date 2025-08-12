@@ -120,9 +120,12 @@ const options = Object.entries(variantOptions).reduce((acc: Record<string, strin
 const mainImage = defaultVariant?.mockup_settings?.views?.find((v: any) => v.view === 'front')?.url || 
                   defaultVariant?.mockup_settings?.views?.[0]?.url || 
                   product.thumbnail_url;
+
+// Decode product name if URL encoded
+const displayName = product.name ? decodeURIComponent(product.name) : product.name;
 ---
 
-<Layout title={product.name}>
+<Layout title={displayName}>
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
     {/* Breadcrumb */}
     <nav class="flex mb-8" aria-label="Breadcrumb">
@@ -146,7 +149,7 @@ const mainImage = defaultVariant?.mockup_settings?.views?.find((v: any) => v.vie
               <path d="M5.555 17.776l8-16 .894.448-8 16-.894-.448z" />
             </svg>
             <span class="ml-2 text-gray-500" aria-current="page">
-              {product.name}
+              {displayName}
             </span>
           </div>
         </li>
@@ -159,7 +162,7 @@ const mainImage = defaultVariant?.mockup_settings?.views?.find((v: any) => v.vie
         <div class="aspect-w-1 aspect-h-1 rounded-lg bg-gray-100 overflow-hidden">
           <img
             src={product.thumbnail_url || 'https://via.placeholder.com/600'}
-            alt={product.name}
+            alt={displayName}
             class="w-full h-full object-center object-cover"
           />
         </div>
@@ -173,7 +176,7 @@ const mainImage = defaultVariant?.mockup_settings?.views?.find((v: any) => v.vie
                 <div class="aspect-w-1 aspect-h-1 rounded-lg bg-gray-100 overflow-hidden">
                   <img
                     src={file.preview_url}
-                    alt={`${product.name} - ${variant.name || ''}`}
+                    alt={`${displayName} - ${variant.name || ''}`}
                     class="w-full h-full object-center object-cover"
                   />
                 </div>
@@ -185,7 +188,7 @@ const mainImage = defaultVariant?.mockup_settings?.views?.find((v: any) => v.vie
 
       <!-- Product info -->
       <div class="mt-10 px-4 sm:px-0 sm:mt-16 lg:mt-0">
-        <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">{product.name}</h1>
+        <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">{displayName}</h1>
         
         <div class="mt-3">
           <h2 class="sr-only">Product information</h2>

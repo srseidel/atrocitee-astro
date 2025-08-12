@@ -67,6 +67,10 @@ export const createClient = (): SupabaseClient => {
 
   // Real client for build-time data fetching and runtime
   console.log('[INFO] Using real Supabase client for data fetching');
+  
+  // Check if we're in SSR/build environment
+  const isSSR = typeof window === 'undefined';
+  
   return createSupabaseClient(
     supabaseUrl,
     supabaseAnonKey,
@@ -77,8 +81,14 @@ export const createClient = (): SupabaseClient => {
         detectSessionInUrl: false // Don't detect session in URL
       },
       realtime: {
+        disabled: isSSR, // Completely disable realtime during SSR
         params: {
-          eventsPerSecond: -1 // Disable realtime during build
+          eventsPerSecond: isSSR ? -1 : 10
+        }
+      },
+      global: {
+        headers: {
+          'X-Client-Info': isSSR ? 'atrocitee-static-build' : 'atrocitee-runtime'
         }
       }
     }
@@ -117,6 +127,16 @@ export const createBrowserSupabaseClient = (): SupabaseClient | MockSupabaseClie
         persistSession: true, // Allow session persistence in browser
         autoRefreshToken: true, // Allow auto-refresh in browser
         detectSessionInUrl: true // Allow URL session detection in browser
+      },
+      realtime: {
+        params: {
+          eventsPerSecond: 10 // Limit realtime events in browser
+        }
+      },
+      global: {
+        headers: {
+          'X-Client-Info': 'atrocitee-browser'
+        }
       }
     }
   );
