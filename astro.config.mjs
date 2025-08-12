@@ -18,14 +18,13 @@ export default defineConfig({
     react({
       include: ['**/react/*', '**/components/**/*.tsx', '**/features/**/*.tsx'],
     }),
-    // Temporarily disable Sentry to debug escape error
-    // sentry({
-    //   dsn: process.env.SENTRY_DSN,
-    //   environment: process.env.NODE_ENV,
-    //   release: process.env.SENTRY_RELEASE,
-    //   enabled: !isDev, // Only enable Sentry in production
-    //   tracesSampleRate: 1.0,
-    // }),
+    sentry({
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.NODE_ENV,
+      release: process.env.SENTRY_RELEASE,
+      enabled: !isDev, // Only enable Sentry in production
+      tracesSampleRate: 1.0,
+    }),
   ],
   output: 'server', // Always use server output to support both static and SSR pages
   adapter: isDev ? node({

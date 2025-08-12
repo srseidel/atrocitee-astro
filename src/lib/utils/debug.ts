@@ -122,20 +122,27 @@ export const debug = {
       try {
         const sanitizedError = error ? sanitizeForProduction(error) : undefined;
         
-        // TODO: Re-enable Sentry after fixing escape variable conflict
-        // Sentry.withScope((scope) => {
-        //   if (sanitizedContext) {
-        //     Object.keys(sanitizedContext).forEach(key => {
-        //       scope.setTag(key, sanitizedContext[key]);
-        //     });
-        //   }
-        //   
-        //   if (sanitizedError instanceof Error) {
-        //     Sentry.captureException(sanitizedError);
-        //   } else {
-        //     Sentry.captureMessage(message, 'error');
-        //   }
-        // });
+        // Dynamic import of Sentry to avoid build-time issues
+        if (typeof window !== 'undefined' || (typeof process !== 'undefined' && process.env.NODE_ENV === 'production')) {
+          import('@sentry/astro').then(({ withScope, captureException, captureMessage }) => {
+            withScope((scope) => {
+              if (sanitizedContext) {
+                Object.keys(sanitizedContext).forEach(key => {
+                  scope.setTag(key, sanitizedContext[key]);
+                });
+              }
+              
+              if (sanitizedError instanceof Error) {
+                captureException(sanitizedError);
+              } else {
+                captureMessage(message, 'error');
+              }
+            });
+          }).catch(() => {
+            // Fallback if Sentry import fails
+            console.error('[ERROR]', message);
+          });
+        }
         
         // Also log a clean message to console for server logs
         console.error('[ERROR]', message);

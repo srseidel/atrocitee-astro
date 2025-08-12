@@ -1,8 +1,7 @@
 import { createServerClient, createBrowserClient } from '@supabase/ssr';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { env } from '@lib/config/env';
-// Temporarily remove debug import to isolate escape error
-// import { debug } from '@lib/utils/debug';
+import { debug } from '@lib/utils/debug';
 
 import type { TypedSupabaseClient } from '../../types/supabase';
 import type { CookieOptions } from '@supabase/ssr';
