@@ -12,8 +12,13 @@ import type { AstroCookies } from 'astro';
 const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL || 'https://placeholder-url.supabase.co';
 const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
 
-// Check if we're in build/SSG mode
-const isBuild = import.meta.env.PROD && import.meta.env.SSR && !import.meta.env.DEV;
+// Check if we have real Supabase credentials
+const hasRealCredentials = import.meta.env.PUBLIC_SUPABASE_URL && 
+                          import.meta.env.PUBLIC_SUPABASE_ANON_KEY &&
+                          import.meta.env.PUBLIC_SUPABASE_URL !== 'https://placeholder-url.supabase.co' &&
+                          import.meta.env.PUBLIC_SUPABASE_ANON_KEY !== 'placeholder-key';
+
+const shouldUseMockClient = !hasRealCredentials;
 
 // Mock client type for build time
 interface MockSupabaseClient {
@@ -34,9 +39,9 @@ interface MockSupabaseClient {
 
 // Create a client for static generation or build time - no cookies needed
 export const createClient = (): SupabaseClient => {
-  // During build/prerendering, return a minimal mock client to avoid browser API access
-  if (isBuild) {
-    console.warn('[WARN] Using mock Supabase client during prerendering');
+  // Only use mock client if environment variables are missing
+  if (shouldUseMockClient) {
+    console.warn('[WARN] Using mock Supabase client - missing environment variables');
     const mockClient = {
       auth: {
         getUser: () => Promise.resolve({ data: { user: null }, error: null }),
@@ -60,7 +65,8 @@ export const createClient = (): SupabaseClient => {
     return mockClient as unknown as SupabaseClient;
   }
 
-  // Normal client for runtime
+  // Real client for build-time data fetching and runtime
+  console.log('[INFO] Using real Supabase client for data fetching');
   return createSupabaseClient(
     supabaseUrl,
     supabaseAnonKey,
@@ -81,10 +87,10 @@ export const createClient = (): SupabaseClient => {
 
 // Create a client for browser usage - with safety check for build time
 export const createBrowserSupabaseClient = (): SupabaseClient | MockSupabaseClient => {
-  // During build, return a mock client if environment variables are missing
-  if (isBuild && (!import.meta.env.PUBLIC_SUPABASE_URL || !import.meta.env.PUBLIC_SUPABASE_ANON_KEY)) {
-    console.warn('[WARN] Supabase client created with placeholder credentials during build');
-    // Return a minimal mock client for build time
+  // Only use mock client if environment variables are missing
+  if (shouldUseMockClient) {
+    console.warn('[WARN] Browser Supabase client created with placeholder credentials');
+    // Return a minimal mock client for missing env vars
     const mockClient = {
       auth: {
         getUser: () => Promise.resolve({ data: { user: null }, error: null }),

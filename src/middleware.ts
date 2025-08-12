@@ -10,14 +10,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // If auth middleware returned void, get the response from next()
   const response = authResponse || await next();
   
-  // Then add CSP headers (including Stripe domains and Cloudflare assets)
+  // Set permissive CSP headers for Cloudflare Pages compatibility
   response.headers.set(
     'Content-Security-Policy',
-    "default-src 'self' 'unsafe-inline' 'unsafe-eval' https:; " +
+    "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:; " +
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:; " +
     "script-src-elem 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:; " +
-    "style-src 'self' 'unsafe-inline' https: data: blob:; " +
-    "style-src-elem 'self' 'unsafe-inline' https: data: blob:; " +
+    "style-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:; " +
+    "style-src-elem 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:; " +
     "img-src 'self' data: https: blob:; " +
     "font-src 'self' data: https:; " +
     "connect-src 'self' ws: wss: http: https: data: blob:; " +

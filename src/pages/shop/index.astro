@@ -5,7 +5,7 @@ import ProductCard from '@components/features/products/ProductCard.astro';
 import type { Database } from '@local-types/database/schema';
 import { createClient } from '@lib/supabase/client';
 
-// Enable prerendering
+// Enable prerendering for SEO and performance
 export const prerender = true;
 
 interface ProductVariant {
