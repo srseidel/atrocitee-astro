@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { env } from '@lib/config/env';
-import { debug } from '@lib/utils/debug';
+// Temporarily removed debug import to isolate escape error
+// import { debug } from '@lib/utils/debug';
 
 import type { AstroCookies } from 'astro';
 import type { TypedSupabaseClient } from '../../types/supabase';

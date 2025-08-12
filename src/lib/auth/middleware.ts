@@ -1,7 +1,12 @@
 import { createServerClient } from '@supabase/ssr';
 import { createServerSupabaseClient, checkAdminStatus } from '@lib/supabase/client';
 import { env } from '@lib/config/env';
-import { debug } from '@lib/utils/debug';
+// Import debug only when needed to avoid initialization conflicts
+// import { debug } from '@lib/utils/debug';
+
+// Use console.error directly in middleware to avoid circular dependency
+// The debug utility can't be safely imported here due to module initialization conflicts
+
 import type { AstroCookies, AstroGlobal, MiddlewareHandler } from 'astro';
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import type { APIContext } from 'astro';
@@ -28,7 +33,7 @@ const astroCookiesAdapter = (cookies: AstroCookies): {
       const cookie = cookies.get(key);
       return cookie?.value ?? null;
     } catch (error) {
-      debug.criticalError(`Error getting cookie ${key}`, error, { cookieKey: key });
+      console.error(`[CRITICAL] Error getting cookie ${key}`, error, { cookieKey: key });
       return null;
     }
   },
@@ -42,7 +47,7 @@ const astroCookiesAdapter = (cookies: AstroCookies): {
         ...options // Allow overriding defaults
       });
     } catch (error) {
-      debug.criticalError(`Error setting cookie ${key}`, error, { cookieKey: key });
+      console.error(`[CRITICAL] Error setting cookie ${key}`, error, { cookieKey: key });
     }
   },
   remove: (key: string, options: { path?: string; domain?: string }): void => {
@@ -53,14 +58,14 @@ const astroCookiesAdapter = (cookies: AstroCookies): {
         secure: process.env.NODE_ENV === 'production'
       });
     } catch (error) {
-      debug.criticalError(`Error removing cookie ${key}`, error, { cookieKey: key });
+      console.error(`[CRITICAL] Error removing cookie ${key}`, error, { cookieKey: key });
     }
   },
   getAll: (): { name: string; value: string }[] => {
     try {
       return [];
     } catch (error) {
-      debug.criticalError('Error getting all cookies', error);
+      console.error('[CRITICAL] Error getting all cookies', error);
       return [];
     }
   }
@@ -83,7 +88,7 @@ export async function isAdmin(supabase: SupabaseClient): Promise<boolean> {
     // Check the role directly from app_metadata
     return user.app_metadata?.role === 'admin';
   } catch (error) {
-    debug.criticalError('Error checking admin status in isAdmin helper', error);
+    console.error('[CRITICAL] Error checking admin status in isAdmin helper', error);
     return false;
   }
 }
@@ -99,7 +104,7 @@ export const redirectIfNotAdmin = async (Astro: AstroGlobal): Promise<Response |
     
     return null;
   } catch (error) {
-    debug.criticalError('Error checking admin status in redirectIfNotAdmin', error);
+    console.error('[CRITICAL] Error checking admin status in redirectIfNotAdmin', error);
     return Astro.redirect('/auth/login?redirect=/admin');
   }
 };
@@ -163,7 +168,7 @@ export const authMiddleware: MiddlewareHandler = async (context, next) => {
 
     return next();
   } catch (error) {
-    debug.criticalError('Middleware error', error, { pathname });
+    console.error('[CRITICAL] Middleware error', error, { pathname });
     // For API routes, return 500 instead of redirecting
     if (pathname.startsWith('/api')) {
       return new Response(JSON.stringify({
@@ -193,7 +198,7 @@ export const redirectIfNotAuthenticated = async (Astro: AstroGlobal): Promise<Re
     
     return null;
   } catch (error) {
-    debug.criticalError('Error checking authentication in redirectIfNotAuthenticated', error);
+    console.error('[CRITICAL] Error checking authentication in redirectIfNotAuthenticated', error);
     return Astro.redirect('/auth/login');
   }
 };
@@ -210,7 +215,7 @@ export const redirectIfAuthenticated = async (Astro: AstroGlobal): Promise<Respo
     
     return null;
   } catch (error) {
-    debug.criticalError('Error checking authentication in redirectIfAuthenticated', error);
+    console.error('[CRITICAL] Error checking authentication in redirectIfAuthenticated', error);
     return null;
   }
 };
@@ -231,7 +236,7 @@ export const getUser = async (Astro: AstroGlobal) => {
     
     return user;
   } catch (error) {
-    debug.criticalError('Error in getUser', error);
+    console.error('[CRITICAL] Error in getUser', error);
     throw error; // Re-throw so calling code can handle appropriately
   }
 };
@@ -281,7 +286,7 @@ export const updateUserToAdmin = async (
 
     return { success: true };
   } catch (error) {
-    debug.criticalError('Error updating user role', error, { email, isAdmin });
+    console.error('[CRITICAL] Error updating user role', error, { email, isAdmin });
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Failed to update user role' 

@@ -1,7 +1,8 @@
 import { createServerClient, createBrowserClient } from '@supabase/ssr';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { env } from '@lib/config/env';
-import { debug } from '@lib/utils/debug';
+// Temporarily remove debug import to isolate escape error
+// import { debug } from '@lib/utils/debug';
 
 import type { TypedSupabaseClient } from '../../types/supabase';
 import type { CookieOptions } from '@supabase/ssr';
@@ -34,7 +35,33 @@ interface MockSupabaseClient {
 
 // Create a client for static generation or build time - no cookies needed
 export const createClient = (): SupabaseClient => {
-  // Always use the basic client for static generation (no cookies)
+  // During build/prerendering, return a minimal mock client to avoid browser API access
+  if (isBuild) {
+    console.warn('[WARN] Using mock Supabase client during prerendering');
+    const mockClient = {
+      auth: {
+        getUser: () => Promise.resolve({ data: { user: null }, error: null }),
+        signInWithPassword: () => Promise.resolve({ data: null, error: null }),
+        signUp: () => Promise.resolve({ data: null, error: null }),
+        signOut: () => Promise.resolve({ error: null }),
+        signInWithOtp: () => Promise.resolve({ data: null, error: null }),
+        updateUser: () => Promise.resolve({ data: null, error: null })
+      },
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            order: () => Promise.resolve({ data: [], error: null }),
+            limit: () => Promise.resolve({ data: [], error: null })
+          }),
+          limit: () => Promise.resolve({ data: [], error: null })
+        })
+      }),
+      rpc: () => Promise.resolve({ data: null, error: null })
+    };
+    return mockClient as unknown as SupabaseClient;
+  }
+
+  // Normal client for runtime
   return createSupabaseClient(
     supabaseUrl,
     supabaseAnonKey,
@@ -43,6 +70,11 @@ export const createClient = (): SupabaseClient => {
         persistSession: false, // Don't persist session in static generation
         autoRefreshToken: false, // Don't auto-refresh tokens
         detectSessionInUrl: false // Don't detect session in URL
+      },
+      realtime: {
+        params: {
+          eventsPerSecond: -1 // Disable realtime during build
+        }
       }
     }
   );
@@ -52,7 +84,7 @@ export const createClient = (): SupabaseClient => {
 export const createBrowserSupabaseClient = (): SupabaseClient | MockSupabaseClient => {
   // During build, return a mock client if environment variables are missing
   if (isBuild && (!import.meta.env.PUBLIC_SUPABASE_URL || !import.meta.env.PUBLIC_SUPABASE_ANON_KEY)) {
-    debug.warn('Supabase client created with placeholder credentials during build');
+    console.warn('[WARN] Supabase client created with placeholder credentials during build');
     // Return a minimal mock client for build time
     const mockClient = {
       auth: {

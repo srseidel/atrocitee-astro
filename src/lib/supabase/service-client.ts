@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { debug } from '@lib/utils/debug';
+// Temporarily removed debug import to isolate escape error
+// import { debug } from '@lib/utils/debug';
 
 /**
  * Creates a Supabase client with the service role for server-side operations

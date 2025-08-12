@@ -1,18 +1,37 @@
 /**
- * Debug Utility - Ultra-Simple Build-Safe Version
+ * Debug Utility
  * 
- * Simplified debug utility that avoids all import.meta.env references
- * during build to prevent initialization conflicts
+ * Provides environment-aware logging that respects ENABLE_TEST_MODE.
+ * In development/test mode: logs to console
+ * In production: suppresses debug logs (Sentry temporarily disabled for build fix)
  */
 
-// Simple environment detection without import.meta.env
-const isDev = () => {
-  // Use process.env if available (server), otherwise assume browser dev mode
-  if (typeof process !== 'undefined' && process.env) {
-    return process.env.NODE_ENV !== 'production';
+// Temporarily disable Sentry import to fix escape build error
+// import * as Sentry from '@sentry/astro';
+
+/**
+ * Check if debug mode is enabled
+ */
+const isDebugEnabled = (): boolean => {
+  // If ENABLE_TEST_MODE is explicitly set, respect that setting
+  if (import.meta.env.ENABLE_TEST_MODE !== undefined) {
+    return import.meta.env.ENABLE_TEST_MODE === 'true';
   }
-  // Browser fallback - dev mode if console is available (avoid window check for SSR)
-  return typeof console !== 'undefined';
+  // Otherwise, default to DEV mode
+  return import.meta.env.DEV === true;
+};
+
+/**
+ * Check if we're in production mode
+ */
+const isProduction = (): boolean => {
+  // If ENABLE_TEST_MODE is explicitly set to false, we're in production mode
+  if (import.meta.env.ENABLE_TEST_MODE === 'false') {
+    return true;
+  }
+  // Otherwise, use the default Astro PROD setting
+  return import.meta.env.PROD === true && 
+         import.meta.env.ENABLE_TEST_MODE !== 'true';
 };
 
 /**
@@ -68,7 +87,7 @@ export const debug = {
    * Debug level logging - only in debug mode
    */
   log: (...args: any[]) => {
-    if (isDev()) {
+    if (isDebugEnabled()) {
       const sanitizedArgs = args.map(arg => sanitizeData(arg));
       console.log('[DEBUG]', ...sanitizedArgs);
     }
@@ -78,7 +97,7 @@ export const debug = {
    * Info level logging - only in debug mode  
    */
   info: (...args: any[]) => {
-    if (isDev()) {
+    if (isDebugEnabled()) {
       const sanitizedArgs = args.map(arg => sanitizeData(arg));
       console.info('[INFO]', ...sanitizedArgs);
     }
@@ -88,7 +107,7 @@ export const debug = {
    * Warning level logging - only in debug mode
    */
   warn: (...args: any[]) => {
-    if (isDev()) {
+    if (isDebugEnabled()) {
       const sanitizedArgs = args.map(arg => sanitizeData(arg));
       console.warn('[WARN]', ...sanitizedArgs);
     }
@@ -99,7 +118,7 @@ export const debug = {
    * For production errors, use criticalError instead
    */
   error: (...args: any[]) => {
-    if (isDev()) {
+    if (isDebugEnabled()) {
       const sanitizedArgs = args.map(arg => sanitizeData(arg));
       console.error('[ERROR]', ...sanitizedArgs);
     }
@@ -114,10 +133,10 @@ export const debug = {
     // Always sanitize context data before any logging
     const sanitizedContext = context ? sanitizeData(context) : context;
     
-    if (isDev()) {
+    if (isDebugEnabled()) {
       // Development: Console logging with sanitized context only
       console.error('[CRITICAL]', message, error, sanitizedContext);
-    } else {
+    } else if (isProduction()) {
       // Production: Send to Sentry with sanitized data
       try {
         const sanitizedError = error ? sanitizeForProduction(error) : undefined;
@@ -151,10 +170,10 @@ export const debug = {
    * User-facing errors that should be captured but not expose sensitive data
    */
   userError: (userMessage: string, technicalError?: any, context?: Record<string, any>) => {
-    if (isDev()) {
+    if (isDebugEnabled()) {
       const sanitizedContext = context ? sanitizeData(context) : context;
       console.error('[USER_ERROR]', userMessage, technicalError, sanitizedContext);
-    } else {
+    } else if (isProduction()) {
       // Send technical details to Sentry but show clean message to user
       debug.criticalError(`User Error: ${userMessage}`, technicalError, context);
       console.error('[USER_ERROR]', userMessage); // Clean message only
@@ -165,7 +184,7 @@ export const debug = {
    * Performance logging for optimization
    */
   performance: (label: string, timeMs?: number, data?: any) => {
-    if (isDev()) {
+    if (isDebugEnabled()) {
       const sanitizedData = data ? sanitizeData(data) : data;
       if (timeMs !== undefined) {
         console.log(`[PERF] ${label}: ${timeMs}ms`, sanitizedData);
@@ -179,7 +198,7 @@ export const debug = {
    * API request/response logging
    */
   api: (method: string, url: string, status?: number, data?: any) => {
-    if (isDev()) {
+    if (isDebugEnabled()) {
       const sanitizedData = data ? sanitizeData(data) : data;
       console.log(`[API] ${method} ${url}`, status ? `(${status})` : '', sanitizedData);
     }
@@ -189,7 +208,7 @@ export const debug = {
    * Database operation logging
    */
   db: (operation: string, table?: string, data?: any) => {
-    if (isDev()) {
+    if (isDebugEnabled()) {
       const sanitizedData = data ? sanitizeData(data) : data;
       console.log(`[DB] ${operation}`, table, sanitizedData);
     }
@@ -199,7 +218,7 @@ export const debug = {
    * Authentication/authorization logging
    */
   auth: (action: string, user?: string, data?: any) => {
-    if (isDev()) {
+    if (isDebugEnabled()) {
       const sanitizedData = data ? sanitizeData(data) : data;
       console.log(`[AUTH] ${action}`, user, sanitizedData);
     }
@@ -222,16 +241,10 @@ export const perfTimer = (label: string) => {
 };
 
 /**
- * Debug mode status (lazy-evaluated to avoid initialization conflicts)
+ * Debug mode status
  */
 export const debugStatus = {
-  get isEnabled() {
-    return isDev();
-  },
-  get isProduction() {
-    return !isDev();
-  },
-  get mode() {
-    return isDev() ? 'debug' : 'production';
-  }
+  isEnabled: isDebugEnabled(),
+  isProduction: isProduction(),
+  mode: isDebugEnabled() ? 'debug' : 'production'
 };
