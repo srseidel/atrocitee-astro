@@ -134,9 +134,10 @@ const processedProducts = products ? products.map(product => {
   // Use the first variant's price, or base price as fallback
   const displayPrice = variants[0]?.price || product.atrocitee_base_price || 0;
   
-  // Ensure we preserve the featured flag
+  // Ensure we preserve the featured flag and decode any URL-encoded names
   return {
     ...product,
+    name: product.name ? decodeURIComponent(product.name) : product.name,
     imageUrl,
     webpUrl,
     variants,
