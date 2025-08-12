@@ -345,7 +345,7 @@ const clientData = {
         <div class="mb-6">
           {selectedVariant && (
             <SecureAddToCartButton
-              client:load
+              client:only="react"
               variantId={selectedVariant.id}
               disabled={!selectedVariant.in_stock}
             />

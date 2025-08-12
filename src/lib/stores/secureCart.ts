@@ -33,10 +33,15 @@ export interface ValidatedCartItem {
 }
 
 // Only store variant IDs and quantities (secure)
-export const secureCartItems = persistentAtom<SecureCartItem[]>('atrocitee-secure-cart', [], {
-  encode: JSON.stringify,
-  decode: JSON.parse,
-});
+// Check if we're in browser environment before enabling persistence
+const isBrowser = typeof window !== 'undefined' && typeof window.addEventListener === 'function';
+
+export const secureCartItems = isBrowser 
+  ? persistentAtom<SecureCartItem[]>('atrocitee-secure-cart', [], {
+      encode: JSON.stringify,
+      decode: JSON.parse,
+    })
+  : atom<SecureCartItem[]>([]);  // Fallback to regular atom during SSR
 
 // Cache for validated items (not persisted)
 export const validatedCartItems = atom<ValidatedCartItem[]>([]);
@@ -199,8 +204,8 @@ export const secureCartActions = {
   },
 };
 
-// Initialize validation on first load
-if (typeof window !== 'undefined') {
+// Initialize validation on first load (browser only)
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
   validateCartItems();
 }
 

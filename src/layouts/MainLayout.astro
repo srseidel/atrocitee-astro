@@ -138,7 +138,7 @@ const navLinks = [
               </a>
             )}
             
-            <CartIcon client:load />
+            <CartIcon client:only="react" />
             
             <!-- Mobile menu button -->
             <button 
@@ -286,6 +286,6 @@ const navLinks = [
     </script>
 
     <!-- Cart Dropdown -->
-    <CartDropdown client:load />
+    <CartDropdown client:only="react" />
   </body>
 </html> 

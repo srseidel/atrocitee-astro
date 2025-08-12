@@ -52,14 +52,18 @@ export default defineConfig({
       external: [
         'node:fs', 'node:path', 'node:child_process', 'fs', 'path', 'child_process',
         'url', 'worker_threads', 'diagnostics_channel', 'events', 'async_hooks',
-        'escape-html', 'send', '@astrojs/node', 'ws', 'websocket'
+        'escape-html', 'send', '@astrojs/node', 'ws', 'websocket',
+        // Externalize modules that access browser APIs
+        '@nanostores/persistent', '@nanostores/react',
+        // Externalize Supabase realtime that uses WebSockets
+        '@supabase/realtime-js', '@supabase/gotrue-js'
       ],
-      noExternal: ['@lib/*', '@supabase/supabase-js'],
+      noExternal: ['@lib/*'],
     },
     build: {
       commonjsOptions: { transformMixedEsModules: true },
       rollupOptions: {
-        external: ['escape-html', 'send'],
+        external: ['escape-html', 'send', '@supabase/realtime-js', '@supabase/gotrue-js'],
         plugins: [
           {
             name: 'fix-escape-conflict',
@@ -77,32 +81,24 @@ export default defineConfig({
             }
           },
           {
-            name: 'minimal-ssr-polyfills',
+            name: 'ssr-browser-polyfills',
             generateBundle(options, bundle) {
               Object.keys(bundle).forEach(fileName => {
-                if (bundle[fileName].type === 'chunk' && (fileName.includes('_worker.js') || fileName.includes('chunks/client'))) {
-                  // Add minimal polyfills to worker and client files for SSR
+                if (bundle[fileName].type === 'chunk' && fileName.includes('_worker.js')) {
+                  // Add browser polyfills only to worker chunks that run during SSR
                   const polyfills = `
-// Minimal SSR polyfills for missing browser APIs
+// Browser API polyfills for SSR
 if (typeof globalThis !== 'undefined' && typeof globalThis.window === 'undefined') {
-  globalThis.window = globalThis;
-  globalThis.WebSocket = class MockWebSocket {
-    constructor() { this.readyState = 3; }
-    addEventListener() {}
-    removeEventListener() {}
-    send() {}
-    close() {}
-  };
-  globalThis.EventSource = class MockEventSource {
-    constructor() { this.readyState = 2; }
-    addEventListener() {}
-    removeEventListener() {}
-    close() {}
-  };
-  globalThis.document = globalThis.document || {
+  globalThis.window = {
     addEventListener: () => {},
-    removeEventListener: () => {}
+    removeEventListener: () => {},
+    location: { href: '', origin: '', pathname: '/' },
+    navigator: { userAgent: 'SSR' },
+    document: { addEventListener: () => {}, removeEventListener: () => {} }
   };
+  globalThis.document = globalThis.window.document;
+  globalThis.navigator = globalThis.window.navigator;
+  globalThis.location = globalThis.window.location;
 }
 `;
                   bundle[fileName].code = polyfills + bundle[fileName].code;

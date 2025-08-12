@@ -29,8 +29,11 @@ export default function SecureAddToCartButton({
   
   const { addToCart, loading, error, isInCart, getQuantity } = useSecureAddToCart();
   
-  // Listen for variant selection changes
+  // Listen for variant selection changes (browser only)
   useEffect(() => {
+    // Only add event listeners in browser environment
+    if (typeof window === 'undefined') return;
+    
     const handleVariantChange = (event: CustomEvent) => {
       const { variant } = event.detail;
       setVariantId(variant.id);

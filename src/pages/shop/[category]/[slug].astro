@@ -227,7 +227,7 @@ const displayName = product.name ? decodeURIComponent(product.name) : product.na
         <div class="mt-10">
           {defaultVariant ? (
             <SecureAddToCartButton
-              client:load
+              client:only="react"
               variantId={defaultVariant.id}
               disabled={!defaultVariant.in_stock}
             />
