@@ -10,23 +10,25 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // If auth middleware returned void, get the response from next()
   const response = authResponse || await next();
   
-  // Then add CSP headers (including Stripe domains)
+  // Then add CSP headers (including Stripe domains and Cloudflare assets)
   response.headers.set(
     'Content-Security-Policy',
-    "default-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://static.cloudflareinsights.com https://js.stripe.com; " +
-    "script-src-elem 'self' 'unsafe-inline' https://js.stripe.com; " +
-    "style-src 'self' 'unsafe-inline' https://js.stripe.com; " +
-    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://fonts.googleapis.com; " +
+    "default-src 'self' 'unsafe-inline' 'unsafe-eval' https:; " +
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:; " +
+    "script-src-elem 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:; " +
+    "style-src 'self' 'unsafe-inline' https: data: blob:; " +
+    "style-src-elem 'self' 'unsafe-inline' https: data: blob:; " +
     "img-src 'self' data: https: blob:; " +
-    "font-src 'self' data: https://fonts.gstatic.com; " +
-    "connect-src 'self' ws: wss: http: https: ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:* https://*.supabase.co https://api.printful.com https://api.stripe.com https://sentry.io https://cloudflareinsights.com; " +
-    "frame-src 'self' https://js.stripe.com https://checkout.stripe.com; " +
+    "font-src 'self' data: https:; " +
+    "connect-src 'self' ws: wss: http: https: data: blob:; " +
+    "frame-src 'self' https:; " +
+    "media-src 'self' data: https: blob:; " +
+    "worker-src 'self' blob:; " +
+    "child-src 'self' blob:; " +
     "object-src 'none'; " +
     "base-uri 'self'; " +
-    "form-action 'self'; " +
-    "frame-ancestors 'none'; " +
-    "upgrade-insecure-requests;"
+    "form-action 'self' https:; " +
+    "frame-ancestors 'none';"
   );
 
   return response;
