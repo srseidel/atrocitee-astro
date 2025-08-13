@@ -1,17 +1,15 @@
 /**
- * Debug Utility - Ultra-Simple Build-Safe Version
+ * Debug Utility - Simple Console-Only Version
  * 
- * Simplified debug utility that avoids all import.meta.env references
- * during build to prevent initialization conflicts
+ * Provides environment-aware logging without external dependencies
+ * to prevent build conflicts on Cloudflare
  */
 
-// Simple environment detection without import.meta.env
+// Simple environment detection
 const isDev = () => {
-  // Use process.env if available (server), otherwise assume browser dev mode
   if (typeof process !== 'undefined' && process.env) {
     return process.env.NODE_ENV !== 'production';
   }
-  // Browser fallback - dev mode if console is available (avoid window check for SSR)
   return typeof console !== 'undefined';
 };
 
@@ -54,13 +52,6 @@ const sanitizeData = (data: any): any => {
 };
 
 /**
- * Sanitize sensitive data specifically for production logging
- */
-const sanitizeForProduction = (data: any): any => {
-  return sanitizeData(data);
-};
-
-/**
  * Debug utility with environment-aware logging
  */
 export const debug = {
@@ -96,7 +87,6 @@ export const debug = {
 
   /**
    * Error level logging - only in debug mode
-   * For production errors, use criticalError instead
    */
   error: (...args: any[]) => {
     if (isDev()) {
@@ -106,70 +96,23 @@ export const debug = {
   },
 
   /**
-   * Critical errors that should always be tracked
-   * In debug mode: logs to console with full details
-   * In production: sends to Sentry with sanitized data
+   * Critical errors that should always be logged
    */
   criticalError: (message: string, error?: any, context?: Record<string, any>) => {
-    // Always sanitize context data before any logging
     const sanitizedContext = context ? sanitizeData(context) : context;
-    
-    if (isDev()) {
-      // Development: Console logging with sanitized context only
-      console.error('[CRITICAL]', message, error, sanitizedContext);
-    } else {
-      // Production: Send to Sentry with sanitized data
-      try {
-        const sanitizedError = error ? sanitizeForProduction(error) : undefined;
-        
-        // Dynamic import of Sentry to avoid build-time issues
-        if (typeof window !== 'undefined' || (typeof process !== 'undefined' && process.env.NODE_ENV === 'production')) {
-          import('@sentry/astro').then(({ withScope, captureException, captureMessage }) => {
-            withScope((scope) => {
-              if (sanitizedContext) {
-                Object.keys(sanitizedContext).forEach(key => {
-                  scope.setTag(key, sanitizedContext[key]);
-                });
-              }
-              
-              if (sanitizedError instanceof Error) {
-                captureException(sanitizedError);
-              } else {
-                captureMessage(message, 'error');
-              }
-            });
-          }).catch(() => {
-            // Fallback if Sentry import fails
-            console.error('[ERROR]', message);
-          });
-        }
-        
-        // Also log a clean message to console for server logs
-        console.error('[ERROR]', message);
-      } catch (sentryError) {
-        // Fallback if Sentry fails
-        console.error('[ERROR]', message);
-        console.error('[SENTRY_ERROR]', sentryError);
-      }
-    }
+    console.error('[CRITICAL]', message, error, sanitizedContext);
   },
 
   /**
-   * User-facing errors that should be captured but not expose sensitive data
+   * User-facing errors
    */
   userError: (userMessage: string, technicalError?: any, context?: Record<string, any>) => {
-    if (isDev()) {
-      const sanitizedContext = context ? sanitizeData(context) : context;
-      console.error('[USER_ERROR]', userMessage, technicalError, sanitizedContext);
-    } else {
-      // Send technical details to Sentry but show clean message to user
-      debug.criticalError(`User Error: ${userMessage}`, technicalError, context);
-      console.error('[USER_ERROR]', userMessage); // Clean message only
-    }
+    const sanitizedContext = context ? sanitizeData(context) : context;
+    console.error('[USER_ERROR]', userMessage, technicalError, sanitizedContext);
   },
 
   /**
-   * Performance logging for optimization
+   * Performance logging
    */
   performance: (label: string, timeMs?: number, data?: any) => {
     if (isDev()) {
@@ -229,16 +172,9 @@ export const perfTimer = (label: string) => {
 };
 
 /**
- * Debug mode status (lazy-evaluated to avoid initialization conflicts)
+ * Debug mode status
  */
 export const debugStatus = {
-  get isEnabled() {
-    return isDev();
-  },
-  get isProduction() {
-    return !isDev();
-  },
-  get mode() {
-    return isDev() ? 'debug' : 'production';
-  }
+  isEnabled: isDev(),
+  mode: isDev() ? 'debug' : 'production'
 };

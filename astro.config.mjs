@@ -6,7 +6,7 @@ import tailwind from '@astrojs/tailwind';
 import react from '@astrojs/react';
 import node from '@astrojs/node';
 import cloudflare from '@astrojs/cloudflare';
-import sentry from '@sentry/astro';
+// import sentry from '@sentry/astro';
 
 // Get environment
 const isDev = process.env.NODE_ENV !== 'production';
@@ -15,19 +15,12 @@ export default defineConfig({
   site: 'https://atrocitee.com',
   integrations: [
     tailwind(),
-    react({
-      include: ['**/react/*', '**/components/**/*.tsx', '**/features/**/*.tsx'],
-    }),
-    // Only enable Sentry in production and when DSN is provided
-    ...(process.env.SENTRY_DSN && !isDev ? [sentry({
-      dsn: process.env.SENTRY_DSN,
-      environment: process.env.NODE_ENV,
-      release: process.env.SENTRY_RELEASE,
-      tracesSampleRate: 1.0,
-      sourceMapsUploadOptions: {
-        enabled: false, // Disable source map uploads to avoid conflicts
-      },
-    })] : []),
+    // Temporarily disable React to isolate escape error
+    // react({
+    //   include: ['**/react/*', '**/components/**/*.tsx', '**/features/**/*.tsx'],
+    // }),
+    // Sentry temporarily disabled to fix escape variable conflict on Cloudflare
+    // TODO: Re-enable Sentry after resolving the build conflict
   ],
   output: 'server', // Always use server output to support both static and SSR pages
   adapter: isDev ? node({
