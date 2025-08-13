@@ -5,8 +5,8 @@ import ProductCard from '@components/features/products/ProductCard.astro';
 import type { Database } from '@local-types/database/schema';
 import { createClient } from '@lib/supabase/client';
 
-// Temporarily disable prerendering to isolate escape error
-export const prerender = false;
+// Enable prerendering
+export const prerender = true;
 
 interface ProductVariant {
   retail_price: number | null;

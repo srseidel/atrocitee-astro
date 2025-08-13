@@ -1,29 +1,57 @@
 ---
-import { getCollection } from 'astro:content';
-
 import Container from '@components/common/Container.astro';
 import SectionHead from '@components/common/SectionHead.astro';
 
 import MainLayout from '@layouts/MainLayout.astro';
 
-
-// Get the about content
-const aboutContent = await getCollection('about');
-const about = aboutContent[0];
-
 // Pre-render this page at build time
 export const prerender = true;
+
+// Static content (converted from content collections)
+const pageData = {
+  title: "About Atrocitee",
+  description: "Fashion with a purpose - making a difference one shirt at a time."
+};
 ---
 
-<MainLayout title={about.data.title}>
+<MainLayout title={pageData.title}>
   <Container>
     <SectionHead>
-      <Fragment slot="title">{about.data.title}</Fragment>
-      <Fragment slot="desc">{about.data.description}</Fragment>
+      <Fragment slot="title">{pageData.title}</Fragment>
+      <Fragment slot="desc">{pageData.description}</Fragment>
     </SectionHead>
 
     <div class="prose prose-lg mx-auto max-w-4xl mt-16">
-      <div set:html={about.body} />
+      <h2>Our Mission</h2>
+      <p>
+        Atrocitee was founded with a simple but powerful mission: to create a platform where political expression through fashion directly supports the causes we care about. We believe in the power of wearing your values and backing them up with real action.
+      </p>
+      <p>
+        Every t-shirt in our collection is designed to spark conversations and raise awareness about important political and social issues. More importantly, each purchase directly contributes to organizations working on these causes.
+      </p>
+
+      <h2>How We Support Causes</h2>
+      <p>
+        We partner with vetted non-profit organizations that are making tangible impacts in their fields. A portion of every sale (typically 10-20% depending on the product) goes directly to the charity associated with that design.
+      </p>
+      <p>
+        Our donation process is transparent, and we regularly publish reports on the total amounts donated to each cause.
+      </p>
+
+      <h2>Our Values</h2>
+      <p><strong>Transparency:</strong> We're open about our costs, donations, and operations.</p>
+      <p><strong>Quality:</strong> Our products are ethically manufactured and built to last.</p>
+      <p><strong>Impact:</strong> We measure success by the tangible change we help create.</p>
+      <p><strong>Conversation:</strong> We believe in the power of dialogue to drive progress.</p>
+
+      <h2 id="impact">Our Impact</h2>
+      <p>Together with our community, we've made tangible differences in these areas:</p>
+      <ul>
+        <li><strong>$24K</strong> Donated</li>
+        <li><strong>1,200</strong> Shirts Sold</li>
+        <li><strong>18</strong> Causes Supported</li>
+        <li><strong>3,500</strong> Customers</li>
+      </ul>
     </div>
 
     <!-- CTA -->

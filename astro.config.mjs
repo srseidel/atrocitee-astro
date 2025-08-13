@@ -15,10 +15,9 @@ export default defineConfig({
   site: 'https://atrocitee.com',
   integrations: [
     tailwind(),
-    // Temporarily disable React to isolate escape error
-    // react({
-    //   include: ['**/react/*', '**/components/**/*.tsx', '**/features/**/*.tsx'],
-    // }),
+    react({
+      include: ['**/react/*', '**/components/**/*.tsx', '**/features/**/*.tsx'],
+    }),
     // Sentry temporarily disabled to fix escape variable conflict on Cloudflare
     // TODO: Re-enable Sentry after resolving the build conflict
   ],

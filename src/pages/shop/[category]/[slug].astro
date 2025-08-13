@@ -7,8 +7,8 @@ import { createClient } from '@lib/supabase/client';
 import type { Database } from '@local-types/database/schema';
 import type { GetStaticPaths } from 'astro';
 
-// Temporarily disable prerendering to isolate escape error
-export const prerender = false;
+// Add prerender option
+export const prerender = true;
 
 type Product = Database['public']['Tables']['products']['Row'];
 type ProductVariant = Database['public']['Tables']['product_variants']['Row'];

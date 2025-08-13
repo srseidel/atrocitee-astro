@@ -14,8 +14,8 @@ import {
 } from '@utils/helpers/product-helpers';
 import { createClient } from '@lib/supabase/client';
 
-// Temporarily disable prerendering to isolate escape error
-export const prerender = false;
+// Enable prerendering for SEO and performance
+export const prerender = true;
 
 // Simplified static path generation - one path per product
 export async function getStaticPaths() {
